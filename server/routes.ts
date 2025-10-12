@@ -384,6 +384,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // SKU Errors (admin only)
+  app.get("/api/sku-errors", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const errors = await storage.getAllSkuErrors();
+      return res.json(errors);
+    } catch (error: any) {
+      console.error("Get SKU errors error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/sku-errors/:id/resolve", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { correctedSku } = req.body;
+      const userId = (req as any).userId;
+
+      if (!correctedSku) {
+        return res.status(400).json({ error: "Corrected SKU is required" });
+      }
+
+      await storage.resolveSkuError(id, correctedSku, userId);
+      return res.json({ message: "SKU error resolved successfully" });
+    } catch (error: any) {
+      console.error("Resolve SKU error:", error);
+      return res.status(500).json({ error: error.message || "Internal server error" });
+    }
+  });
+
+  app.delete("/api/sku-errors/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSkuError(id);
+      return res.json({ message: "SKU error deleted successfully" });
+    } catch (error: any) {
+      console.error("Delete SKU error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Event logs (admin only)
   app.get("/api/logs", requireAuth, requireAdmin, async (req, res) => {
     try {

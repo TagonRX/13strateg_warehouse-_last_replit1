@@ -16,6 +16,7 @@ import StockOutView from "@/components/StockOutView";
 import DailyPickingView from "@/components/DailyPickingView";
 import EventLogsView from "@/components/EventLogsView";
 import WorkerAnalytics from "@/components/WorkerAnalytics";
+import SkuErrorsView from "@/components/SkuErrorsView";
 import NotFound from "@/pages/not-found";
 import * as api from "@/lib/api";
 import type { InventoryItem } from "@shared/schema";
@@ -292,9 +293,9 @@ function AppContent() {
           <DailyPickingView />
         </Route>
         <Route path="/sku-errors">
-          <div className="bg-card p-8 rounded-md border text-center">
-            <h2 className="text-2xl font-bold mb-4">SKU Errors</h2>
-            <p className="text-muted-foreground">Функция в разработке</p>
+          <div className="space-y-4">
+            <h1 className="text-3xl font-bold">Ошибки SKU</h1>
+            <SkuErrorsView />
           </div>
         </Route>
         <Route path="/analytics">

@@ -5,6 +5,7 @@ import {
   eventLogs,
   pickingLists,
   pickingTasks,
+  skuErrors,
   type User, 
   type InsertUser,
   type InventoryItem,
@@ -14,7 +15,9 @@ import {
   type PickingList,
   type InsertPickingList,
   type PickingTask,
-  type InsertPickingTask
+  type InsertPickingTask,
+  type SkuError,
+  type InsertSkuError
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ilike } from "drizzle-orm";
 
@@ -63,6 +66,13 @@ export interface IStorage {
     itemPicked: number;
     locationDeleted: number;
   }[]>;
+
+  // SKU Errors
+  createSkuError(error: InsertSkuError): Promise<SkuError>;
+  getAllSkuErrors(): Promise<SkuError[]>;
+  getSkuError(id: string): Promise<SkuError | undefined>;
+  resolveSkuError(id: string, correctedSku: string, userId: string): Promise<void>;
+  deleteSkuError(id: string): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -132,14 +142,27 @@ export class DbStorage implements IStorage {
         const existing = await this.getInventoryItemByProductId(item.productId);
         
         if (existing) {
-          // Update existing item - update quantity and location from CSV
-          await this.updateInventoryItem(item.productId, {
-            quantity: item.quantity,
-            location: item.location,
-            sku: item.sku,
-            barcode: item.barcode,
-          });
-          updated++;
+          // Check if SKU matches
+          if (existing.sku === item.sku) {
+            // SKU matches - update quantity
+            await this.updateInventoryItem(item.productId, {
+              quantity: item.quantity,
+              barcode: item.barcode,
+            });
+            updated++;
+          } else {
+            // SKU mismatch - create SKU error record
+            await this.createSkuError({
+              productId: item.productId,
+              name: item.name,
+              csvSku: item.sku,
+              existingSku: existing.sku,
+              quantity: item.quantity,
+              barcode: item.barcode,
+              status: "PENDING",
+            });
+            errors++;
+          }
         } else {
           // Create new item
           await this.createInventoryItem(item);
@@ -539,6 +562,67 @@ export class DbStorage implements IStorage {
     });
 
     return analytics;
+  }
+
+  // SKU Errors methods
+  async createSkuError(error: InsertSkuError): Promise<SkuError> {
+    const result = await db.insert(skuErrors).values(error).returning();
+    return result[0];
+  }
+
+  async getAllSkuErrors(): Promise<SkuError[]> {
+    return await db.select().from(skuErrors).where(eq(skuErrors.status, 'PENDING')).orderBy(skuErrors.createdAt);
+  }
+
+  async getSkuError(id: string): Promise<SkuError | undefined> {
+    const result = await db.select().from(skuErrors).where(eq(skuErrors.id, id)).limit(1);
+    return result[0];
+  }
+
+  async resolveSkuError(id: string, correctedSku: string, userId: string): Promise<void> {
+    const error = await this.getSkuError(id);
+    if (!error) throw new Error("SKU error not found");
+
+    // Find existing inventory item by productId
+    const existing = await this.getInventoryItemByProductId(error.productId);
+    
+    if (existing) {
+      // Update existing item: correct SKU/location and add quantity
+      await this.updateInventoryItem(error.productId, {
+        sku: correctedSku,
+        location: correctedSku,
+        quantity: existing.quantity + error.quantity,
+        barcode: error.barcode || existing.barcode,
+      });
+    } else {
+      // If somehow doesn't exist, create new (shouldn't happen in normal flow)
+      await this.createInventoryItem({
+        productId: error.productId,
+        name: error.name,
+        sku: correctedSku,
+        location: correctedSku,
+        quantity: error.quantity,
+        barcode: error.barcode,
+        status: "IN_STOCK",
+        createdBy: userId,
+      });
+    }
+
+    // Mark error as resolved
+    await db.update(skuErrors)
+      .set({ status: "RESOLVED", resolvedAt: new Date() })
+      .where(eq(skuErrors.id, id));
+
+    // Log the event
+    await this.createEventLog({
+      userId,
+      action: "SKU_ERROR_RESOLVED",
+      details: `Resolved SKU error for ${error.name} (${error.productId}): ${error.csvSku} → ${correctedSku}, quantity added: ${error.quantity}`,
+    });
+  }
+
+  async deleteSkuError(id: string): Promise<void> {
+    await db.delete(skuErrors).where(eq(skuErrors.id, id));
   }
 }
 
