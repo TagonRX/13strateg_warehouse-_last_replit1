@@ -42,6 +42,15 @@ Preferred communication style: Simple, everyday language.
   - Updates existing inventory item (no duplicates): corrects SKU/location and adds quantity
   - Design: SKU = Location throughout system (both fields update together)
   - Admin-only access at /sku-errors route
+- **Warehouse Loading Redesign**: Redesigned warehouse loading page with compact, filterable letter-based view
+  - Letter filter with checkboxes - select which location letters to display
+  - "Все"/"Сброс" buttons to select all or clear all filters
+  - Horizontal scroll layout showing each letter in separate card
+  - Range grouping within letters (A1 for A100-A199, A2 for A200-A299, etc.)
+  - Non-standard locations grouped as "Прочее" (Others)
+  - TSKU and MAXQ displayed and applied per letter card
+  - Compact badge display for SKU count and quantity with color coding
+  - More efficient use of screen space with smaller cards and typography
 
 ## System Architecture
 
