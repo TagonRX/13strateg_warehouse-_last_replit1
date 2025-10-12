@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Key } from "lucide-react";
+import { Plus, Trash2, Key, Eye, EyeOff } from "lucide-react";
 
 interface User {
   id: string;
@@ -51,10 +51,12 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "worker">("worker");
+  const [showPassword, setShowPassword] = useState(false);
   
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,15 +128,30 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password">Пароль</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="********"
-                      required
-                      data-testid="input-user-password"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="********"
+                        required
+                        data-testid="input-user-password"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full"
+                        onClick={() => setShowPassword(!showPassword)}
+                        data-testid="button-toggle-create-password"
+                        aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                        title={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="role">Роль</Label>
@@ -219,16 +236,31 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="new-password">Новый пароль</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="********"
-                  minLength={6}
-                  required
-                  data-testid="input-new-password"
-                />
+                <div className="relative">
+                  <Input
+                    id="new-password"
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="********"
+                    minLength={6}
+                    required
+                    data-testid="input-new-password"
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    data-testid="button-toggle-reset-password"
+                    aria-label={showNewPassword ? "Скрыть пароль" : "Показать пароль"}
+                    title={showNewPassword ? "Скрыть пароль" : "Показать пароль"}
+                  >
+                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
             </div>
             <DialogFooter>
