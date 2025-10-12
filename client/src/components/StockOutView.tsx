@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Search, Package, Barcode, ChevronDown } from "lucide-react";
+import { Trash2, Search, Package, Barcode, ChevronDown, Trash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type LocationData = {
   location: string;
@@ -31,6 +32,7 @@ export default function StockOutView({ user }: { user: { role: string } }) {
   const [searchLocation, setSearchLocation] = useState("");
   const [limitFilter, setLimitFilter] = useState<string>("all");
   const [lastPickedItem, setLastPickedItem] = useState<any>(null);
+  const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
 
   const { data: locations = [], isLoading } = useQuery<LocationData[]>({
     queryKey: ["/api/warehouse/loading"],
@@ -116,6 +118,63 @@ export default function StockOutView({ user }: { user: { role: string } }) {
     }
   };
 
+  const toggleLocationSelection = (location: string) => {
+    const newSelected = new Set(selectedLocations);
+    if (newSelected.has(location)) {
+      newSelected.delete(location);
+    } else {
+      newSelected.add(location);
+    }
+    setSelectedLocations(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedLocations.size === filteredLocations.length) {
+      setSelectedLocations(new Set());
+    } else {
+      setSelectedLocations(new Set(filteredLocations.map(loc => loc.location)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedLocations.size === 0) {
+      toast({
+        title: "No Selection",
+        description: "Please select locations to delete",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const totalItems = filteredLocations
+      .filter(loc => selectedLocations.has(loc.location))
+      .reduce((sum, loc) => sum + loc.items.length, 0);
+
+    if (!confirm(`Delete ${selectedLocations.size} locations with ${totalItems} total items?`)) {
+      return;
+    }
+
+    try {
+      await Promise.all(
+        Array.from(selectedLocations).map(location => deleteLocation(location))
+      );
+      
+      setSelectedLocations(new Set());
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/loading"] });
+      
+      toast({
+        title: "Bulk Delete Complete",
+        description: `Deleted ${selectedLocations.size} locations with ${totalItems} items`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Bulk Delete Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   // Filter locations based on search and limit
   const filteredLocations = locations
     .filter(loc => {
@@ -169,6 +228,32 @@ export default function StockOutView({ user }: { user: { role: string } }) {
               </Select>
             </div>
 
+            {/* Bulk Actions (Admin Only) */}
+            {user.role === "admin" && filteredLocations.length > 0 && (
+              <div className="flex gap-2 items-center">
+                <Button
+                  data-testid="button-select-all"
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleSelectAll}
+                  className="flex-1"
+                >
+                  {selectedLocations.size === filteredLocations.length ? "Deselect All" : "Select All"}
+                </Button>
+                <Button
+                  data-testid="button-bulk-delete"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  disabled={selectedLocations.size === 0}
+                  className="flex-1"
+                >
+                  <Trash className="h-4 w-4 mr-2" />
+                  Delete Selected ({selectedLocations.size})
+                </Button>
+              </div>
+            )}
+
             {/* Location Accordion */}
             <div className="space-y-2">
               {filteredLocations.length === 0 ? (
@@ -186,6 +271,14 @@ export default function StockOutView({ user }: { user: { role: string } }) {
                       <AccordionTrigger className="hover-elevate px-4 rounded-md">
                         <div className="flex items-center justify-between w-full pr-4">
                           <div className="flex items-center gap-3">
+                            {user.role === "admin" && (
+                              <Checkbox
+                                data-testid={`checkbox-location-${location.location}`}
+                                checked={selectedLocations.has(location.location)}
+                                onCheckedChange={() => toggleLocationSelection(location.location)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            )}
                             <span className="font-mono font-semibold">{location.location}</span>
                             <Badge variant="secondary" data-testid={`badge-sku-count-${location.location}`}>
                               {location.skuCount} SKU{location.skuCount !== 1 ? 's' : ''}
