@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertUserSchema, insertInventoryItemSchema, insertEventLogSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
+import { verifyPassword, hashPassword, createSession, requireAuth, requireAdmin } from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
@@ -20,10 +21,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
-      // Simple password check (in production, use proper hashing)
-      if (user.password !== password) {
+      // Verify password using bcrypt
+      const isValid = await verifyPassword(password, user.password);
+      
+      if (!isValid) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
+
+      // Create session and return token
+      const token = createSession(user.id, user.role);
 
       // Log the login event
       await storage.createEventLog({
@@ -33,6 +39,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       return res.json({
+        token,
         user: {
           id: user.id,
           name: user.name,
@@ -46,8 +53,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Inventory routes
-  app.get("/api/inventory", async (req, res) => {
+  // Inventory routes (require authentication)
+  app.get("/api/inventory", requireAuth, async (req, res) => {
     try {
       const items = await storage.getAllInventoryItems();
       return res.json(items);
@@ -57,7 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/inventory", async (req, res) => {
+  app.post("/api/inventory", requireAuth, async (req, res) => {
     try {
       const validation = insertInventoryItemSchema.safeParse(req.body);
       
@@ -110,7 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/inventory/bulk-upload", async (req, res) => {
+  app.post("/api/inventory/bulk-upload", requireAuth, async (req, res) => {
     try {
       const { items, userId } = req.body;
       
@@ -136,8 +143,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Warehouse loading analysis
-  app.get("/api/warehouse/loading", async (req, res) => {
+  // Warehouse loading analysis (require authentication)
+  app.get("/api/warehouse/loading", requireAuth, async (req, res) => {
     try {
       const loading = await storage.getWarehouseLoadingByLocation();
       return res.json(loading);
@@ -147,8 +154,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User management routes (admin only - validation should be done on frontend)
-  app.get("/api/users", async (req, res) => {
+  // User management routes (admin only)
+  app.get("/api/users", requireAuth, requireAdmin, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
       // Don't send passwords to frontend
@@ -160,7 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users", async (req, res) => {
+  app.post("/api/users", requireAuth, requireAdmin, async (req, res) => {
     try {
       const validation = insertUserSchema.safeParse(req.body);
       
@@ -176,7 +183,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "User with this login already exists" });
       }
 
-      const user = await storage.createUser(validation.data);
+      // Hash the password before storing
+      const hashedPassword = await hashPassword(validation.data.password);
+      const user = await storage.createUser({
+        ...validation.data,
+        password: hashedPassword,
+      });
       
       // Don't send password to frontend
       const { password, ...safeUser } = user;
@@ -188,7 +200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/users/:id", async (req, res) => {
+  app.delete("/api/users/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteUser(id);
@@ -200,7 +212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Event logs (admin only)
-  app.get("/api/logs", async (req, res) => {
+  app.get("/api/logs", requireAuth, requireAdmin, async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
       const logs = await storage.getEventLogs(limit);

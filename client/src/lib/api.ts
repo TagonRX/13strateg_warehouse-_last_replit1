@@ -1,0 +1,191 @@
+import type { User, InventoryItem } from "@shared/schema";
+
+export interface LoginResponse {
+  token: string;
+  user: {
+    id: string;
+    name: string;
+    login: string;
+    role: string;
+  };
+}
+
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
+export function getAuthToken(): string | null {
+  return authToken;
+}
+
+function getHeaders(): HeadersInit {
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+  
+  return headers;
+}
+
+export async function login(login: string, password: string): Promise<LoginResponse> {
+  const response = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ login, password }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Login failed");
+  }
+
+  const data = await response.json();
+  setAuthToken(data.token);
+  return data;
+}
+
+export async function getAllInventory(): Promise<InventoryItem[]> {
+  const response = await fetch("/api/inventory", {
+    headers: getHeaders(),
+  });
+  
+  if (!response.ok) {
+    throw new Error("Failed to fetch inventory");
+  }
+
+  return response.json();
+}
+
+export async function createInventoryItem(
+  item: {
+    productId: string;
+    name: string;
+    sku: string;
+    location: string;
+    quantity: number;
+    barcode?: string;
+    createdBy?: string;
+  }
+): Promise<InventoryItem> {
+  const response = await fetch("/api/inventory", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ ...item, status: "IN_STOCK" }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to create item");
+  }
+
+  return response.json();
+}
+
+export async function bulkUploadInventory(
+  items: Array<{
+    productId: string;
+    name: string;
+    sku: string;
+    location: string;
+    quantity: number;
+    barcode?: string;
+  }>,
+  userId: string
+): Promise<{ success: number; updated: number; errors: number }> {
+  const formattedItems = items.map(item => ({
+    ...item,
+    status: "IN_STOCK",
+    createdBy: userId,
+  }));
+
+  const response = await fetch("/api/inventory/bulk-upload", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ items: formattedItems, userId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to upload");
+  }
+
+  return response.json();
+}
+
+export async function getWarehouseLoading(): Promise<{
+  location: string;
+  skuCount: number;
+  items: { sku: string; name: string; quantity: number }[];
+}[]> {
+  const response = await fetch("/api/warehouse/loading", {
+    headers: getHeaders(),
+  });
+  
+  if (!response.ok) {
+    throw new Error("Failed to fetch warehouse loading");
+  }
+
+  return response.json();
+}
+
+export async function getAllUsers(): Promise<Omit<User, "password">[]> {
+  const response = await fetch("/api/users", {
+    headers: getHeaders(),
+  });
+  
+  if (!response.ok) {
+    throw new Error("Failed to fetch users");
+  }
+
+  return response.json();
+}
+
+export async function createUser(user: {
+  name: string;
+  login: string;
+  password: string;
+  role: string;
+}): Promise<Omit<User, "password">> {
+  const response = await fetch("/api/users", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(user),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to create user");
+  }
+
+  return response.json();
+}
+
+export async function deleteUser(id: string): Promise<void> {
+  const response = await fetch(`/api/users/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to delete user");
+  }
+}
+
+export async function getEventLogs(limit?: number): Promise<any[]> {
+  const url = limit ? `/api/logs?limit=${limit}` : "/api/logs";
+  const response = await fetch(url, {
+    headers: getHeaders(),
+  });
+  
+  if (!response.ok) {
+    throw new Error("Failed to fetch logs");
+  }
+
+  return response.json();
+}

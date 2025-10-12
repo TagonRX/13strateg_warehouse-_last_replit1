@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery, useMutation } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
 import LoginForm from "@/components/LoginForm";
 import AppLayout from "@/components/AppLayout";
 import StockInForm from "@/components/StockInForm";
@@ -12,44 +13,156 @@ import InventoryTable from "@/components/InventoryTable";
 import WarehouseLoadingView from "@/components/WarehouseLoadingView";
 import UserManagementPanel from "@/components/UserManagementPanel";
 import NotFound from "@/pages/not-found";
+import * as api from "@/lib/api";
+import type { InventoryItem } from "@shared/schema";
 
-//todo: remove mock functionality - replace with real auth and data
-function App() {
-  const [user, setUser] = useState<{ name: string; role: "admin" | "worker" } | null>(null);
-  const [inventoryItems, setInventoryItems] = useState([
-    {
-      id: "1",
-      productId: "PROD001",
-      name: "LED Bulb GU10 5W",
-      sku: "A101",
-      location: "A101-J",
-      quantity: 25,
-      barcode: "1234567890123",
-      status: "IN_STOCK" as const,
+function AppContent() {
+  const { toast } = useToast();
+  const [user, setUser] = useState<{ id: string; name: string; role: "admin" | "worker" } | null>(null);
+
+  const { data: inventory = [], refetch: refetchInventory } = useQuery<any[]>({
+    queryKey: ["/api/inventory"],
+    queryFn: api.getAllInventory,
+    enabled: !!user,
+  });
+
+  const { data: warehouseLoading = [] } = useQuery({
+    queryKey: ["/api/warehouse/loading"],
+    queryFn: api.getWarehouseLoading,
+    enabled: !!user,
+  });
+
+  const { data: users = [], refetch: refetchUsers } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+    queryFn: api.getAllUsers,
+    enabled: !!user && user.role === "admin",
+  });
+
+  const loginMutation = useMutation({
+    mutationFn: ({ login, password }: { login: string; password: string }) =>
+      api.login(login, password),
+    onSuccess: (data) => {
+      setUser({
+        id: data.user.id,
+        name: data.user.name,
+        role: data.user.role as "admin" | "worker",
+      });
+      toast({
+        title: "Вход выполнен",
+        description: `Добро пожаловать, ${data.user.name}!`,
+      });
     },
-    {
-      id: "2",
-      productId: "PROD002",
-      name: "Smart Switch Hub",
-      sku: "A101",
-      location: "A101-K",
-      quantity: 10,
-      barcode: "9876543210987",
-      status: "IN_STOCK" as const,
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка входа",
+        description: error.message,
+        variant: "destructive",
+      });
     },
-  ]);
-  const [users, setUsers] = useState([
-    { id: "1", name: "Админ", login: "admin", role: "admin" as const },
-    { id: "2", name: "Работник", login: "worker", role: "worker" as const },
-  ]);
+  });
+
+  const createItemMutation = useMutation({
+    mutationFn: (data: {
+      productId: string;
+      name: string;
+      sku: string;
+      quantity: number;
+      barcode?: string;
+    }) =>
+      api.createInventoryItem({
+        ...data,
+        location: data.sku,
+        createdBy: user?.id,
+      }),
+    onSuccess: () => {
+      refetchInventory();
+      toast({
+        title: "Товар добавлен",
+        description: "Товар успешно добавлен в инвентарь",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkUploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const text = await file.text();
+      const lines = text.split("\n").filter(line => line.trim());
+      
+      const items = lines.slice(1).map(line => {
+        const parts = line.split(",").map(p => p.trim());
+        return {
+          productId: parts[0],
+          name: parts[1],
+          sku: parts[2],
+          location: parts[2],
+          quantity: parseInt(parts[3]) || 1,
+          barcode: parts[4] || undefined,
+        };
+      }).filter(item => item.productId && item.name && item.sku);
+
+      return api.bulkUploadInventory(items, user!.id);
+    },
+    onSuccess: (result) => {
+      refetchInventory();
+      toast({
+        title: "Загрузка завершена",
+        description: `Новых: ${result.success}, Обновлено: ${result.updated}, Ошибок: ${result.errors}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка загрузки",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: (userData: { name: string; login: string; password: string; role: "admin" | "worker" }) =>
+      api.createUser(userData),
+    onSuccess: () => {
+      refetchUsers();
+      toast({
+        title: "Пользователь создан",
+        description: "Новый пользователь успешно добавлен",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: (userId: string) => api.deleteUser(userId),
+    onSuccess: () => {
+      refetchUsers();
+      toast({
+        title: "Пользователь удален",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleLogin = (login: string, password: string) => {
-    //todo: remove mock functionality - replace with real auth
-    if (login === "admin") {
-      setUser({ name: "Администратор", role: "admin" });
-    } else {
-      setUser({ name: "Работник", role: "worker" });
-    }
+    loginMutation.mutate({ login, password });
   };
 
   const handleLogout = () => {
@@ -57,178 +170,131 @@ function App() {
   };
 
   const handleStockIn = (data: any) => {
-    //todo: remove mock functionality - replace with API call
-    const newItem = {
-      id: String(inventoryItems.length + 1),
-      productId: data.productId,
-      name: data.name,
-      sku: data.sku,
-      location: data.sku,
-      quantity: data.quantity,
-      barcode: data.barcode,
-      status: "IN_STOCK" as const,
-    };
-    setInventoryItems([...inventoryItems, newItem]);
-    alert(`Товар добавлен: ${data.name}`);
+    createItemMutation.mutate(data);
   };
 
   const handleCSVUpload = async (file: File) => {
-    //todo: remove mock functionality - replace with API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    return { success: 150, updated: 23, errors: 5 };
+    return bulkUploadMutation.mutateAsync(file);
   };
 
   const handleCreateUser = (userData: any) => {
-    //todo: remove mock functionality - replace with API call
-    const newUser = {
-      id: String(users.length + 1),
-      ...userData,
-    };
-    setUsers([...users, newUser]);
+    createUserMutation.mutate(userData);
   };
 
   const handleDeleteUser = (userId: string) => {
-    //todo: remove mock functionality - replace with API call
-    setUsers(users.filter(u => u.id !== userId));
+    deleteUserMutation.mutate(userId);
   };
 
-  //todo: remove mock functionality - calculate from real data
-  const locationGroups = [
-    {
-      location: "A101",
-      skuCount: 5,
-      items: [
-        { sku: "SKU-001", name: "LED Bulb", quantity: 10 },
-        { sku: "SKU-002", name: "Smart Switch", quantity: 5 },
-        { sku: "SKU-003", name: "USB Cable", quantity: 20 },
-        { sku: "SKU-004", name: "Phone Case", quantity: 15 },
-        { sku: "SKU-005", name: "Screen Protector", quantity: 8 },
-      ],
-    },
-    {
-      location: "B205",
-      skuCount: 3,
-      items: [
-        { sku: "SKU-101", name: "Laptop Stand", quantity: 12 },
-        { sku: "SKU-102", name: "Keyboard", quantity: 7 },
-        { sku: "SKU-103", name: "Mouse Pad", quantity: 25 },
-      ],
-    },
-  ];
-
   if (!user) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <LoginForm onLogin={handleLogin} />
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
-    );
+    return <LoginForm onLogin={handleLogin} />;
   }
 
   return (
+    <AppLayout userRole={user.role} userName={user.name} onLogout={handleLogout}>
+      <Switch>
+        <Route path="/">
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Добро пожаловать, {user.name}!</h1>
+              <p className="text-muted-foreground">
+                Выберите раздел в меню для начала работы
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-card p-6 rounded-md border">
+                <h3 className="text-lg font-semibold mb-2">Товаров в наличии</h3>
+                <p className="text-3xl font-bold text-primary">{inventory.length}</p>
+              </div>
+              <div className="bg-card p-6 rounded-md border">
+                <h3 className="text-lg font-semibold mb-2">Локаций</h3>
+                <p className="text-3xl font-bold text-primary">{warehouseLoading.length}</p>
+              </div>
+              <div className="bg-card p-6 rounded-md border">
+                <h3 className="text-lg font-semibold mb-2">Пользователей</h3>
+                <p className="text-3xl font-bold text-primary">{users.length}</p>
+              </div>
+            </div>
+          </div>
+        </Route>
+        <Route path="/stock-in">
+          <div className="space-y-4">
+            <h1 className="text-3xl font-bold">Приход товара</h1>
+            <StockInForm onSubmit={handleStockIn} />
+          </div>
+        </Route>
+        <Route path="/bulk-upload">
+          <div className="space-y-4">
+            <h1 className="text-3xl font-bold">Массовая загрузка</h1>
+            <CSVUploader onUpload={handleCSVUpload} />
+          </div>
+        </Route>
+        <Route path="/inventory">
+          <div className="space-y-4">
+            <h1 className="text-3xl font-bold">Инвентаризация</h1>
+            <InventoryTable items={inventory} />
+          </div>
+        </Route>
+        <Route path="/warehouse">
+          <div className="space-y-4">
+            <h1 className="text-3xl font-bold">Загрузка склада</h1>
+            <WarehouseLoadingView locationGroups={warehouseLoading} />
+          </div>
+        </Route>
+        {user.role === "admin" && (
+          <Route path="/users">
+            <div className="space-y-4">
+              <h1 className="text-3xl font-bold">Управление пользователями</h1>
+              <UserManagementPanel
+                users={users}
+                onCreateUser={handleCreateUser}
+                onDeleteUser={handleDeleteUser}
+              />
+            </div>
+          </Route>
+        )}
+        <Route path="/stock-out">
+          <div className="bg-card p-8 rounded-md border text-center">
+            <h2 className="text-2xl font-bold mb-4">Сборка/Списание</h2>
+            <p className="text-muted-foreground">Функция в разработке</p>
+          </div>
+        </Route>
+        <Route path="/picking">
+          <div className="bg-card p-8 rounded-md border text-center">
+            <h2 className="text-2xl font-bold mb-4">Daily Picking List</h2>
+            <p className="text-muted-foreground">Функция в разработке</p>
+          </div>
+        </Route>
+        <Route path="/sku-errors">
+          <div className="bg-card p-8 rounded-md border text-center">
+            <h2 className="text-2xl font-bold mb-4">SKU Errors</h2>
+            <p className="text-muted-foreground">Функция в разработке</p>
+          </div>
+        </Route>
+        <Route path="/analytics">
+          <div className="bg-card p-8 rounded-md border text-center">
+            <h2 className="text-2xl font-bold mb-4">Аналитика работников</h2>
+            <p className="text-muted-foreground">Функция в разработке</p>
+          </div>
+        </Route>
+        <Route path="/logs">
+          <div className="bg-card p-8 rounded-md border text-center">
+            <h2 className="text-2xl font-bold mb-4">Логи событий</h2>
+            <p className="text-muted-foreground">Функция в разработке</p>
+          </div>
+        </Route>
+        <Route component={NotFound} />
+      </Switch>
+    </AppLayout>
+  );
+}
+
+export default function App() {
+  return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AppLayout userRole={user.role} userName={user.name} onLogout={handleLogout}>
-          <Switch>
-            <Route path="/">
-              <div className="space-y-6">
-                <div>
-                  <h1 className="text-3xl font-bold mb-2">Добро пожаловать, {user.name}!</h1>
-                  <p className="text-muted-foreground">
-                    Выберите раздел в меню для начала работы
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-card p-6 rounded-md border">
-                    <h3 className="text-lg font-semibold mb-2">Товаров в наличии</h3>
-                    <p className="text-3xl font-bold text-primary">{inventoryItems.length}</p>
-                  </div>
-                  <div className="bg-card p-6 rounded-md border">
-                    <h3 className="text-lg font-semibold mb-2">Локаций</h3>
-                    <p className="text-3xl font-bold text-primary">{locationGroups.length}</p>
-                  </div>
-                  <div className="bg-card p-6 rounded-md border">
-                    <h3 className="text-lg font-semibold mb-2">Пользователей</h3>
-                    <p className="text-3xl font-bold text-primary">{users.length}</p>
-                  </div>
-                </div>
-              </div>
-            </Route>
-            <Route path="/stock-in">
-              <div className="space-y-4">
-                <h1 className="text-3xl font-bold">Приход товара</h1>
-                <StockInForm onSubmit={handleStockIn} />
-              </div>
-            </Route>
-            <Route path="/bulk-upload">
-              <div className="space-y-4">
-                <h1 className="text-3xl font-bold">Массовая загрузка</h1>
-                <CSVUploader onUpload={handleCSVUpload} />
-              </div>
-            </Route>
-            <Route path="/inventory">
-              <div className="space-y-4">
-                <h1 className="text-3xl font-bold">Инвентаризация</h1>
-                <InventoryTable items={inventoryItems} />
-              </div>
-            </Route>
-            <Route path="/warehouse">
-              <div className="space-y-4">
-                <h1 className="text-3xl font-bold">Загрузка склада</h1>
-                <WarehouseLoadingView locationGroups={locationGroups} />
-              </div>
-            </Route>
-            {user.role === "admin" && (
-              <Route path="/users">
-                <div className="space-y-4">
-                  <h1 className="text-3xl font-bold">Управление пользователями</h1>
-                  <UserManagementPanel
-                    users={users}
-                    onCreateUser={handleCreateUser}
-                    onDeleteUser={handleDeleteUser}
-                  />
-                </div>
-              </Route>
-            )}
-            <Route path="/stock-out">
-              <div className="bg-card p-8 rounded-md border text-center">
-                <h2 className="text-2xl font-bold mb-4">Сборка/Списание</h2>
-                <p className="text-muted-foreground">Функция в разработке</p>
-              </div>
-            </Route>
-            <Route path="/picking">
-              <div className="bg-card p-8 rounded-md border text-center">
-                <h2 className="text-2xl font-bold mb-4">Daily Picking List</h2>
-                <p className="text-muted-foreground">Функция в разработке</p>
-              </div>
-            </Route>
-            <Route path="/sku-errors">
-              <div className="bg-card p-8 rounded-md border text-center">
-                <h2 className="text-2xl font-bold mb-4">SKU Errors</h2>
-                <p className="text-muted-foreground">Функция в разработке</p>
-              </div>
-            </Route>
-            <Route path="/analytics">
-              <div className="bg-card p-8 rounded-md border text-center">
-                <h2 className="text-2xl font-bold mb-4">Аналитика работников</h2>
-                <p className="text-muted-foreground">Функция в разработке</p>
-              </div>
-            </Route>
-            <Route path="/logs">
-              <div className="bg-card p-8 rounded-md border text-center">
-                <h2 className="text-2xl font-bold mb-4">Логи событий</h2>
-                <p className="text-muted-foreground">Функция в разработке</p>
-              </div>
-            </Route>
-            <Route component={NotFound} />
-          </Switch>
-        </AppLayout>
+        <AppContent />
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
   );
 }
-
-export default App;
