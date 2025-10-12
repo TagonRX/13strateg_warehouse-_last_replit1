@@ -28,6 +28,13 @@ Preferred communication style: Simple, everyday language.
   - Page limits: 100/200/500/All (10000)
   - All filters properly combine using Drizzle's `and()` and `or()` operators
   - Fixed OR precedence issues and timezone handling in date filters
+- **Worker Analytics**: Complete implementation of worker performance analytics
+  - Period filters: day, week, month, all time
+  - Action columns: Входы, Добавлено, Выдано, CSV загрузка, Листов создано, Собрано, Удалено локаций
+  - Sortable columns with tri-state sorting (asc/desc/none)
+  - Visual sort indicators (arrows)
+  - Backend aggregates event logs by worker and action type
+  - Fixed TanStack Query authentication by adding Bearer token to all requests
 
 ## System Architecture
 
