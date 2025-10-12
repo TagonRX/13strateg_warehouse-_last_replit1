@@ -35,6 +35,13 @@ Preferred communication style: Simple, everyday language.
   - Visual sort indicators (arrows)
   - Backend aggregates event logs by worker and action type
   - Fixed TanStack Query authentication by adding Bearer token to all requests
+- **SKU Errors System**: Implemented correction workflow for SKU mismatches during bulk upload
+  - Detects when productId exists but SKU differs during CSV upload
+  - Creates skuError records instead of silent data corruption
+  - Correction UI allows editing SKU and returning item to inventory
+  - Updates existing inventory item (no duplicates): corrects SKU/location and adds quantity
+  - Design: SKU = Location throughout system (both fields update together)
+  - Admin-only access at /sku-errors route
 
 ## System Architecture
 
@@ -96,6 +103,9 @@ Preferred communication style: Simple, everyday language.
 - `/api/warehouse/loading` - Warehouse capacity analysis
 - `/api/users` - User management (admin only)
 - `/api/logs` - Event logging (admin only)
+- `/api/sku-errors` - SKU error management (admin only)
+- `/api/worker-analytics` - Worker performance analytics (admin only)
+- `/api/picking-lists` - Picking list management
 
 ### Database Schema
 
@@ -127,6 +137,12 @@ Preferred communication style: Simple, everyday language.
    - Fields: id (UUID), listId, sku, requiredQuantity, pickedQuantity, pickedItemIds (array), status (PENDING/COMPLETED), createdAt, completedAt
    - SKU-based picking (matches any item with same SKU)
    - Tracks which specific items were picked via pickedItemIds
+
+7. **sku_errors** - SKU mismatch correction during bulk upload
+   - Fields: id (UUID), productId, name, csvSku, existingSku, quantity, barcode, status (PENDING/RESOLVED), createdAt, resolvedAt
+   - Created when bulk CSV upload finds matching productId but different SKU
+   - Prevents silent data corruption during import
+   - Admin can correct SKU and return item to inventory with proper reconciliation
 
 **Key Design Decisions**:
 - UUID primary keys using PostgreSQL's `gen_random_uuid()`
