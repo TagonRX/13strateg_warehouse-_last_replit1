@@ -217,6 +217,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/users/:id/password", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { password } = req.body;
+
+      if (!password || password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+
+      const hashedPassword = await hashPassword(password);
+      await storage.updateUserPassword(id, hashedPassword);
+      
+      return res.json({ message: "Password updated successfully" });
+    } catch (error: any) {
+      console.error("Update password error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Event logs (admin only)
   app.get("/api/logs", requireAuth, requireAdmin, async (req, res) => {
     try {
