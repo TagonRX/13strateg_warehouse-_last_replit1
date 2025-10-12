@@ -174,6 +174,19 @@ export async function deleteUser(id: string): Promise<void> {
   }
 }
 
+export async function updateUserPassword(id: string, password: string): Promise<void> {
+  const response = await fetch(`/api/users/${id}/password`, {
+    method: "PATCH",
+    headers: getHeaders(),
+    body: JSON.stringify({ password }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to update password");
+  }
+}
+
 export async function logout(): Promise<void> {
   const response = await fetch("/api/auth/logout", {
     method: "POST",

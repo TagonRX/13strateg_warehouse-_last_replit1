@@ -160,6 +160,24 @@ function AppContent() {
     },
   });
 
+  const updatePasswordMutation = useMutation({
+    mutationFn: ({ userId, password }: { userId: string; password: string }) =>
+      api.updateUserPassword(userId, password),
+    onSuccess: () => {
+      toast({
+        title: "Пароль изменен",
+        description: "Пароль пользователя успешно обновлен",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleLogin = (login: string, password: string) => {
     loginMutation.mutate({ login, password });
   };
@@ -188,6 +206,10 @@ function AppContent() {
 
   const handleDeleteUser = (userId: string) => {
     deleteUserMutation.mutate(userId);
+  };
+
+  const handleUpdatePassword = (userId: string, password: string) => {
+    updatePasswordMutation.mutate({ userId, password });
   };
 
   if (!user) {
@@ -253,6 +275,7 @@ function AppContent() {
                 users={users}
                 onCreateUser={handleCreateUser}
                 onDeleteUser={handleDeleteUser}
+                onUpdatePassword={handleUpdatePassword}
               />
             </div>
           </Route>

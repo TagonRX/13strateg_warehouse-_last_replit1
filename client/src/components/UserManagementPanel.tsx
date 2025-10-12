@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Key } from "lucide-react";
 
 interface User {
   id: string;
@@ -41,14 +41,19 @@ interface UserManagementPanelProps {
   users: User[];
   onCreateUser: (user: { name: string; login: string; password: string; role: "admin" | "worker" }) => void;
   onDeleteUser: (userId: string) => void;
+  onUpdatePassword: (userId: string, password: string) => void;
 }
 
-export default function UserManagementPanel({ users, onCreateUser, onDeleteUser }: UserManagementPanelProps) {
+export default function UserManagementPanel({ users, onCreateUser, onDeleteUser, onUpdatePassword }: UserManagementPanelProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "worker">("worker");
+  
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,6 +63,21 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser 
     setPassword("");
     setRole("worker");
     setOpen(false);
+  };
+
+  const handlePasswordChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedUserId) {
+      onUpdatePassword(selectedUserId, newPassword);
+      setNewPassword("");
+      setSelectedUserId(null);
+      setPasswordDialogOpen(false);
+    }
+  };
+
+  const openPasswordDialog = (userId: string) => {
+    setSelectedUserId(userId);
+    setPasswordDialogOpen(true);
   };
 
   return (
@@ -146,7 +166,7 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser 
                 <TableHead>Имя</TableHead>
                 <TableHead>Логин</TableHead>
                 <TableHead>Роль</TableHead>
-                <TableHead className="w-[100px]"></TableHead>
+                <TableHead className="w-[150px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -160,14 +180,24 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser 
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDeleteUser(user.id)}
-                      data-testid={`button-delete-${user.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openPasswordDialog(user.id)}
+                        data-testid={`button-change-password-${user.id}`}
+                      >
+                        <Key className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDeleteUser(user.id)}
+                        data-testid={`button-delete-${user.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -175,6 +205,39 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser 
           </Table>
         </div>
       </CardContent>
+
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handlePasswordChange}>
+            <DialogHeader>
+              <DialogTitle>Изменить пароль</DialogTitle>
+              <DialogDescription>
+                Введите новый пароль для пользователя
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Новый пароль</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="********"
+                  minLength={6}
+                  required
+                  data-testid="input-new-password"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" data-testid="button-save-password">
+                Сохранить
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
