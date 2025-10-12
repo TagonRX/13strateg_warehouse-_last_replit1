@@ -17,6 +17,18 @@ The system handles:
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### October 12, 2025
+- **Inventory Pagination**: Added page limit filter (10/20/50/100/All) with default of 50 items
+- **Event Logs Advanced Filters**: Implemented comprehensive filtering system
+  - Search by SKU/ID/name (searches in action and details fields)
+  - Filter by worker/user
+  - Date range filter with timezone-safe SQL implementation
+  - Page limits: 100/200/500/All (10000)
+  - All filters properly combine using Drizzle's `and()` and `or()` operators
+  - Fixed OR precedence issues and timezone handling in date filters
+
 ## System Architecture
 
 ### Frontend Architecture
