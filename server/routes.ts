@@ -160,6 +160,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Stock-Out (Picking) routes
+  app.post("/api/inventory/pick", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { barcode } = req.body;
+
+      if (!barcode) {
+        return res.status(400).json({ error: "Barcode is required" });
+      }
+
+      const item = await storage.pickItemByBarcode(barcode, userId);
+
+      if (!item) {
+        return res.status(404).json({ error: "Item not found or already picked" });
+      }
+
+      return res.json(item);
+    } catch (error: any) {
+      console.error("Pick item error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/inventory/item/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { id } = req.params;
+
+      const deleted = await storage.deleteInventoryItem(id, userId);
+
+      if (!deleted) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+
+      return res.status(204).send();
+    } catch (error: any) {
+      console.error("Delete item error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/inventory/location/:location", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { location } = req.params;
+
+      const count = await storage.deleteItemsByLocation(location, userId);
+
+      if (count === 0) {
+        return res.status(404).json({ error: "Location not found" });
+      }
+
+      return res.json({ deleted: count });
+    } catch (error: any) {
+      console.error("Delete location error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // User management routes (admin only)
   app.get("/api/users", requireAuth, requireAdmin, async (req, res) => {
     try {

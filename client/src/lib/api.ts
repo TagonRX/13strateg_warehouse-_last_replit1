@@ -118,7 +118,7 @@ export async function getWarehouseLoading(): Promise<{
   location: string;
   skuCount: number;
   totalQuantity: number;
-  items: { sku: string; name: string; quantity: number; barcode?: string }[];
+  items: { sku: string; name: string; quantity: number; barcode?: string; id: string }[];
 }[]> {
   const response = await fetch("/api/warehouse/loading", {
     headers: getHeaders(),
@@ -126,6 +126,47 @@ export async function getWarehouseLoading(): Promise<{
   
   if (!response.ok) {
     throw new Error("Failed to fetch warehouse loading");
+  }
+
+  return response.json();
+}
+
+export async function pickItemByBarcode(barcode: string): Promise<InventoryItem> {
+  const response = await fetch("/api/inventory/pick", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ barcode }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to pick item");
+  }
+
+  return response.json();
+}
+
+export async function deleteInventoryItem(id: string): Promise<void> {
+  const response = await fetch(`/api/inventory/item/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to delete item");
+  }
+}
+
+export async function deleteLocation(location: string): Promise<{ deleted: number }> {
+  const response = await fetch(`/api/inventory/location/${encodeURIComponent(location)}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to delete location");
   }
 
   return response.json();

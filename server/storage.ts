@@ -10,7 +10,7 @@ import {
   type InsertEventLog,
   type EventLog
 } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -194,6 +194,7 @@ export class DbStorage implements IStorage {
         skuCount: locationItems.length,
         totalQuantity,
         items: locationItems.map(item => ({
+          id: item.id,
           sku: item.sku,
           name: item.name,
           quantity: item.quantity,
@@ -201,6 +202,98 @@ export class DbStorage implements IStorage {
         })),
       };
     }).sort((a, b) => a.location.localeCompare(b.location)); // Sort by location alphabetically
+  }
+
+  // Stock-Out (Picking) operations
+  async pickItemByBarcode(barcode: string, userId: string): Promise<InventoryItem | null> {
+    const items = await db
+      .select()
+      .from(inventoryItems)
+      .where(and(
+        eq(inventoryItems.barcode, barcode),
+        eq(inventoryItems.status, "IN_STOCK")
+      ));
+
+    if (items.length === 0) {
+      return null;
+    }
+
+    const item = items[0];
+    
+    // Update status to PICKED
+    await db
+      .update(inventoryItems)
+      .set({ 
+        status: "PICKED",
+        updatedAt: new Date()
+      })
+      .where(eq(inventoryItems.id, item.id));
+
+    // Log the pick event
+    await this.createEventLog({
+      userId,
+      action: "STOCK_OUT",
+      details: `Picked item: ${item.name} (${item.sku}) - Barcode: ${barcode}`,
+    });
+
+    return item;
+  }
+
+  async deleteInventoryItem(id: string, userId: string): Promise<boolean> {
+    const items = await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, id));
+
+    if (items.length === 0) {
+      return false;
+    }
+
+    const item = items[0];
+
+    await db
+      .delete(inventoryItems)
+      .where(eq(inventoryItems.id, id));
+
+    // Log the deletion
+    await this.createEventLog({
+      userId,
+      action: "DELETE_ITEM",
+      details: `Deleted item: ${item.name} (${item.sku})`,
+    });
+
+    return true;
+  }
+
+  async deleteItemsByLocation(location: string, userId: string): Promise<number> {
+    // Get all items in this location
+    const items = await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.status, "IN_STOCK"));
+
+    const itemsToDelete = items.filter(item => 
+      this.extractLocation(item.sku) === location
+    );
+
+    if (itemsToDelete.length === 0) {
+      return 0;
+    }
+
+    // Delete all items
+    const ids = itemsToDelete.map(item => item.id);
+    await db
+      .delete(inventoryItems)
+      .where(inArray(inventoryItems.id, ids));
+
+    // Log the deletion
+    await this.createEventLog({
+      userId,
+      action: "DELETE_LOCATION",
+      details: `Deleted location ${location} with ${itemsToDelete.length} items`,
+    });
+
+    return itemsToDelete.length;
   }
 }
 

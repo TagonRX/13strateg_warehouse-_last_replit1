@@ -12,6 +12,7 @@ import CSVUploader from "@/components/CSVUploader";
 import InventoryTable from "@/components/InventoryTable";
 import WarehouseLoadingView from "@/components/WarehouseLoadingView";
 import UserManagementPanel from "@/components/UserManagementPanel";
+import StockOutView from "@/components/StockOutView";
 import NotFound from "@/pages/not-found";
 import * as api from "@/lib/api";
 import type { InventoryItem } from "@shared/schema";
@@ -282,10 +283,7 @@ function AppContent() {
           </Route>
         )}
         <Route path="/stock-out">
-          <div className="bg-card p-8 rounded-md border text-center">
-            <h2 className="text-2xl font-bold mb-4">Сборка/Списание</h2>
-            <p className="text-muted-foreground">Функция в разработке</p>
-          </div>
+          <StockOutView user={user} />
         </Route>
         <Route path="/picking">
           <div className="bg-card p-8 rounded-md border text-center">
