@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search } from "lucide-react";
 
 interface InventoryItem {
@@ -29,13 +30,16 @@ interface InventoryTableProps {
 
 export default function InventoryTable({ items }: InventoryTableProps) {
   const [search, setSearch] = useState("");
+  const [pageLimit, setPageLimit] = useState<string>("50");
 
-  const filteredItems = items.filter(
-    (item) =>
-      item.productId.toLowerCase().includes(search.toLowerCase()) ||
-      item.name.toLowerCase().includes(search.toLowerCase()) ||
-      item.sku.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredItems = items
+    .filter(
+      (item) =>
+        item.productId.toLowerCase().includes(search.toLowerCase()) ||
+        item.name.toLowerCase().includes(search.toLowerCase()) ||
+        item.sku.toLowerCase().includes(search.toLowerCase())
+    )
+    .slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit));
 
   const totalInStock = items.filter((i) => i.status === "IN_STOCK").reduce((sum, i) => sum + i.quantity, 0);
   const totalPicked = items.filter((i) => i.status === "PICKED").reduce((sum, i) => sum + i.quantity, 0);
@@ -56,15 +60,29 @@ export default function InventoryTable({ items }: InventoryTableProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по ID, названию или SKU..."
-            className="pl-10"
-            data-testid="input-search-inventory"
-          />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Поиск по ID, названию или SKU..."
+              className="pl-10"
+              data-testid="input-search-inventory"
+            />
+          </div>
+          <Select value={pageLimit} onValueChange={setPageLimit}>
+            <SelectTrigger data-testid="select-inventory-page-limit" className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10</SelectItem>
+              <SelectItem value="20">20</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+              <SelectItem value="all">Все</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="border rounded-md">

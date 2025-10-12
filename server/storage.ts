@@ -16,7 +16,7 @@ import {
   type PickingTask,
   type InsertPickingTask
 } from "@shared/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, or, sql, inArray, ilike } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -36,7 +36,13 @@ export interface IStorage {
   
   // Event log methods
   createEventLog(log: InsertEventLog): Promise<EventLog>;
-  getEventLogs(limit?: number): Promise<EventLog[]>;
+  getEventLogs(filters?: {
+    limit?: number;
+    userId?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<EventLog[]>;
   
   // Warehouse loading analysis
   getWarehouseLoadingByLocation(): Promise<{
@@ -141,10 +147,46 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async getEventLogs(limit: number = 100): Promise<EventLog[]> {
-    return await db
-      .select()
-      .from(eventLogs)
+  async getEventLogs(filters?: {
+    limit?: number;
+    userId?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<EventLog[]> {
+    const limit = filters?.limit || 100;
+    const conditions = [];
+    
+    // Build filter conditions
+    if (filters?.userId) {
+      conditions.push(eq(eventLogs.userId, filters.userId));
+    }
+    
+    if (filters?.search) {
+      conditions.push(
+        or(
+          ilike(eventLogs.details, `%${filters.search}%`),
+          ilike(eventLogs.action, `%${filters.search}%`)
+        )!
+      );
+    }
+    
+    if (filters?.startDate) {
+      conditions.push(sql`${eventLogs.createdAt} >= ${filters.startDate}`);
+    }
+    
+    if (filters?.endDate) {
+      // Add 1 day to endDate to include the entire day using SQL interval
+      conditions.push(sql`${eventLogs.createdAt} < (${filters.endDate}::date + INTERVAL '1 day')`);
+    }
+    
+    // Apply filters using AND
+    let query = db.select().from(eventLogs);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query
       .orderBy(sql`${eventLogs.createdAt} DESC`)
       .limit(limit);
   }

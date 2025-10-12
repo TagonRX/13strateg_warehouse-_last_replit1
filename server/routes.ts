@@ -387,8 +387,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Event logs (admin only)
   app.get("/api/logs", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
-      const logs = await storage.getEventLogs(limit);
+      const filters = {
+        limit: req.query.limit ? parseInt(req.query.limit as string) : 100,
+        userId: req.query.userId as string | undefined,
+        search: req.query.search as string | undefined,
+        startDate: req.query.startDate as string | undefined,
+        endDate: req.query.endDate as string | undefined,
+      };
+      
+      const logs = await storage.getEventLogs(filters);
       return res.json(logs);
     } catch (error: any) {
       console.error("Get logs error:", error);
