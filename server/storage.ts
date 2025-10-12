@@ -143,22 +143,43 @@ export class DbStorage implements IStorage {
       .limit(limit);
   }
 
+  // Helper function to extract location from SKU
+  // SKU format examples:
+  // - A101-F → Location: A101 (remove single letter after dash)
+  // - E501-N → Location: E501 (remove single letter after dash)
+  // - ZW-F232 → Location: ZW-F232 (no change, multi-char after dash)
+  // - ABC123 → Location: ABC123 (no change, no dash)
+  private extractLocation(sku: string): string {
+    const parts = sku.split('-');
+    // Only process if there's a dash AND last segment is exactly 1 letter
+    if (parts.length > 1) {
+      const lastPart = parts[parts.length - 1];
+      if (lastPart.length === 1 && /[A-Z]/i.test(lastPart)) {
+        // Remove the dash and single letter suffix
+        return parts.slice(0, -1).join('-');
+      }
+    }
+    // For all other cases (no dash, or multi-char suffix), return as-is
+    return sku;
+  }
+
   // Warehouse loading analysis
   async getWarehouseLoadingByLocation(): Promise<{
     location: string;
     skuCount: number;
-    items: { sku: string; name: string; quantity: number }[];
+    totalQuantity: number;
+    items: { sku: string; name: string; quantity: number; barcode?: string }[];
   }[]> {
     const items = await db
       .select()
       .from(inventoryItems)
       .where(eq(inventoryItems.status, "IN_STOCK"));
 
-    // Group by location
+    // Group by extracted location
     const locationMap = new Map<string, InventoryItem[]>();
     
     for (const item of items) {
-      const location = item.location;
+      const location = this.extractLocation(item.sku);
       if (!locationMap.has(location)) {
         locationMap.set(location, []);
       }
@@ -166,15 +187,20 @@ export class DbStorage implements IStorage {
     }
 
     // Convert to required format
-    return Array.from(locationMap.entries()).map(([location, locationItems]) => ({
-      location,
-      skuCount: locationItems.length,
-      items: locationItems.map(item => ({
-        sku: item.sku,
-        name: item.name,
-        quantity: item.quantity,
-      })),
-    })).sort((a, b) => b.skuCount - a.skuCount); // Sort by SKU count descending
+    return Array.from(locationMap.entries()).map(([location, locationItems]) => {
+      const totalQuantity = locationItems.reduce((sum, item) => sum + item.quantity, 0);
+      return {
+        location,
+        skuCount: locationItems.length,
+        totalQuantity,
+        items: locationItems.map(item => ({
+          sku: item.sku,
+          name: item.name,
+          quantity: item.quantity,
+          barcode: item.barcode || undefined,
+        })),
+      };
+    }).sort((a, b) => a.location.localeCompare(b.location)); // Sort by location alphabetically
   }
 }
 

@@ -117,7 +117,8 @@ export async function bulkUploadInventory(
 export async function getWarehouseLoading(): Promise<{
   location: string;
   skuCount: number;
-  items: { sku: string; name: string; quantity: number }[];
+  totalQuantity: number;
+  items: { sku: string; name: string; quantity: number; barcode?: string }[];
 }[]> {
   const response = await fetch("/api/warehouse/loading", {
     headers: getHeaders(),
