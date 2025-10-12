@@ -7,8 +7,8 @@ This is a comprehensive warehouse management system designed for inventory track
 The system handles:
 - Individual and bulk stock intake with barcode assignment
 - Location-based picking and stock removal
-- Daily picking list management
-- Real-time inventory tracking
+- Daily picking list management with CSV upload and barcode scanning
+- Real-time inventory tracking with progress monitoring
 - Warehouse capacity monitoring with overload warnings
 - Worker performance analytics
 - Complete event audit logging
@@ -95,12 +95,19 @@ Preferred communication style: Simple, everyday language.
 
 3. **event_logs** - Audit trail of all warehouse operations
    - Fields: id (UUID), userId, action, details, createdAt
-   - Actions: LOGIN, STOCK_IN, STOCK_OUT, CSV_UPLOAD, etc.
+   - Actions: LOGIN, STOCK_IN, STOCK_OUT, CSV_UPLOAD, PICKING_LIST_CREATED, ITEM_PICKED, etc.
 
 4. **worker_analytics** - Daily performance metrics
    - Fields: id (UUID), userId, date, itemsReceived, itemsPicked, csvErrors
 
-5. **picking_lists** - (Schema defined but implementation may be incomplete)
+5. **picking_lists** - Daily picking list management
+   - Fields: id (UUID), name, userId, status (PENDING/IN_PROGRESS/COMPLETED), createdAt, completedAt
+   - One list can have multiple picking tasks
+
+6. **picking_tasks** - Individual pick items within a picking list
+   - Fields: id (UUID), listId, sku, requiredQuantity, pickedQuantity, pickedItemIds (array), status (PENDING/COMPLETED), createdAt, completedAt
+   - SKU-based picking (matches any item with same SKU)
+   - Tracks which specific items were picked via pickedItemIds
 
 **Key Design Decisions**:
 - UUID primary keys using PostgreSQL's `gen_random_uuid()`
