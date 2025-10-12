@@ -271,41 +271,42 @@ export default function StockOutView({ user }: { user: { role: string } }) {
                       value={location.location}
                       data-testid={`accordion-location-${location.location}`}
                     >
-                      <AccordionTrigger className="hover-elevate px-4 rounded-md">
-                        <div className="flex items-center justify-between w-full pr-4">
-                          <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        {user.role === "admin" && (
+                          <Checkbox
+                            data-testid={`checkbox-location-${location.location}`}
+                            checked={selectedLocations.has(location.location)}
+                            onCheckedChange={() => toggleLocationSelection(location.location)}
+                          />
+                        )}
+                        <AccordionTrigger className="hover-elevate px-4 rounded-md flex-1">
+                          <div className="flex items-center justify-between w-full pr-4">
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono font-semibold">{location.location}</span>
+                              <Badge variant="secondary" data-testid={`badge-sku-count-${location.location}`}>
+                                {location.skuCount} SKU{location.skuCount !== 1 ? 's' : ''}
+                              </Badge>
+                              <Badge variant="outline" data-testid={`badge-total-qty-${location.location}`}>
+                                {location.totalQuantity} units
+                              </Badge>
+                            </div>
                             {user.role === "admin" && (
-                              <Checkbox
-                                data-testid={`checkbox-location-${location.location}`}
-                                checked={selectedLocations.has(location.location)}
-                                onCheckedChange={() => toggleLocationSelection(location.location)}
-                                onClick={(e) => e.stopPropagation()}
-                              />
+                              <Button
+                                data-testid={`button-delete-location-${location.location}`}
+                                size="icon"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteLocation(location.location, location.items.length);
+                                }}
+                                className="h-8 w-8"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
                             )}
-                            <span className="font-mono font-semibold">{location.location}</span>
-                            <Badge variant="secondary" data-testid={`badge-sku-count-${location.location}`}>
-                              {location.skuCount} SKU{location.skuCount !== 1 ? 's' : ''}
-                            </Badge>
-                            <Badge variant="outline" data-testid={`badge-total-qty-${location.location}`}>
-                              {location.totalQuantity} units
-                            </Badge>
                           </div>
-                          {user.role === "admin" && (
-                            <Button
-                              data-testid={`button-delete-location-${location.location}`}
-                              size="icon"
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteLocation(location.location, location.items.length);
-                              }}
-                              className="h-8 w-8"
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
-                        </div>
-                      </AccordionTrigger>
+                        </AccordionTrigger>
+                      </div>
                       <AccordionContent>
                         <div className="space-y-2 px-4 pt-2">
                           {location.items.map((item) => (

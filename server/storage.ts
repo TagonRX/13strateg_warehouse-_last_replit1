@@ -3,12 +3,18 @@ import {
   users, 
   inventoryItems, 
   eventLogs,
+  pickingLists,
+  pickingTasks,
   type User, 
   type InsertUser,
   type InventoryItem,
   type InsertInventoryItem,
   type InsertEventLog,
-  type EventLog
+  type EventLog,
+  type PickingList,
+  type InsertPickingList,
+  type PickingTask,
+  type InsertPickingTask
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 
@@ -294,6 +300,143 @@ export class DbStorage implements IStorage {
     });
 
     return itemsToDelete.length;
+  }
+
+  // Daily Picking methods
+  async createPickingList(data: { name: string; userId: string; tasks: { sku: string; requiredQuantity: number }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }> {
+    // Create the picking list
+    const [list] = await db.insert(pickingLists).values({
+      name: data.name,
+      createdBy: data.userId,
+      status: "PENDING",
+    }).returning();
+
+    // Create tasks for the picking list
+    const tasks = await db.insert(pickingTasks).values(
+      data.tasks.map(task => ({
+        listId: list.id,
+        sku: task.sku,
+        requiredQuantity: task.requiredQuantity,
+        pickedQuantity: 0,
+        status: "PENDING",
+      }))
+    ).returning();
+
+    // Log the event
+    await this.createEventLog({
+      userId: data.userId,
+      action: "CREATE_PICKING_LIST",
+      details: `Created picking list "${data.name}" with ${data.tasks.length} tasks`,
+    });
+
+    return { list, tasks };
+  }
+
+  async getAllPickingLists(): Promise<PickingList[]> {
+    return await db.select().from(pickingLists).orderBy(sql`${pickingLists.createdAt} DESC`);
+  }
+
+  async getPickingListWithTasks(listId: string): Promise<{ list: PickingList; tasks: PickingTask[] } | null> {
+    const [list] = await db.select().from(pickingLists).where(eq(pickingLists.id, listId));
+    if (!list) return null;
+
+    const tasks = await db.select().from(pickingTasks)
+      .where(eq(pickingTasks.listId, listId))
+      .orderBy(pickingTasks.sku);
+
+    return { list, tasks };
+  }
+
+  async scanBarcodeForPickingTask(barcode: string, taskId: string, userId: string): Promise<{
+    success: boolean;
+    message: string;
+    item?: InventoryItem;
+    task?: PickingTask;
+  }> {
+    // Get the task
+    const [task] = await db.select().from(pickingTasks).where(eq(pickingTasks.id, taskId));
+    if (!task) {
+      return { success: false, message: "Task not found" };
+    }
+
+    // Find item with matching barcode (IN_STOCK only)
+    const [item] = await db.select().from(inventoryItems)
+      .where(and(
+        eq(inventoryItems.barcode, barcode),
+        eq(inventoryItems.status, "IN_STOCK")
+      ));
+
+    if (!item) {
+      return { success: false, message: "Item not found or already picked" };
+    }
+
+    // Check if SKU matches
+    if (item.sku !== task.sku) {
+      return { 
+        success: false, 
+        message: `Wrong item! Expected SKU: ${task.sku}, but scanned: ${item.sku}` 
+      };
+    }
+
+    // Check if task is already complete
+    if (task.pickedQuantity >= task.requiredQuantity) {
+      return { success: false, message: "Task already completed" };
+    }
+
+    // Mark item as PICKED
+    await db.update(inventoryItems)
+      .set({ status: "PICKED", updatedAt: new Date() })
+      .where(eq(inventoryItems.id, item.id));
+
+    // Update task progress
+    const pickedIds = task.pickedItemIds || [];
+    pickedIds.push(item.id);
+    const newPickedQuantity = task.pickedQuantity + 1;
+    const isCompleted = newPickedQuantity >= task.requiredQuantity;
+
+    const [updatedTask] = await db.update(pickingTasks)
+      .set({
+        pickedQuantity: newPickedQuantity,
+        pickedItemIds: pickedIds,
+        status: isCompleted ? "COMPLETED" : "PENDING",
+        completedAt: isCompleted ? new Date() : null,
+      })
+      .where(eq(pickingTasks.id, taskId))
+      .returning();
+
+    // Log the event
+    await this.createEventLog({
+      userId,
+      action: "PICK_ITEM",
+      details: `Picked ${item.name} (${item.sku}) for picking list task`,
+    });
+
+    return { 
+      success: true, 
+      message: `Item picked successfully! Progress: ${newPickedQuantity}/${task.requiredQuantity}`,
+      item,
+      task: updatedTask
+    };
+  }
+
+  async deletePickingList(listId: string, userId: string): Promise<boolean> {
+    const [list] = await db.select().from(pickingLists).where(eq(pickingLists.id, listId));
+    if (!list) return false;
+
+    // Delete tasks first
+    await db.delete(pickingTasks).where(eq(pickingTasks.listId, listId));
+    
+    // Delete list
+    await db.delete(pickingLists).where(eq(pickingLists.id, listId));
+
+    // Log the event
+    await this.createEventLog({
+      userId,
+      action: "DELETE_PICKING_LIST",
+      details: `Deleted picking list "${list.name}"`,
+    });
+
+    return true;
   }
 }
 

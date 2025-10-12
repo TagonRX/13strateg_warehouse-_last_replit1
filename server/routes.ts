@@ -219,6 +219,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Daily Picking routes
+  app.post("/api/picking/lists", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { name, tasks } = req.body;
+
+      if (!name || !tasks || !Array.isArray(tasks)) {
+        return res.status(400).json({ error: "Name and tasks are required" });
+      }
+
+      const result = await storage.createPickingList({
+        name,
+        userId,
+        tasks,
+      });
+
+      return res.json(result);
+    } catch (error: any) {
+      console.error("Create picking list error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/picking/lists", requireAuth, async (req, res) => {
+    try {
+      const lists = await storage.getAllPickingLists();
+      return res.json(lists);
+    } catch (error: any) {
+      console.error("Get picking lists error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/picking/lists/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await storage.getPickingListWithTasks(id);
+
+      if (!result) {
+        return res.status(404).json({ error: "Picking list not found" });
+      }
+
+      return res.json(result);
+    } catch (error: any) {
+      console.error("Get picking list error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/picking/scan", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { barcode, taskId } = req.body;
+
+      if (!barcode || !taskId) {
+        return res.status(400).json({ error: "Barcode and taskId are required" });
+      }
+
+      const result = await storage.scanBarcodeForPickingTask(barcode, taskId, userId);
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.message });
+      }
+
+      return res.json(result);
+    } catch (error: any) {
+      console.error("Scan barcode error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/picking/lists/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { id } = req.params;
+
+      const deleted = await storage.deletePickingList(id, userId);
+
+      if (!deleted) {
+        return res.status(404).json({ error: "Picking list not found" });
+      }
+
+      return res.status(204).send();
+    } catch (error: any) {
+      console.error("Delete picking list error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // User management routes (admin only)
   app.get("/api/users", requireAuth, requireAdmin, async (req, res) => {
     try {

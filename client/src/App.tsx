@@ -13,6 +13,7 @@ import InventoryTable from "@/components/InventoryTable";
 import WarehouseLoadingView from "@/components/WarehouseLoadingView";
 import UserManagementPanel from "@/components/UserManagementPanel";
 import StockOutView from "@/components/StockOutView";
+import DailyPickingView from "@/components/DailyPickingView";
 import NotFound from "@/pages/not-found";
 import * as api from "@/lib/api";
 import type { InventoryItem } from "@shared/schema";
@@ -286,10 +287,7 @@ function AppContent() {
           <StockOutView user={user} />
         </Route>
         <Route path="/picking">
-          <div className="bg-card p-8 rounded-md border text-center">
-            <h2 className="text-2xl font-bold mb-4">Daily Picking List</h2>
-            <p className="text-muted-foreground">Функция в разработке</p>
-          </div>
+          <DailyPickingView />
         </Route>
         <Route path="/sku-errors">
           <div className="bg-card p-8 rounded-md border text-center">

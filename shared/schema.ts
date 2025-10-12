@@ -61,10 +61,13 @@ export const pickingLists = pgTable("picking_lists", {
 export const pickingTasks = pgTable("picking_tasks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   listId: varchar("list_id").references(() => pickingLists.id),
-  itemId: varchar("item_id").references(() => inventoryItems.id),
-  quantity: integer("quantity").notNull().default(1),
-  status: text("status").notNull().default("PENDING"), // PENDING, PICKED
-  pickedAt: timestamp("picked_at"),
+  sku: text("sku").notNull(), // SKU to pick (not specific item ID)
+  requiredQuantity: integer("required_quantity").notNull().default(1), // How many needed
+  pickedQuantity: integer("picked_quantity").notNull().default(0), // How many picked
+  status: text("status").notNull().default("PENDING"), // PENDING, COMPLETED
+  pickedItemIds: text("picked_item_ids").array(), // IDs of picked inventory items
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
 });
 
 // Insert schemas
@@ -90,6 +93,12 @@ export const insertPickingListSchema = createInsertSchema(pickingLists).omit({
   completedAt: true,
 });
 
+export const insertPickingTaskSchema = createInsertSchema(pickingTasks).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -103,4 +112,5 @@ export type EventLog = typeof eventLogs.$inferSelect;
 export type InsertPickingList = z.infer<typeof insertPickingListSchema>;
 export type PickingList = typeof pickingLists.$inferSelect;
 
+export type InsertPickingTask = z.infer<typeof insertPickingTaskSchema>;
 export type PickingTask = typeof pickingTasks.$inferSelect;
