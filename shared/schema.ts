@@ -70,6 +70,20 @@ export const pickingTasks = pgTable("picking_tasks", {
   completedAt: timestamp("completed_at"),
 });
 
+// SKU Errors - несовпадения SKU при bulk upload
+export const skuErrors = pgTable("sku_errors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  productId: text("product_id").notNull(),
+  name: text("name").notNull(),
+  csvSku: text("csv_sku").notNull(), // SKU из CSV файла
+  existingSku: text("existing_sku").notNull(), // Существующий SKU в системе
+  quantity: integer("quantity").notNull().default(1),
+  barcode: text("barcode"),
+  status: text("status").notNull().default("PENDING"), // PENDING, RESOLVED
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -99,6 +113,12 @@ export const insertPickingTaskSchema = createInsertSchema(pickingTasks).omit({
   completedAt: true,
 });
 
+export const insertSkuErrorSchema = createInsertSchema(skuErrors).omit({
+  id: true,
+  createdAt: true,
+  resolvedAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -114,3 +134,6 @@ export type PickingList = typeof pickingLists.$inferSelect;
 
 export type InsertPickingTask = z.infer<typeof insertPickingTaskSchema>;
 export type PickingTask = typeof pickingTasks.$inferSelect;
+
+export type InsertSkuError = z.infer<typeof insertSkuErrorSchema>;
+export type SkuError = typeof skuErrors.$inferSelect;
