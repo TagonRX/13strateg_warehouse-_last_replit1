@@ -69,7 +69,6 @@ export async function createInventoryItem(
     location: string;
     quantity: number;
     barcode?: string;
-    createdBy?: string;
   }
 ): Promise<InventoryItem> {
   const response = await fetch("/api/inventory", {
@@ -94,19 +93,17 @@ export async function bulkUploadInventory(
     location: string;
     quantity: number;
     barcode?: string;
-  }>,
-  userId: string
+  }>
 ): Promise<{ success: number; updated: number; errors: number }> {
   const formattedItems = items.map(item => ({
     ...item,
     status: "IN_STOCK",
-    createdBy: userId,
   }));
 
   const response = await fetch("/api/inventory/bulk-upload", {
     method: "POST",
     headers: getHeaders(),
-    body: JSON.stringify({ items: formattedItems, userId }),
+    body: JSON.stringify({ items: formattedItems }),
   });
 
   if (!response.ok) {
@@ -175,6 +172,19 @@ export async function deleteUser(id: string): Promise<void> {
     const error = await response.json();
     throw new Error(error.error || "Failed to delete user");
   }
+}
+
+export async function logout(): Promise<void> {
+  const response = await fetch("/api/auth/logout", {
+    method: "POST",
+    headers: getHeaders(),
+  });
+
+  if (!response.ok) {
+    console.error("Logout request failed, but clearing local token anyway");
+  }
+  
+  setAuthToken(null);
 }
 
 export async function getEventLogs(limit?: number): Promise<any[]> {

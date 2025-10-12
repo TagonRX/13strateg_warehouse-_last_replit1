@@ -72,7 +72,6 @@ function AppContent() {
       api.createInventoryItem({
         ...data,
         location: data.sku,
-        createdBy: user?.id,
       }),
     onSuccess: () => {
       refetchInventory();
@@ -107,7 +106,7 @@ function AppContent() {
         };
       }).filter(item => item.productId && item.name && item.sku);
 
-      return api.bulkUploadInventory(items, user!.id);
+      return api.bulkUploadInventory(items);
     },
     onSuccess: (result) => {
       refetchInventory();
@@ -165,8 +164,14 @@ function AppContent() {
     loginMutation.mutate({ login, password });
   };
 
-  const handleLogout = () => {
-    setUser(null);
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      setUser(null);
+    }
   };
 
   const handleStockIn = (data: any) => {

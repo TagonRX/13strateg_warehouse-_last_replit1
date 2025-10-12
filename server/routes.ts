@@ -66,6 +66,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/inventory", requireAuth, async (req, res) => {
     try {
+      const userId = (req as any).userId; // From requireAuth middleware
+      
       const validation = insertInventoryItemSchema.safeParse(req.body);
       
       if (!validation.success) {
@@ -86,28 +88,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           barcode: validation.data.barcode,
         });
 
-        // Log the event
-        if (validation.data.createdBy) {
-          await storage.createEventLog({
-            userId: validation.data.createdBy,
-            action: "STOCK_IN_UPDATE",
-            details: `Updated ${validation.data.name} (${validation.data.productId}): +${quantityToAdd}`,
-          });
-        }
+        // Log the event using authenticated user ID
+        await storage.createEventLog({
+          userId,
+          action: "STOCK_IN_UPDATE",
+          details: `Updated ${validation.data.name} (${validation.data.productId}): +${quantityToAdd}`,
+        });
 
         return res.json(updated);
       } else {
-        // Create new item
-        const item = await storage.createInventoryItem(validation.data);
+        // Create new item with authenticated user ID
+        const item = await storage.createInventoryItem({
+          ...validation.data,
+          createdBy: userId,
+        });
 
-        // Log the event
-        if (validation.data.createdBy) {
-          await storage.createEventLog({
-            userId: validation.data.createdBy,
-            action: "STOCK_IN",
-            details: `Added ${validation.data.name} (${validation.data.productId}): ${validation.data.quantity}`,
-          });
-        }
+        // Log the event using authenticated user ID
+        await storage.createEventLog({
+          userId,
+          action: "STOCK_IN",
+          details: `Added ${validation.data.name} (${validation.data.productId}): ${validation.data.quantity}`,
+        });
 
         return res.status(201).json(item);
       }
@@ -119,22 +120,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/inventory/bulk-upload", requireAuth, async (req, res) => {
     try {
-      const { items, userId } = req.body;
+      const userId = (req as any).userId; // From requireAuth middleware
+      const { items } = req.body;
       
       if (!Array.isArray(items)) {
         return res.status(400).json({ error: "Items must be an array" });
       }
 
-      const result = await storage.bulkUpsertInventoryItems(items);
+      // Force createdBy to authenticated user ID for all items
+      const sanitizedItems = items.map(item => ({
+        ...item,
+        createdBy: userId,
+      }));
 
-      // Log the event
-      if (userId) {
-        await storage.createEventLog({
-          userId,
-          action: "CSV_UPLOAD",
-          details: `Bulk upload: ${result.success} new, ${result.updated} updated, ${result.errors} errors`,
-        });
-      }
+      const result = await storage.bulkUpsertInventoryItems(sanitizedItems);
+
+      // Log the event using authenticated user ID
+      await storage.createEventLog({
+        userId,
+        action: "CSV_UPLOAD",
+        details: `Bulk upload: ${result.success} new, ${result.updated} updated, ${result.errors} errors`,
+      });
 
       return res.json(result);
     } catch (error: any) {
@@ -219,6 +225,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(logs);
     } catch (error: any) {
       console.error("Get logs error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Logout endpoint
+  app.post("/api/auth/logout", requireAuth, async (req, res) => {
+    try {
+      const token = req.headers.authorization?.replace("Bearer ", "");
+      
+      if (token) {
+        const { destroySession } = await import("./auth");
+        destroySession(token);
+      }
+
+      return res.json({ message: "Logged out successfully" });
+    } catch (error: any) {
+      console.error("Logout error:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
