@@ -403,6 +403,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Worker analytics (admin only)
+  app.get("/api/analytics", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const period = (req.query.period as 'day' | 'week' | 'month' | 'all') || 'day';
+      const analytics = await storage.getWorkerAnalytics(period);
+      return res.json(analytics);
+    } catch (error: any) {
+      console.error("Get analytics error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Logout endpoint
   app.post("/api/auth/logout", requireAuth, async (req, res) => {
     try {

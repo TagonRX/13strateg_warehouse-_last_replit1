@@ -50,6 +50,19 @@ export interface IStorage {
     skuCount: number;
     items: { sku: string; name: string; quantity: number }[];
   }[]>;
+  
+  // Worker analytics
+  getWorkerAnalytics(period: 'day' | 'week' | 'month' | 'all'): Promise<{
+    userId: string;
+    userName: string;
+    login: number;
+    stockIn: number;
+    stockOut: number;
+    csvUpload: number;
+    pickingListCreated: number;
+    itemPicked: number;
+    locationDeleted: number;
+  }[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -479,6 +492,53 @@ export class DbStorage implements IStorage {
     });
 
     return true;
+  }
+
+  async getWorkerAnalytics(period: 'day' | 'week' | 'month' | 'all'): Promise<{
+    userId: string;
+    userName: string;
+    login: number;
+    stockIn: number;
+    stockOut: number;
+    csvUpload: number;
+    pickingListCreated: number;
+    itemPicked: number;
+    locationDeleted: number;
+  }[]> {
+    // Calculate date filter based on period
+    let dateFilter = sql`true`;
+    if (period === 'day') {
+      dateFilter = sql`${eventLogs.createdAt} >= CURRENT_DATE`;
+    } else if (period === 'week') {
+      dateFilter = sql`${eventLogs.createdAt} >= CURRENT_DATE - INTERVAL '7 days'`;
+    } else if (period === 'month') {
+      dateFilter = sql`${eventLogs.createdAt} >= CURRENT_DATE - INTERVAL '30 days'`;
+    }
+
+    // Get all users
+    const allUsers = await db.select().from(users).where(eq(users.role, 'worker'));
+    
+    // Get event logs for the period
+    const logs = await db.select().from(eventLogs).where(dateFilter);
+
+    // Group by user and count actions
+    const analytics = allUsers.map(user => {
+      const userLogs = logs.filter(log => log.userId === user.id);
+      
+      return {
+        userId: user.id,
+        userName: user.name,
+        login: userLogs.filter(log => log.action === 'LOGIN').length,
+        stockIn: userLogs.filter(log => log.action === 'STOCK_IN').length,
+        stockOut: userLogs.filter(log => log.action === 'STOCK_OUT').length,
+        csvUpload: userLogs.filter(log => log.action === 'CSV_UPLOAD').length,
+        pickingListCreated: userLogs.filter(log => log.action === 'PICKING_LIST_CREATED').length,
+        itemPicked: userLogs.filter(log => log.action === 'PICK_ITEM' || log.action === 'ITEM_PICKED').length,
+        locationDeleted: userLogs.filter(log => log.action === 'LOCATION_DELETED').length,
+      };
+    });
+
+    return analytics;
   }
 }
 
