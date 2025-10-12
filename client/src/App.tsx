@@ -15,6 +15,7 @@ import UserManagementPanel from "@/components/UserManagementPanel";
 import StockOutView from "@/components/StockOutView";
 import DailyPickingView from "@/components/DailyPickingView";
 import EventLogsView from "@/components/EventLogsView";
+import WorkerAnalytics from "@/components/WorkerAnalytics";
 import NotFound from "@/pages/not-found";
 import * as api from "@/lib/api";
 import type { InventoryItem } from "@shared/schema";
@@ -297,9 +298,9 @@ function AppContent() {
           </div>
         </Route>
         <Route path="/analytics">
-          <div className="bg-card p-8 rounded-md border text-center">
-            <h2 className="text-2xl font-bold mb-4">Аналитика работников</h2>
-            <p className="text-muted-foreground">Функция в разработке</p>
+          <div className="space-y-4">
+            <h1 className="text-3xl font-bold">Аналитика работников</h1>
+            <WorkerAnalytics />
           </div>
         </Route>
         <Route path="/logs">
