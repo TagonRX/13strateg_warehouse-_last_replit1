@@ -42,9 +42,10 @@ interface UserManagementPanelProps {
   onCreateUser: (user: { name: string; login: string; password: string; role: "admin" | "worker" }) => void;
   onDeleteUser: (userId: string) => void;
   onUpdatePassword: (userId: string, password: string) => void;
+  isUpdatingPassword?: boolean;
 }
 
-export default function UserManagementPanel({ users, onCreateUser, onDeleteUser, onUpdatePassword }: UserManagementPanelProps) {
+export default function UserManagementPanel({ users, onCreateUser, onDeleteUser, onUpdatePassword, isUpdatingPassword = false }: UserManagementPanelProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [login, setLogin] = useState("");
@@ -231,8 +232,8 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
               </div>
             </div>
             <DialogFooter>
-              <Button type="submit" data-testid="button-save-password">
-                Сохранить
+              <Button type="submit" data-testid="button-save-password" disabled={isUpdatingPassword}>
+                {isUpdatingPassword ? "Сохранение..." : "Сохранить"}
               </Button>
             </DialogFooter>
           </form>

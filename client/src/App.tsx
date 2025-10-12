@@ -276,6 +276,7 @@ function AppContent() {
                 onCreateUser={handleCreateUser}
                 onDeleteUser={handleDeleteUser}
                 onUpdatePassword={handleUpdatePassword}
+                isUpdatingPassword={updatePasswordMutation.isPending}
               />
             </div>
           </Route>
