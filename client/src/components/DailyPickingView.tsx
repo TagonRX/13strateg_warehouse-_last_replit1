@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,15 +33,7 @@ export default function DailyPickingView() {
 
   const createListMutation = useMutation({
     mutationFn: async (data: { name: string; tasks: { sku: string; requiredQuantity: number }[] }) => {
-      const response = await fetch("/api/picking/lists", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("authToken")}`
-        },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error(await response.text());
+      const response = await apiRequest("POST", "/api/picking/lists", data);
       return response.json();
     },
     onSuccess: (data) => {
@@ -58,17 +50,8 @@ export default function DailyPickingView() {
 
   const scanMutation = useMutation({
     mutationFn: async (data: { barcode: string; taskId: string }) => {
-      const response = await fetch("/api/picking/scan", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("authToken")}`
-        },
-        body: JSON.stringify(data),
-      });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error);
-      return json;
+      const response = await apiRequest("POST", "/api/picking/scan", data);
+      return response.json();
     },
     onSuccess: (data) => {
       setLastResult(data);
@@ -87,11 +70,7 @@ export default function DailyPickingView() {
 
   const deleteListMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/picking/lists/${id}`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${localStorage.getItem("authToken")}` },
-      });
-      if (!response.ok) throw new Error("Failed to delete list");
+      await apiRequest("DELETE", `/api/picking/lists/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/picking/lists"] });

@@ -280,32 +280,27 @@ export default function StockOutView({ user }: { user: { role: string } }) {
                           />
                         )}
                         <AccordionTrigger className="hover-elevate px-4 rounded-md flex-1">
-                          <div className="flex items-center justify-between w-full pr-4">
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono font-semibold">{location.location}</span>
-                              <Badge variant="secondary" data-testid={`badge-sku-count-${location.location}`}>
-                                {location.skuCount} SKU{location.skuCount !== 1 ? 's' : ''}
-                              </Badge>
-                              <Badge variant="outline" data-testid={`badge-total-qty-${location.location}`}>
-                                {location.totalQuantity} units
-                              </Badge>
-                            </div>
-                            {user.role === "admin" && (
-                              <Button
-                                data-testid={`button-delete-location-${location.location}`}
-                                size="icon"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteLocation(location.location, location.items.length);
-                                }}
-                                className="h-8 w-8"
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            )}
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono font-semibold">{location.location}</span>
+                            <Badge variant="secondary" data-testid={`badge-sku-count-${location.location}`}>
+                              {location.skuCount} SKU{location.skuCount !== 1 ? 's' : ''}
+                            </Badge>
+                            <Badge variant="outline" data-testid={`badge-total-qty-${location.location}`}>
+                              {location.totalQuantity} units
+                            </Badge>
                           </div>
                         </AccordionTrigger>
+                        {user.role === "admin" && (
+                          <Button
+                            data-testid={`button-delete-location-${location.location}`}
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDeleteLocation(location.location, location.items.length)}
+                            className="h-8 w-8"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                       <AccordionContent>
                         <div className="space-y-2 px-4 pt-2">
