@@ -146,11 +146,14 @@ export default function StockOutView({ user }: { user: { role: string } }) {
       return;
     }
 
-    const totalItems = filteredLocations
+    // Calculate from all locations, not just filtered
+    const totalItems = locations
       .filter(loc => selectedLocations.has(loc.location))
       .reduce((sum, loc) => sum + loc.items.length, 0);
 
-    if (!confirm(`Delete ${selectedLocations.size} locations with ${totalItems} total items?`)) {
+    const selectedCount = selectedLocations.size;
+
+    if (!confirm(`Delete ${selectedCount} locations with ${totalItems} total items?`)) {
       return;
     }
 
@@ -164,7 +167,7 @@ export default function StockOutView({ user }: { user: { role: string } }) {
       
       toast({
         title: "Bulk Delete Complete",
-        description: `Deleted ${selectedLocations.size} locations with ${totalItems} items`,
+        description: `Deleted ${selectedCount} locations with ${totalItems} items`,
       });
     } catch (error: any) {
       toast({
