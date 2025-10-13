@@ -40,6 +40,7 @@ export function setupWebSocket(server: Server) {
   });
 
   wss.on("connection", (ws: AuthenticatedWebSocket, req) => {
+    console.log("[WS] New connection from:", req.socket.remoteAddress);
     ws.isAlive = true;
 
     ws.on("pong", () => {
@@ -66,11 +67,14 @@ export function setupWebSocket(server: Server) {
             }
             userClients.add(ws);
             
+            console.log(`[WS] User ${session.userId} authenticated, total devices: ${userClients.size}`);
+            
             ws.send(JSON.stringify({ 
               type: "auth_success",
               userId: session.userId 
             }));
           } else {
+            console.log("[WS] Authentication failed: Invalid token");
             ws.send(JSON.stringify({ 
               type: "auth_error",
               error: "Invalid token" 
@@ -83,17 +87,22 @@ export function setupWebSocket(server: Server) {
         if (message.type === "remote_scan" && ws.userId) {
           const { barcode } = message;
           
+          console.log(`[WS] Remote scan from user ${ws.userId}: ${barcode}`);
+          
           // Send to all other devices of the same user
           const userClients = clients.get(ws.userId);
           if (userClients) {
+            let sentCount = 0;
             userClients.forEach((client) => {
               if (client !== ws && client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({
                   type: "barcode_scanned",
                   barcode
                 }));
+                sentCount++;
               }
             });
+            console.log(`[WS] Sent barcode to ${sentCount} other device(s)`);
           }
         }
 
