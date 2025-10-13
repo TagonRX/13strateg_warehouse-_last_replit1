@@ -164,10 +164,9 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     queryKey: ["/api/warehouse/active-locations"],
   });
 
-  // Fetch warehouse settings
+  // Fetch warehouse settings (all users need TSKU/MAXQ data for filters and display)
   const { data: warehouseSettings = [] } = useQuery<WarehouseSetting[]>({
     queryKey: ["/api/warehouse/settings"],
-    enabled: userRole === "admin",
   });
 
   // Set active locations mutation

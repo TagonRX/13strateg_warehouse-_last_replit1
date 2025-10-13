@@ -160,8 +160,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Warehouse Settings (Admin only)
-  app.get("/api/warehouse/settings", requireAuth, requireAdmin, async (req, res) => {
+  // Warehouse Settings (Read: all users, Write: admin only)
+  app.get("/api/warehouse/settings", requireAuth, async (req, res) => {
     try {
       const settings = await storage.getAllWarehouseSettings();
       return res.json(settings);
