@@ -2,8 +2,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Upload, FileText, CheckCircle, XCircle } from "lucide-react";
+import { Upload, FileText, CheckCircle, XCircle, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface CSVUploaderProps {
   onUpload: (file: File) => Promise<{
@@ -14,6 +17,7 @@ interface CSVUploaderProps {
 }
 
 export default function CSVUploader({ onUpload }: CSVUploaderProps) {
+  const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<{
@@ -21,6 +25,34 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
     updated: number;
     errors: number;
   } | null>(null);
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/inventory/sync-from-file");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setResult({
+        success: data.created,
+        updated: data.updated,
+        errors: 0,
+      });
+      toast({
+        title: "Синхронизация завершена",
+        description: `Создано: ${data.created}, Обновлено: ${data.updated}, Удалено: ${data.deleted}`,
+      });
+      if (data.deletedItems && data.deletedItems.length > 0) {
+        console.log("[FILE SYNC] Deleted items:", data.deletedItems);
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка синхронизации",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -115,6 +147,29 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
             </Alert>
           </div>
         )}
+
+        <div className="border-t pt-4">
+          <div className="bg-accent/50 rounded-md p-4">
+            <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+              <RefreshCw className="w-4 h-4" />
+              Синхронизация из файла
+            </h4>
+            <p className="text-sm text-muted-foreground mb-3">
+              Обновите инвентарь из <code className="bg-background px-1 rounded">data/inventory_sync.csv</code>. 
+              Позиции, отсутствующие в файле, будут удалены.
+            </p>
+            <Button
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+              variant="secondary"
+              className="w-full"
+              data-testid="button-sync-from-file"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+              {syncMutation.isPending ? "Синхронизация..." : "Обновить из файла"}
+            </Button>
+          </div>
+        </div>
 
         <div className="bg-muted rounded-md p-4">
           <h4 className="text-sm font-medium mb-2">Правила обработки:</h4>
