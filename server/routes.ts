@@ -123,8 +123,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req as any).userId; // From requireAuth middleware
       const { items } = req.body;
       
+      console.log("[BULK UPLOAD] Received items count:", items?.length || 0);
+      if (items && items.length > 0) {
+        console.log("[BULK UPLOAD] First 3 items:", JSON.stringify(items.slice(0, 3), null, 2));
+      }
+      
       if (!Array.isArray(items)) {
         return res.status(400).json({ error: "Items must be an array" });
+      }
+
+      if (items.length === 0) {
+        return res.status(400).json({ error: "No items to upload" });
       }
 
       // Force createdBy to authenticated user ID for all items

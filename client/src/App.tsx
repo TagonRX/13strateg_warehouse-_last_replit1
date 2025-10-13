@@ -103,32 +103,57 @@ function AppContent() {
         throw new Error("CSV file is empty");
       }
 
+      // Detect delimiter: semicolon or comma
+      const delimiter = lines[0].includes(";") ? ";" : ",";
+
       // Parse header to determine columns
-      const header = lines[0].toLowerCase().split(",").map(h => h.trim());
-      const productIdIndex = header.indexOf("productid") >= 0 ? header.indexOf("productid") : header.indexOf("id товара") >= 0 ? header.indexOf("id товара") : -1;
-      const nameIndex = header.indexOf("name") >= 0 ? header.indexOf("name") : header.indexOf("название") >= 0 ? header.indexOf("название") : -1;
-      const skuIndex = header.indexOf("sku") >= 0 ? header.indexOf("sku") : header.indexOf("sku (локация)") >= 0 ? header.indexOf("sku (локация)") : -1;
-      const quantityIndex = header.indexOf("quantity") >= 0 ? header.indexOf("quantity") : header.indexOf("количество") >= 0 ? header.indexOf("количество") : -1;
-      const barcodeIndex = header.indexOf("barcode") >= 0 ? header.indexOf("barcode") : header.indexOf("штрихкод") >= 0 ? header.indexOf("штрихкод") : -1;
+      const header = lines[0].toLowerCase().split(delimiter).map(h => h.trim());
+      
+      // Try to find column indexes by name, or use position as fallback
+      let productIdIndex = header.findIndex(h => h.includes("id") || h.includes("productid"));
+      let nameIndex = header.findIndex(h => h.includes("name") || h.includes("название"));
+      let skuIndex = header.findIndex(h => h.includes("sku"));
+      let locationIndex = header.findIndex(h => (h.includes("location") || h.includes("локация")) && !h.includes("sku"));
+      let quantityIndex = header.findIndex(h => h.includes("quantity") || h.includes("количество"));
+      let barcodeIndex = header.findIndex(h => h.includes("barcode") || h.includes("штрихкод"));
+
+      // Fallback: if columns not found by name (encoding issues), use standard positions
+      // Standard format: ID товара; название; SKU; количество; штрихкод
+      if (productIdIndex === -1 && header.length >= 5) productIdIndex = 0;
+      if (nameIndex === -1 && header.length >= 5) nameIndex = 1;
+      if (skuIndex === -1 && header.length >= 5) skuIndex = 2;
+      if (quantityIndex === -1 && header.length >= 5) quantityIndex = 3;
+      if (barcodeIndex === -1 && header.length >= 5) barcodeIndex = 4;
 
       const items = lines.slice(1).map(line => {
-        const parts = line.split(",").map(p => p.trim());
+        const parts = line.split(delimiter).map(p => p.trim().replace(/^"|"$/g, '')); // Remove quotes
         
-        const productId = productIdIndex >= 0 ? parts[productIdIndex] || undefined : undefined;
-        const name = nameIndex >= 0 ? parts[nameIndex] || undefined : undefined;
-        const sku = skuIndex >= 0 ? parts[skuIndex].toUpperCase() : ""; // Convert to uppercase to match form behavior
-        const quantity = quantityIndex >= 0 ? parseInt(parts[quantityIndex]) || 1 : 1;
-        const barcode = barcodeIndex >= 0 ? parts[barcodeIndex] || undefined : undefined;
+        const productId = productIdIndex >= 0 && parts[productIdIndex] ? parts[productIdIndex] : undefined;
+        const name = nameIndex >= 0 && parts[nameIndex] ? parts[nameIndex] : undefined;
+        const sku = skuIndex >= 0 && parts[skuIndex] ? parts[skuIndex].toUpperCase() : "";
+        // Try to get location from CSV; if not present, use SKU as fallback
+        let location = locationIndex >= 0 && parts[locationIndex] ? parts[locationIndex].toUpperCase() : "";
+        if (!location && sku) {
+          location = sku; // Fallback: if no location column, use SKU
+        }
+        const quantity = quantityIndex >= 0 && parts[quantityIndex] ? parseInt(parts[quantityIndex]) || 1 : 1;
+        const barcode = barcodeIndex >= 0 && parts[barcodeIndex] ? parts[barcodeIndex] : undefined;
 
         return {
           productId,
           name,
           sku,
-          location: sku, // Location = SKU
+          location,
           quantity,
           barcode,
         };
       }).filter(item => item.sku); // Only require SKU
+
+      console.log("[CSV PARSE] Delimiter:", delimiter);
+      console.log("[CSV PARSE] Header:", header);
+      console.log("[CSV PARSE] Indexes:", { productIdIndex, nameIndex, skuIndex, locationIndex, quantityIndex, barcodeIndex });
+      console.log("[CSV PARSE] Total items:", items.length);
+      console.log("[CSV PARSE] First 3 items:", items.slice(0, 3));
 
       return api.bulkUploadInventory(items);
     },
