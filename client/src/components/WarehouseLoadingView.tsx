@@ -7,10 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 interface LocationGroup {
   location: string;
@@ -155,7 +157,7 @@ function WarehouseSettingsPanel({
 export default function WarehouseLoadingView({ locationGroups, userRole }: WarehouseLoadingViewProps) {
   const { toast } = useToast();
   const [locationInput, setLocationInput] = useState<string>("");
-  const [letterFilter, setLetterFilter] = useState<string>(""); // New letter filter
+  const [letterFilter, setLetterFilter] = useState<string[]>([]); // Multi-select letter filter
   const [limitFilter, setLimitFilter] = useState<string>("100");
   const [tskuFilter, setTskuFilter] = useState<string>("");
   const [maxqFilter, setMaxqFilter] = useState<string>("");
@@ -252,44 +254,36 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     // Start with appropriate base: 
     // If letter filter is active, use all locations and ignore active locations filter
     // Otherwise, filter by active locations if specified
-    let filtered = letterFilter 
+    let filtered = letterFilter.length > 0
       ? locationGroups 
       : (activeSet.size > 0
           ? locationGroups.filter(loc => activeSet.has(loc.location.toUpperCase()))
           : locationGroups);
 
-    // Filter by letter (if specified)
-    if (letterFilter) {
+    // Filter by letters (if specified) - multi-select
+    if (letterFilter.length > 0) {
       filtered = filtered.filter(loc => {
         const letter = loc.location.match(/^([A-Z]+)/)?.[1];
-        return letter === letterFilter;
+        return letter && letterFilter.includes(letter);
       });
     }
 
-    // Filter by TSKU
+    // Filter by TSKU - exact value match
     if (tskuFilter) {
       const tskuValue = parseInt(tskuFilter);
-      filtered = filtered.filter(loc => {
-        const setting = getSettingForLocation(loc.location);
-        const tsku = setting?.tsku || 4;
-        return loc.skuCount >= tskuValue && loc.skuCount <= tsku;
-      });
+      filtered = filtered.filter(loc => loc.skuCount === tskuValue);
     }
 
-    // Filter by MAXQ
+    // Filter by MAXQ - exact value match
     if (maxqFilter) {
       const maxqValue = parseInt(maxqFilter);
-      filtered = filtered.filter(loc => {
-        const setting = getSettingForLocation(loc.location);
-        const maxq = setting?.maxq || 10;
-        return loc.totalQuantity >= maxqValue && loc.totalQuantity <= maxq;
-      });
+      filtered = filtered.filter(loc => loc.totalQuantity === maxqValue);
     }
 
     // Apply limit
     const limit = limitFilter === "all" ? filtered.length : parseInt(limitFilter);
     return filtered.slice(0, limit);
-  }, [locationGroups, locationInput, letterFilter, tskuFilter, maxqFilter, limitFilter, warehouseSettings]);
+  }, [locationGroups, locationInput, letterFilter, tskuFilter, maxqFilter, limitFilter]);
 
   // Group locations by letter for column layout
   const locationsByLetter = useMemo(() => {
@@ -307,14 +301,17 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [filteredLocations]);
 
-  // Color indicators
+  // Color indicators - gradient from green (0) to red (max)
   const getSkuColor = (location: string, skuCount: number) => {
     const setting = getSettingForLocation(location);
     const tsku = setting?.tsku || 4;
     
-    if (skuCount >= tsku) return "bg-red-500";
-    if (skuCount === tsku - 1) return "bg-orange-500";
-    if (skuCount === tsku - 2) return "bg-yellow-500";
+    const ratio = Math.min(skuCount / tsku, 1);
+    
+    if (ratio >= 1) return "bg-red-500";
+    if (ratio >= 0.75) return "bg-orange-500";
+    if (ratio >= 0.5) return "bg-yellow-500";
+    if (ratio >= 0.25) return "bg-lime-500";
     return "bg-green-500";
   };
 
@@ -322,10 +319,12 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     const setting = getSettingForLocation(location);
     const maxq = setting?.maxq || 10;
     
-    if (quantity >= maxq) return "bg-red-500";
-    const ratio = quantity / maxq;
-    if (ratio >= 0.8) return "bg-orange-500";
+    const ratio = Math.min(quantity / maxq, 1);
+    
+    if (ratio >= 1) return "bg-red-500";
+    if (ratio >= 0.75) return "bg-orange-500";
     if (ratio >= 0.5) return "bg-yellow-500";
+    if (ratio >= 0.25) return "bg-lime-500";
     return "bg-green-500";
   };
 
@@ -383,21 +382,75 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="letter-filter">Фильтр по букве</Label>
-            <Select value={letterFilter || "all"} onValueChange={(value) => setLetterFilter(value === "all" ? "" : value)}>
-              <SelectTrigger data-testid="select-letter-filter">
-                <SelectValue placeholder="Все буквы" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Все буквы</SelectItem>
-                {availableLetters.map(letter => (
-                  <SelectItem key={letter} value={letter}>{letter}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Фильтр по буквам</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start font-normal"
+                  data-testid="button-letter-filter"
+                >
+                  {letterFilter.length === 0 ? (
+                    "Все буквы"
+                  ) : (
+                    <div className="flex gap-1 flex-wrap">
+                      {letterFilter.map(letter => (
+                        <Badge key={letter} variant="secondary" className="text-xs">
+                          {letter}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64" align="start">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-sm">Выберите буквы</h4>
+                    {letterFilter.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setLetterFilter([])}
+                        data-testid="button-clear-letters"
+                      >
+                        Очистить
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {availableLetters.map(letter => {
+                      const isChecked = letterFilter.includes(letter);
+                      return (
+                        <div key={letter} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`letter-${letter}`}
+                            checked={isChecked}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setLetterFilter([...letterFilter, letter]);
+                              } else {
+                                setLetterFilter(letterFilter.filter(l => l !== letter));
+                              }
+                            }}
+                            data-testid={`checkbox-letter-${letter}`}
+                          />
+                          <Label 
+                            htmlFor={`letter-${letter}`}
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            {letter}
+                          </Label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="tsku-filter">Фильтр по TSKU (мин. значение)</Label>
+            <Label htmlFor="tsku-filter">Фильтр по TSKU (точное значение)</Label>
             <Input
               id="tsku-filter"
               type="number"
@@ -408,7 +461,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="maxq-filter">Фильтр по MAXQ (мин. значение)</Label>
+            <Label htmlFor="maxq-filter">Фильтр по MAXQ (точное значение)</Label>
             <Input
               id="maxq-filter"
               type="number"
