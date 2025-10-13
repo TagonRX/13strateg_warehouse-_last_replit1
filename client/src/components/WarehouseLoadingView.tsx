@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Trash2 } from "lucide-react";
 
 interface LocationGroup {
   location: string;
@@ -47,10 +47,14 @@ interface WarehouseLoadingViewProps {
 // Settings Panel Component
 function WarehouseSettingsPanel({ 
   settings, 
-  onUpdate 
+  onUpdate,
+  onDelete,
+  isDeleting 
 }: { 
   settings: WarehouseSetting[]; 
   onUpdate: (setting: { locationPattern: string; tsku: number; maxq: number }) => void;
+  onDelete: (locationPattern: string) => void;
+  isDeleting?: boolean;
 }) {
   const [newPattern, setNewPattern] = useState("");
   const [newTsku, setNewTsku] = useState("4");
@@ -84,7 +88,7 @@ function WarehouseSettingsPanel({
               <div className="font-mono font-semibold">{setting.locationPattern}</div>
               <div>{setting.tsku}</div>
               <div>{setting.maxq}</div>
-              <div>
+              <div className="flex gap-2">
                 <Button
                   size="sm"
                   variant="ghost"
@@ -96,6 +100,15 @@ function WarehouseSettingsPanel({
                   data-testid={`button-edit-${setting.locationPattern}`}
                 >
                   Редактировать
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onDelete(setting.locationPattern)}
+                  disabled={isDeleting}
+                  data-testid={`button-delete-${setting.locationPattern}`}
+                >
+                  <Trash2 className="w-4 h-4" />
                 </Button>
               </div>
             </div>
@@ -198,6 +211,28 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       toast({
         title: "Настройка сохранена",
         description: "Настройки склада успешно обновлены",
+      });
+    },
+  });
+
+  // Delete warehouse setting mutation
+  const deleteSettingMutation = useMutation({
+    mutationFn: async (locationPattern: string) => {
+      const res = await apiRequest("DELETE", `/api/warehouse/settings/${locationPattern}`, undefined);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/settings"] });
+      toast({
+        title: "Настройка удалена",
+        description: "Настройка успешно удалена",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка удаления",
+        description: error.message || "Не удалось удалить настройку",
+        variant: "destructive",
       });
     },
   });
@@ -339,21 +374,56 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="location-input">
-                  Введите все локации (через пробел, запятую или с новой строки)
-                </Label>
-                <Textarea
-                  id="location-input"
-                  placeholder="A101 A102 B101 или через запятую/новую строку"
-                  value={locationInput}
-                  onChange={(e) => setLocationInput(e.target.value)}
-                  rows={6}
-                  className="font-mono"
-                  data-testid="textarea-admin-locations"
-                />
-                <p className="text-sm text-muted-foreground">
-                  {parseLocationInput(locationInput).size} локаций введено
-                </p>
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <Label htmlFor="location-input">
+                      Введите локации (столбиком, по одной)
+                    </Label>
+                    <div className="flex flex-col gap-1 mt-2 max-h-48 overflow-y-auto p-2 border rounded">
+                      {locationInput.split(/[\s,\n]+/).filter(loc => loc.trim()).map((loc, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <Input
+                            value={loc.toUpperCase()}
+                            onChange={(e) => {
+                              const locations = locationInput.split(/[\s,\n]+/).filter(l => l.trim());
+                              locations[idx] = e.target.value;
+                              setLocationInput(locations.join("\n"));
+                            }}
+                            className="w-20 font-mono"
+                            data-testid={`input-location-${idx}`}
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              const locations = locationInput.split(/[\s,\n]+/).filter(l => l.trim());
+                              locations.splice(idx, 1);
+                              setLocationInput(locations.join("\n"));
+                            }}
+                            data-testid={`button-remove-location-${idx}`}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const current = locationInput.trim();
+                          setLocationInput(current ? `${current}\n` : "");
+                        }}
+                        data-testid="button-add-location"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Добавить локацию
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {parseLocationInput(locationInput).size} локаций введено
+                    </p>
+                  </div>
+                </div>
               </div>
               <Button onClick={handleSaveLocations} data-testid="button-save-locations">
                 Сохранить локации
@@ -369,6 +439,8 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
               <WarehouseSettingsPanel
                 settings={warehouseSettings}
                 onUpdate={(setting) => upsertSettingMutation.mutate(setting)}
+                onDelete={(locationPattern) => deleteSettingMutation.mutate(locationPattern)}
+                isDeleting={deleteSettingMutation.isPending}
               />
             </CardContent>
           </Card>
