@@ -409,6 +409,10 @@ export class DbStorage implements IStorage {
     totalQuantity: number;
     items: { sku: string; name: string; quantity: number; barcode?: string }[];
   }[]> {
+    // Get all active locations
+    const activeLocationsList = await this.getAllActiveLocations();
+    
+    // Get all inventory items
     const items = await db
       .select()
       .from(inventoryItems);
@@ -424,11 +428,21 @@ export class DbStorage implements IStorage {
       locationMap.get(location)!.push(item);
     }
 
-    // Convert to required format
-    return Array.from(locationMap.entries()).map(([location, locationItems]) => {
+    // Build result array including all active locations
+    const result: {
+      location: string;
+      skuCount: number;
+      totalQuantity: number;
+      items: { sku: string; name: string; quantity: number; barcode?: string }[];
+    }[] = [];
+
+    // Add all active locations (even if empty)
+    for (const activeLoc of activeLocationsList) {
+      const locationItems = locationMap.get(activeLoc.location) || [];
       const totalQuantity = locationItems.reduce((sum, item) => sum + item.quantity, 0);
-      return {
-        location,
+      
+      result.push({
+        location: activeLoc.location,
         skuCount: locationItems.length,
         totalQuantity,
         items: locationItems.map(item => ({
@@ -438,8 +452,29 @@ export class DbStorage implements IStorage {
           quantity: item.quantity,
           barcode: item.barcode || undefined,
         })),
-      };
-    }).sort((a, b) => a.location.localeCompare(b.location)); // Sort by location alphabetically
+      });
+    }
+
+    // Add any locations that have items but are not in active locations list
+    for (const [location, locationItems] of Array.from(locationMap.entries())) {
+      if (!activeLocationsList.some(loc => loc.location === location)) {
+        const totalQuantity = locationItems.reduce((sum: number, item: InventoryItem) => sum + item.quantity, 0);
+        result.push({
+          location,
+          skuCount: locationItems.length,
+          totalQuantity,
+          items: locationItems.map((item: InventoryItem) => ({
+            id: item.id,
+            sku: item.sku,
+            name: item.name || "Без названия",
+            quantity: item.quantity,
+            barcode: item.barcode || undefined,
+          })),
+        });
+      }
+    }
+
+    return result.sort((a, b) => a.location.localeCompare(b.location)); // Sort by location alphabetically
   }
 
   // Stock-Out (Picking) operations

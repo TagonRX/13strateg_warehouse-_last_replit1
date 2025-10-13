@@ -47,6 +47,7 @@ Preferred communication style: Simple, everyday language.
 *   **User Management Enhancements**: Added ability to edit user names via new PATCH `/api/users/:id/name` endpoint. Enhanced delete validation to prevent self-deletion and deletion of the last admin. All error messages in Russian for consistency.
 *   **Warehouse Loading Filter Layout**: Redesigned filter layout to group filters on the left side with fixed widths instead of stretching across the full width. Filters now use flex layout with wrapping, ensuring compact presentation when "All letters" is selected.
 *   **Warehouse Loading Filter Performance**: Optimized filter calculations by separating activeLocationsSet memoization, added NaN validation for numeric filters, and added "50" option to limit selector. Filters no longer hang when changing values.
+*   **Warehouse Loading Empty Locations**: Modified warehouse loading view to show ALL active locations from location management, even if they are currently empty (showing 0 SKUs, 0 quantity). This ensures visibility of all configured locations regardless of current inventory status.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.
