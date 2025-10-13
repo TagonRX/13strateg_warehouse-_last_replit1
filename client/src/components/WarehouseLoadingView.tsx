@@ -480,8 +480,8 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
         <CardHeader>
           <CardTitle>Фильтры</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="space-y-2">
+        <CardContent className="flex flex-wrap gap-4 items-start">
+          <div className="space-y-2 w-48">
             <Label>Фильтр по буквам</Label>
             <Popover>
               <PopoverTrigger asChild>
@@ -549,7 +549,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
               </PopoverContent>
             </Popover>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 w-48">
             <Label htmlFor="tsku-filter">Фильтр по TSKU (точное значение)</Label>
             <Input
               id="tsku-filter"
@@ -560,7 +560,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
               data-testid="input-tsku-filter"
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 w-48">
             <Label htmlFor="maxq-filter">Фильтр по MAXQ (точное значение)</Label>
             <Input
               id="maxq-filter"
@@ -571,7 +571,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
               data-testid="input-maxq-filter"
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 w-40">
             <Label htmlFor="limit">Показать локаций</Label>
             <Select value={limitFilter} onValueChange={setLimitFilter}>
               <SelectTrigger data-testid="select-limit-filter">

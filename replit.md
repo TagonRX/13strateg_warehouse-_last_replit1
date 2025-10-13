@@ -45,6 +45,7 @@ Preferred communication style: Simple, everyday language.
 *   **Warehouse Loading Per-Letter Limit**: Fixed limit filter in Warehouse Loading view to apply per letter when multiple letters or all letters are selected. Example: with limit 100 and letters A, B, C selected, shows 100 items from A + 100 from B + 100 from C (not 100 total). Single letter selection still applies limit to total as before.
 *   **Stock-Out Item Expansion**: Changed Stock-Out view to expand items by quantity. If an item has quantity 19, it now shows 19 separate rows (each numbered #1-#19). Clicking a row auto-fills the barcode field. Added manual confirmation button and undo button. Instructions translated to Russian. Limit filter extended with 100 and 200 options.
 *   **User Management Enhancements**: Added ability to edit user names via new PATCH `/api/users/:id/name` endpoint. Enhanced delete validation to prevent self-deletion and deletion of the last admin. All error messages in Russian for consistency.
+*   **Warehouse Loading Filter Layout**: Redesigned filter layout to group filters on the left side with fixed widths instead of stretching across the full width. Filters now use flex layout with wrapping, ensuring compact presentation when "All letters" is selected.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.
