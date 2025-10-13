@@ -43,6 +43,7 @@ export default function StockOutView({ user }: { user: { role: string } }) {
     onSuccess: (item) => {
       setLastPickedItem(item);
       queryClient.invalidateQueries({ queryKey: ["/api/warehouse/loading"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
       toast({
         title: "Item Picked",
         description: `${item.name} (${item.sku}) has been picked successfully`,
@@ -61,6 +62,7 @@ export default function StockOutView({ user }: { user: { role: string } }) {
     mutationFn: deleteInventoryItem,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warehouse/loading"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
       toast({
         title: "Item Deleted",
         description: "Item has been removed from inventory",
@@ -79,6 +81,7 @@ export default function StockOutView({ user }: { user: { role: string } }) {
     mutationFn: deleteLocation,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/warehouse/loading"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
       toast({
         title: "Location Deleted",
         description: `${data.deleted} items have been removed from inventory`,
@@ -163,6 +166,7 @@ export default function StockOutView({ user }: { user: { role: string } }) {
       
       setSelectedLocations(new Set());
       queryClient.invalidateQueries({ queryKey: ["/api/warehouse/loading"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
       
       toast({
         title: "Bulk Delete Complete",

@@ -456,7 +456,9 @@ export class DbStorage implements IStorage {
       return null;
     }
 
-    const item = items[0];
+    // If multiple items found, pick the first one with quantity > 0
+    const item = items.find(i => i.quantity > 0) || items[0];
+    console.log(`[PICK] Found ${items.length} items with barcode/SKU ${barcode}, picking item with ID ${item.id}, productId ${item.productId}, quantity ${item.quantity}`);
     
     // Decrease quantity by 1
     const newQuantity = item.quantity - 1;
@@ -488,7 +490,8 @@ export class DbStorage implements IStorage {
       location: item.location,
     });
 
-    return item;
+    // Return item with updated quantity
+    return { ...item, quantity: newQuantity };
   }
 
   async deleteInventoryItem(id: string, userId: string): Promise<boolean> {

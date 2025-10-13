@@ -31,12 +31,17 @@ Preferred communication style: Simple, everyday language.
 *   **Tables**:
     *   `users`: Stores worker and admin accounts with role-based access.
     *   `inventory_items`: Tracks product inventory, including SKU, location, quantity, and status.
-    *   `event_logs`: Comprehensive audit trail of all operations with enhanced product tracking. Stores `productId`, `itemName`, `sku`, `location` to enable complete product history tracking from first scan to picking and deletion. Supports search by any product field (ID, name, SKU, location).
+    *   `event_logs`: Comprehensive audit trail of all operations with enhanced product tracking. Stores `productId`, `itemName`, `sku`, `location` to enable complete product history tracking from first scan to picking and deletion. Supports search by any product field (ID, name, SKU, location). All STOCK_OUT and STOCK_IN events include complete product information for full traceability.
     *   `worker_analytics`: Stores daily worker performance metrics.
     *   `picking_lists`: Manages daily picking lists, supporting multiple tasks per list.
     *   `picking_tasks`: Individual pick items within a picking list, tracking required and picked quantities.
     *   `sku_errors`: Manages SKU mismatch corrections during bulk uploads to prevent data corruption.
 *   **Design Decisions**: UUID primary keys, automatic timestamps, foreign key relationships, product deduplication by `productId`, and upsert patterns for bulk inventory updates.
+
+### Recent Bug Fixes (October 2025)
+*   **Pick Operation Cache Invalidation**: Fixed issue where inventory table didn't update after picking items. All stock-out mutations (pick, delete item, delete location, bulk delete) now invalidate both `/api/warehouse/loading` and `/api/inventory` query keys to ensure UI updates immediately after operations.
+*   **Event Logging Product Tracking**: Enhanced event logs with complete product information (productId, itemName, sku, location) for all STOCK_OUT and STOCK_IN events, enabling full product movement history tracking.
+*   **Pick Item Return Data**: Fixed pickItemByBarcode to return updated item quantity instead of original quantity, ensuring frontend receives correct data after pick operations.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.
