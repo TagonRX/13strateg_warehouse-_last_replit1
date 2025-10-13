@@ -21,7 +21,8 @@ export const inventoryItems = pgTable("inventory_items", {
   sku: text("sku").notNull(), // SKU = Локация (обязательно)
   location: text("location").notNull(), // То же что SKU (автоматически)
   quantity: integer("quantity").notNull().default(1),
-  barcode: text("barcode"), // Опционально
+  barcode: text("barcode"), // Опционально (устаревшее - используется для обратной совместимости)
+  barcodeMappings: text("barcode_mappings"), // JSON массив: [{ code: "123", qty: 2 }, { code: "456", qty: 3 }]
   length: integer("length"), // Длина в см (до 3 знаков, макс 999)
   width: integer("width"), // Ширина в см (до 3 знаков, макс 999)
   height: integer("height"), // Высота в см (до 3 знаков, макс 999)
