@@ -155,6 +155,7 @@ function WarehouseSettingsPanel({
 export default function WarehouseLoadingView({ locationGroups, userRole }: WarehouseLoadingViewProps) {
   const { toast } = useToast();
   const [locationInput, setLocationInput] = useState<string>("");
+  const [letterFilter, setLetterFilter] = useState<string>(""); // New letter filter
   const [limitFilter, setLimitFilter] = useState<string>("100");
   const [tskuFilter, setTskuFilter] = useState<string>("");
   const [maxqFilter, setMaxqFilter] = useState<string>("");
@@ -224,6 +225,16 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     setLocationsMutation.mutate(locations);
   };
 
+  // Get all unique letters from locations
+  const availableLetters = useMemo(() => {
+    const letters = new Set<string>();
+    locationGroups.forEach(loc => {
+      const letter = loc.location.match(/^([A-Z]+)/)?.[1];
+      if (letter) letters.add(letter);
+    });
+    return Array.from(letters).sort();
+  }, [locationGroups]);
+
   // Get setting for location pattern (e.g., "A1" from "A101")
   const getSettingForLocation = (location: string): WarehouseSetting | undefined => {
     // Extract pattern: first letter(s) + first digit
@@ -238,10 +249,22 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   const filteredLocations = useMemo(() => {
     const activeSet = parseLocationInput(locationInput);
     
-    // Filter by active locations (if any specified)
-    let filtered = activeSet.size > 0
-      ? locationGroups.filter(loc => activeSet.has(loc.location.toUpperCase()))
-      : locationGroups;
+    // Start with appropriate base: 
+    // If letter filter is active, use all locations and ignore active locations filter
+    // Otherwise, filter by active locations if specified
+    let filtered = letterFilter 
+      ? locationGroups 
+      : (activeSet.size > 0
+          ? locationGroups.filter(loc => activeSet.has(loc.location.toUpperCase()))
+          : locationGroups);
+
+    // Filter by letter (if specified)
+    if (letterFilter) {
+      filtered = filtered.filter(loc => {
+        const letter = loc.location.match(/^([A-Z]+)/)?.[1];
+        return letter === letterFilter;
+      });
+    }
 
     // Filter by TSKU
     if (tskuFilter) {
@@ -266,7 +289,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     // Apply limit
     const limit = limitFilter === "all" ? filtered.length : parseInt(limitFilter);
     return filtered.slice(0, limit);
-  }, [locationGroups, locationInput, tskuFilter, maxqFilter, limitFilter, warehouseSettings]);
+  }, [locationGroups, locationInput, letterFilter, tskuFilter, maxqFilter, limitFilter, warehouseSettings]);
 
   // Group locations by letter for column layout
   const locationsByLetter = useMemo(() => {
@@ -358,7 +381,21 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
         <CardHeader>
           <CardTitle>Фильтры</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="letter-filter">Фильтр по букве</Label>
+            <Select value={letterFilter || "all"} onValueChange={(value) => setLetterFilter(value === "all" ? "" : value)}>
+              <SelectTrigger data-testid="select-letter-filter">
+                <SelectValue placeholder="Все буквы" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все буквы</SelectItem>
+                {availableLetters.map(letter => (
+                  <SelectItem key={letter} value={letter}>{letter}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="tsku-filter">Фильтр по TSKU (мин. значение)</Label>
             <Input
