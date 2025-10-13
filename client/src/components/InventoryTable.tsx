@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import {
   Table,
   TableBody,
@@ -546,9 +546,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                   const barcodes = groupItems.map(item => item.barcode).filter(Boolean);
                   
                   return (
-                    <>
+                    <Fragment key={`group-${groupKey}`}>
                       <TableRow 
-                        key={`group-${groupKey}`} 
                         className="cursor-pointer hover-elevate"
                         onClick={() => toggleGroup(groupKey)}
                       >
@@ -576,7 +575,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                         <TableCell style={{ width: `${columnWidths.weight}px`, minWidth: `${columnWidths.weight}px` }} className="text-xs">{firstItem.weight || "-"}</TableCell>
                       </TableRow>
                       {isExpanded && groupItems.map(item => renderRow(item, true))}
-                    </>
+                    </Fragment>
                   );
                 }
               })}
