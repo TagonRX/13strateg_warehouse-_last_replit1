@@ -48,6 +48,7 @@ Preferred communication style: Simple, everyday language.
 *   **Warehouse Loading Filter Layout**: Redesigned filter layout to group filters on the left side with fixed widths instead of stretching across the full width. Filters now use flex layout with wrapping, ensuring compact presentation when "All letters" is selected.
 *   **Warehouse Loading Filter Performance**: Optimized filter calculations by separating activeLocationsSet memoization, added NaN validation for numeric filters, and added "50" option to limit selector. Filters no longer hang when changing values.
 *   **Warehouse Loading Empty Locations**: Modified warehouse loading view to show ALL active locations from location management, even if they are currently empty (showing 0 SKUs, 0 quantity). This ensures visibility of all configured locations regardless of current inventory status.
+*   **Warehouse Loading Natural Sorting**: Implemented natural/numeric sorting for warehouse locations. Locations now sort logically: X1, X2...X10, X11...X100, X101...X199, X200+ (not alphabetically X1, X10, X100, X11, X2...). Sorting is first by letter prefix alphabetically, then by number numerically within same letter group.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.

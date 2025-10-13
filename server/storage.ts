@@ -402,6 +402,31 @@ export class DbStorage implements IStorage {
     return sku;
   }
 
+  // Natural sort for locations (e.g., X1, X2...X10, X11...X100, X101...)
+  private naturalSortLocations(a: string, b: string): number {
+    // Extract letter prefix and numeric part
+    const matchA = a.match(/^([A-Z]+)(\d+)$/i);
+    const matchB = b.match(/^([A-Z]+)(\d+)$/i);
+
+    // If both match the pattern (letter + number)
+    if (matchA && matchB) {
+      const letterA = matchA[1].toUpperCase();
+      const letterB = matchB[1].toUpperCase();
+      const numA = parseInt(matchA[2], 10);
+      const numB = parseInt(matchB[2], 10);
+
+      // First compare letters
+      if (letterA !== letterB) {
+        return letterA.localeCompare(letterB);
+      }
+      // Then compare numbers numerically
+      return numA - numB;
+    }
+
+    // Fallback to alphabetical sort for non-standard formats
+    return a.localeCompare(b);
+  }
+
   // Warehouse loading analysis
   async getWarehouseLoadingByLocation(): Promise<{
     location: string;
@@ -474,7 +499,7 @@ export class DbStorage implements IStorage {
       }
     }
 
-    return result.sort((a, b) => a.location.localeCompare(b.location)); // Sort by location alphabetically
+    return result.sort((a, b) => this.naturalSortLocations(a.location, b.location)); // Natural sort by location (X1, X2...X10, X11...)
   }
 
   // Stock-Out (Picking) operations
