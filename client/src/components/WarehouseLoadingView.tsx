@@ -1,10 +1,15 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 
 interface LocationGroup {
   location: string;
@@ -18,25 +23,82 @@ interface LocationGroup {
   }[];
 }
 
+interface WarehouseSetting {
+  id: string;
+  locationPattern: string;
+  tsku: number;
+  maxq: number;
+}
+
+interface ActiveLocation {
+  id: string;
+  location: string;
+  isActive: boolean;
+}
+
 interface WarehouseLoadingViewProps {
   locationGroups: LocationGroup[];
+  userRole: "admin" | "worker";
 }
 
-interface LetterData {
-  letter: string;
-  locations: LocationGroup[];
-}
+export default function WarehouseLoadingView({ locationGroups, userRole }: WarehouseLoadingViewProps) {
+  const { toast } = useToast();
+  const [locationInput, setLocationInput] = useState<string>("");
+  const [limitFilter, setLimitFilter] = useState<string>("100");
+  const [tskuFilter, setTskuFilter] = useState<string>("");
+  const [maxqFilter, setMaxqFilter] = useState<string>("");
 
-export default function WarehouseLoadingView({ locationGroups }: WarehouseLoadingViewProps) {
-  const [tsku, setTsku] = useState(4);
-  const [maxq, setMaxq] = useState(10);
-  const [locationFilter, setLocationFilter] = useState<string>("");
-  const [limitFilter, setLimitFilter] = useState<string>("50");
+  // Fetch active locations
+  const { data: activeLocations = [] } = useQuery<ActiveLocation[]>({
+    queryKey: ["/api/warehouse/active-locations"],
+  });
 
-  // Parse location filter input - support comma, space, or newline separated
-  const parseLocationFilter = (input: string): Set<string> => {
+  // Fetch warehouse settings
+  const { data: warehouseSettings = [] } = useQuery<WarehouseSetting[]>({
+    queryKey: ["/api/warehouse/settings"],
+    enabled: userRole === "admin",
+  });
+
+  // Set active locations mutation
+  const setLocationsMutation = useMutation({
+    mutationFn: async (locations: string[]) => {
+      const res = await apiRequest("POST", "/api/warehouse/active-locations", { locations });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/active-locations"] });
+      toast({
+        title: "Локации сохранены",
+        description: "Активные локации успешно обновлены",
+      });
+    },
+  });
+
+  // Upsert warehouse setting mutation
+  const upsertSettingMutation = useMutation({
+    mutationFn: async (setting: { locationPattern: string; tsku: number; maxq: number }) => {
+      const res = await apiRequest("POST", "/api/warehouse/settings", setting);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/settings"] });
+      toast({
+        title: "Настройка сохранена",
+        description: "Настройки склада успешно обновлены",
+      });
+    },
+  });
+
+  // Initialize location input from active locations
+  useEffect(() => {
+    if (activeLocations.length > 0 && !locationInput) {
+      setLocationInput(activeLocations.map(loc => loc.location).join("\n"));
+    }
+  }, [activeLocations]);
+
+  // Parse location input
+  const parseLocationInput = (input: string): Set<string> => {
     if (!input.trim()) return new Set();
-    
     return new Set(
       input
         .toUpperCase()
@@ -46,148 +108,202 @@ export default function WarehouseLoadingView({ locationGroups }: WarehouseLoadin
     );
   };
 
-  // Filter locations based on input
-  const filteredLocations = useMemo(() => {
-    const filterSet = parseLocationFilter(locationFilter);
-    
-    // If no filter, show all locations
-    if (filterSet.size === 0) {
-      const limit = limitFilter === "all" ? locationGroups.length : parseInt(limitFilter);
-      return locationGroups.slice(0, limit);
-    }
-    
-    // Filter by exact location match
-    const filtered = locationGroups.filter(loc => filterSet.has(loc.location.toUpperCase()));
-    const limit = limitFilter === "all" ? filtered.length : parseInt(limitFilter);
-    return filtered.slice(0, limit);
-  }, [locationGroups, locationFilter, limitFilter]);
-
-  const getSkuColor = (skuCount: number) => {
-    if (skuCount >= tsku) return "bg-red-500/20 text-red-700 dark:text-red-400";
-    if (skuCount === tsku - 1) return "bg-orange-500/20 text-orange-700 dark:text-orange-400";
-    if (skuCount === tsku - 2) return "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400";
-    return "bg-green-500/20 text-green-700 dark:text-green-400";
+  // Save locations
+  const handleSaveLocations = () => {
+    const locations = Array.from(parseLocationInput(locationInput));
+    setLocationsMutation.mutate(locations);
   };
 
-  const getQuantityColor = (quantity: number) => {
-    if (quantity >= maxq) return "bg-red-500/20 text-red-700 dark:text-red-400";
+  // Get setting for location pattern (e.g., "A1" from "A101")
+  const getSettingForLocation = (location: string): WarehouseSetting | undefined => {
+    // Extract pattern: first letter(s) + first digit
+    const match = location.match(/^([A-Z]+)(\d)/);
+    if (!match) return undefined;
+    
+    const pattern = match[1] + match[2]; // e.g., "A1", "B1"
+    return warehouseSettings.find(s => s.locationPattern === pattern);
+  };
+
+  // Filter locations based on active locations and TSKU/MAXQ filters
+  const filteredLocations = useMemo(() => {
+    const activeSet = parseLocationInput(locationInput);
+    
+    // Filter by active locations (if any specified)
+    let filtered = activeSet.size > 0
+      ? locationGroups.filter(loc => activeSet.has(loc.location.toUpperCase()))
+      : locationGroups;
+
+    // Filter by TSKU
+    if (tskuFilter) {
+      const tskuValue = parseInt(tskuFilter);
+      filtered = filtered.filter(loc => {
+        const setting = getSettingForLocation(loc.location);
+        const tsku = setting?.tsku || 4;
+        return loc.skuCount >= tskuValue && loc.skuCount <= tsku;
+      });
+    }
+
+    // Filter by MAXQ
+    if (maxqFilter) {
+      const maxqValue = parseInt(maxqFilter);
+      filtered = filtered.filter(loc => {
+        const setting = getSettingForLocation(loc.location);
+        const maxq = setting?.maxq || 10;
+        return loc.totalQuantity >= maxqValue && loc.totalQuantity <= maxq;
+      });
+    }
+
+    // Apply limit
+    const limit = limitFilter === "all" ? filtered.length : parseInt(limitFilter);
+    return filtered.slice(0, limit);
+  }, [locationGroups, locationInput, tskuFilter, maxqFilter, limitFilter, warehouseSettings]);
+
+  // Group locations by letter for column layout
+  const locationsByLetter = useMemo(() => {
+    const groups = new Map<string, LocationGroup[]>();
+    
+    filteredLocations.forEach(loc => {
+      const letter = loc.location.match(/^([A-Z]+)/)?.[1] || "OTHER";
+      if (!groups.has(letter)) {
+        groups.set(letter, []);
+      }
+      groups.get(letter)!.push(loc);
+    });
+
+    // Sort groups by letter
+    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [filteredLocations]);
+
+  // Color indicators
+  const getSkuColor = (location: string, skuCount: number) => {
+    const setting = getSettingForLocation(location);
+    const tsku = setting?.tsku || 4;
+    
+    if (skuCount >= tsku) return "bg-red-500";
+    if (skuCount === tsku - 1) return "bg-orange-500";
+    if (skuCount === tsku - 2) return "bg-yellow-500";
+    return "bg-green-500";
+  };
+
+  const getQuantityColor = (location: string, quantity: number) => {
+    const setting = getSettingForLocation(location);
+    const maxq = setting?.maxq || 10;
+    
+    if (quantity >= maxq) return "bg-red-500";
     const ratio = quantity / maxq;
-    if (ratio >= 0.8) return "bg-orange-500/20 text-orange-700 dark:text-orange-400";
-    if (ratio >= 0.5) return "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400";
-    return "bg-green-500/20 text-green-700 dark:text-green-400";
+    if (ratio >= 0.8) return "bg-orange-500";
+    if (ratio >= 0.5) return "bg-yellow-500";
+    return "bg-green-500";
   };
 
   return (
     <div className="space-y-4">
-      {/* Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Настройки порогов</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Admin: Location Management */}
+      {userRole === "admin" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Управление локациями (Администратор)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="tsku">TSKU (макс. SKU)</Label>
-              <Input
-                id="tsku"
-                type="number"
-                min="1"
-                value={tsku}
-                onChange={(e) => setTsku(parseInt(e.target.value) || 4)}
-                data-testid="input-tsku"
+              <Label htmlFor="location-input">
+                Введите все локации (через пробел, запятую или с новой строки)
+              </Label>
+              <Textarea
+                id="location-input"
+                placeholder="A101 A102 B101 или через запятую/новую строку"
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
+                rows={6}
+                className="font-mono"
+                data-testid="textarea-admin-locations"
               />
+              <p className="text-sm text-muted-foreground">
+                {parseLocationInput(locationInput).size} локаций введено
+              </p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="maxq">MAXQ (макс. товаров)</Label>
-              <Input
-                id="maxq"
-                type="number"
-                min="1"
-                value={maxq}
-                onChange={(e) => setMaxq(parseInt(e.target.value) || 10)}
-                data-testid="input-maxq"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="limit">Показать локаций</Label>
-              <Select value={limitFilter} onValueChange={setLimitFilter}>
-                <SelectTrigger data-testid="select-limit-filter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="30">30</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="all">Все</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            <Button onClick={handleSaveLocations} data-testid="button-save-locations">
+              Сохранить локации
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Location filter */}
+      {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Фильтр локаций</CardTitle>
+          <CardTitle>Фильтры</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="location-filter">
-              Введите локации (через пробел, запятую или с новой строки)
-            </Label>
-            <Textarea
-              id="location-filter"
-              placeholder="Например: A101 A102 B101 или A101, A102, B101"
-              value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value)}
-              rows={4}
-              data-testid="textarea-location-filter"
-              className="font-mono"
+            <Label htmlFor="tsku-filter">Фильтр по TSKU (мин. значение)</Label>
+            <Input
+              id="tsku-filter"
+              type="number"
+              placeholder="Например: 2"
+              value={tskuFilter}
+              onChange={(e) => setTskuFilter(e.target.value)}
+              data-testid="input-tsku-filter"
             />
-            <p className="text-sm text-muted-foreground">
-              {locationFilter.trim() 
-                ? `Фильтр активен: ${parseLocationFilter(locationFilter).size} локаций` 
-                : "Показываются все локации"}
-            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="maxq-filter">Фильтр по MAXQ (мин. значение)</Label>
+            <Input
+              id="maxq-filter"
+              type="number"
+              placeholder="Например: 5"
+              value={maxqFilter}
+              onChange={(e) => setMaxqFilter(e.target.value)}
+              data-testid="input-maxq-filter"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="limit">Показать локаций</Label>
+            <Select value={limitFilter} onValueChange={setLimitFilter}>
+              <SelectTrigger data-testid="select-limit-filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="100">100</SelectItem>
+                <SelectItem value="200">200</SelectItem>
+                <SelectItem value="300">300</SelectItem>
+                <SelectItem value="all">Все</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Warehouse loading data - grid layout for individual locations */}
+      {/* Compact vertical table by letters */}
       <Card>
         <CardHeader>
           <CardTitle>Загрузка склада ({filteredLocations.length} локаций)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {filteredLocations.map((location) => (
-              <div
-                key={location.location}
-                className="border rounded-md p-3 space-y-2 hover-elevate"
-                data-testid={`location-${location.location}`}
-              >
-                <div className="font-mono font-semibold text-sm truncate" title={location.location}>
-                  {location.location}
-                </div>
-                <div className="flex justify-between items-center gap-2">
-                  <div className="text-xs text-muted-foreground">SKU:</div>
-                  <Badge
-                    variant="outline"
-                    className={`${getSkuColor(location.skuCount)} border-0 text-xs px-2 py-0`}
-                  >
-                    {location.skuCount}
-                  </Badge>
-                </div>
-                <div className="flex justify-between items-center gap-2">
-                  <div className="text-xs text-muted-foreground">Товары:</div>
-                  <Badge
-                    variant="outline"
-                    className={`${getQuantityColor(location.totalQuantity)} border-0 text-xs px-2 py-0`}
-                  >
-                    {location.totalQuantity}
-                  </Badge>
+          <div className="flex gap-4 overflow-x-auto pb-4">
+            {locationsByLetter.map(([letter, locations]) => (
+              <div key={letter} className="flex-shrink-0">
+                <div className="text-sm font-bold mb-2 text-center">{letter}</div>
+                <div className="space-y-1">
+                  {locations.map((loc) => {
+                    const setting = getSettingForLocation(loc.location);
+                    const tsku = setting?.tsku || 4;
+                    const maxq = setting?.maxq || 10;
+
+                    return (
+                      <div
+                        key={loc.location}
+                        className="flex items-center gap-2 text-xs border-b py-1"
+                        data-testid={`location-row-${loc.location}`}
+                      >
+                        <div className="w-12 font-mono font-semibold">{loc.location}</div>
+                        <div className="w-6 text-center">{loc.skuCount}</div>
+                        <div className={`w-3 h-3 rounded-full ${getSkuColor(loc.location, loc.skuCount)}`} />
+                        <div className="w-6 text-center">{loc.totalQuantity}</div>
+                        <div className={`w-3 h-3 rounded-full ${getQuantityColor(loc.location, loc.totalQuantity)}`} />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -202,44 +318,23 @@ export default function WarehouseLoadingView({ locationGroups }: WarehouseLoadin
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <div className="font-semibold mb-2 text-sm">Кол-во SKU:</div>
+            <div className="font-semibold mb-2 text-sm">Индикаторы:</div>
             <div className="space-y-1 text-xs">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-green-500/20"></div>
+                <div className="w-4 h-4 rounded-full bg-green-500"></div>
                 <span>Норма</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-yellow-500/20"></div>
+                <div className="w-4 h-4 rounded-full bg-yellow-500"></div>
                 <span>Внимание</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-orange-500/20"></div>
+                <div className="w-4 h-4 rounded-full bg-orange-500"></div>
                 <span>Предупреждение</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-red-500/20"></div>
-                <span>Перегрузка</span>
-              </div>
-            </div>
-          </div>
-          <div>
-            <div className="font-semibold mb-2 text-sm">Всего товаров:</div>
-            <div className="space-y-1 text-xs">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-green-500/20"></div>
-                <span>Низкая</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-yellow-500/20"></div>
-                <span>Средняя</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-orange-500/20"></div>
-                <span>Высокая</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-red-500/20"></div>
-                <span>Критическая</span>
+                <div className="w-4 h-4 rounded-full bg-red-500"></div>
+                <span>Перегрузка / Критично</span>
               </div>
             </div>
           </div>

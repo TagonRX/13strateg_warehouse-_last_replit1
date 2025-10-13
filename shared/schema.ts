@@ -84,6 +84,24 @@ export const skuErrors = pgTable("sku_errors", {
   resolvedAt: timestamp("resolved_at"),
 });
 
+// Настройки склада - TSKU и MAXQ для групп локаций
+export const warehouseSettings = pgTable("warehouse_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  locationPattern: text("location_pattern").notNull().unique(), // Например: "A1", "B1", "C1" и т.д.
+  tsku: integer("tsku").notNull().default(4), // Максимальное количество SKU
+  maxq: integer("maxq").notNull().default(10), // Максимальное количество товаров
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Активные локации (вводит администратор)
+export const activeLocations = pgTable("active_locations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  location: text("location").notNull().unique(), // Например: "A101", "B102"
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -119,6 +137,17 @@ export const insertSkuErrorSchema = createInsertSchema(skuErrors).omit({
   resolvedAt: true,
 });
 
+export const insertWarehouseSettingSchema = createInsertSchema(warehouseSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const insertActiveLocationSchema = createInsertSchema(activeLocations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -137,3 +166,9 @@ export type PickingTask = typeof pickingTasks.$inferSelect;
 
 export type InsertSkuError = z.infer<typeof insertSkuErrorSchema>;
 export type SkuError = typeof skuErrors.$inferSelect;
+
+export type InsertWarehouseSetting = z.infer<typeof insertWarehouseSettingSchema>;
+export type WarehouseSetting = typeof warehouseSettings.$inferSelect;
+
+export type InsertActiveLocation = z.infer<typeof insertActiveLocationSchema>;
+export type ActiveLocation = typeof activeLocations.$inferSelect;

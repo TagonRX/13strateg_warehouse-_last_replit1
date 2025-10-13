@@ -288,7 +288,7 @@ function AppContent() {
         <Route path="/warehouse">
           <div className="space-y-4">
             <h1 className="text-3xl font-bold">Загрузка склада</h1>
-            <WarehouseLoadingView locationGroups={warehouseLoading} />
+            <WarehouseLoadingView locationGroups={warehouseLoading} userRole={user.role} />
           </div>
         </Route>
         {user.role === "admin" && (

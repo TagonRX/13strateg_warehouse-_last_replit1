@@ -6,6 +6,8 @@ import {
   pickingLists,
   pickingTasks,
   skuErrors,
+  warehouseSettings,
+  activeLocations,
   type User, 
   type InsertUser,
   type InventoryItem,
@@ -17,7 +19,11 @@ import {
   type PickingTask,
   type InsertPickingTask,
   type SkuError,
-  type InsertSkuError
+  type InsertSkuError,
+  type WarehouseSetting,
+  type InsertWarehouseSetting,
+  type ActiveLocation,
+  type InsertActiveLocation
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ilike } from "drizzle-orm";
 
@@ -73,6 +79,17 @@ export interface IStorage {
   getSkuError(id: string): Promise<SkuError | undefined>;
   resolveSkuError(id: string, correctedSku: string, userId: string): Promise<void>;
   deleteSkuError(id: string): Promise<void>;
+
+  // Warehouse Settings
+  getAllWarehouseSettings(): Promise<WarehouseSetting[]>;
+  getWarehouseSetting(locationPattern: string): Promise<WarehouseSetting | undefined>;
+  upsertWarehouseSetting(setting: InsertWarehouseSetting): Promise<WarehouseSetting>;
+  deleteWarehouseSetting(locationPattern: string): Promise<void>;
+
+  // Active Locations
+  getAllActiveLocations(): Promise<ActiveLocation[]>;
+  setActiveLocations(locations: string[]): Promise<void>;
+  clearActiveLocations(): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -661,6 +678,69 @@ export class DbStorage implements IStorage {
 
   async deleteSkuError(id: string): Promise<void> {
     await db.delete(skuErrors).where(eq(skuErrors.id, id));
+  }
+
+  // Warehouse Settings methods
+  async getAllWarehouseSettings(): Promise<WarehouseSetting[]> {
+    return await db.select().from(warehouseSettings).orderBy(warehouseSettings.locationPattern);
+  }
+
+  async getWarehouseSetting(locationPattern: string): Promise<WarehouseSetting | undefined> {
+    const result = await db
+      .select()
+      .from(warehouseSettings)
+      .where(eq(warehouseSettings.locationPattern, locationPattern))
+      .limit(1);
+    return result[0];
+  }
+
+  async upsertWarehouseSetting(setting: InsertWarehouseSetting): Promise<WarehouseSetting> {
+    const existing = await this.getWarehouseSetting(setting.locationPattern);
+    
+    if (existing) {
+      // Update existing
+      const result = await db
+        .update(warehouseSettings)
+        .set({ tsku: setting.tsku, maxq: setting.maxq, updatedAt: new Date() })
+        .where(eq(warehouseSettings.locationPattern, setting.locationPattern))
+        .returning();
+      return result[0];
+    } else {
+      // Insert new
+      const result = await db.insert(warehouseSettings).values(setting).returning();
+      return result[0];
+    }
+  }
+
+  async deleteWarehouseSetting(locationPattern: string): Promise<void> {
+    await db.delete(warehouseSettings).where(eq(warehouseSettings.locationPattern, locationPattern));
+  }
+
+  // Active Locations methods
+  async getAllActiveLocations(): Promise<ActiveLocation[]> {
+    return await db
+      .select()
+      .from(activeLocations)
+      .where(eq(activeLocations.isActive, true))
+      .orderBy(activeLocations.location);
+  }
+
+  async setActiveLocations(locations: string[]): Promise<void> {
+    // Clear all existing active locations
+    await db.delete(activeLocations);
+
+    // Insert new active locations
+    if (locations.length > 0) {
+      const values = locations.map(loc => ({
+        location: loc.toUpperCase(),
+        isActive: true,
+      }));
+      await db.insert(activeLocations).values(values);
+    }
+  }
+
+  async clearActiveLocations(): Promise<void> {
+    await db.delete(activeLocations);
   }
 }
 

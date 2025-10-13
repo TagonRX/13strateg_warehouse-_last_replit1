@@ -160,6 +160,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Warehouse Settings (Admin only)
+  app.get("/api/warehouse/settings", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getAllWarehouseSettings();
+      return res.json(settings);
+    } catch (error: any) {
+      console.error("Get warehouse settings error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/warehouse/settings", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { locationPattern, tsku, maxq } = req.body;
+
+      if (!locationPattern || !tsku || !maxq) {
+        return res.status(400).json({ error: "locationPattern, tsku, and maxq are required" });
+      }
+
+      const setting = await storage.upsertWarehouseSetting({ locationPattern, tsku, maxq });
+      return res.json(setting);
+    } catch (error: any) {
+      console.error("Upsert warehouse setting error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/warehouse/settings/:locationPattern", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { locationPattern } = req.params;
+      await storage.deleteWarehouseSetting(locationPattern);
+      return res.status(204).send();
+    } catch (error: any) {
+      console.error("Delete warehouse setting error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Active Locations (Admin only)
+  app.get("/api/warehouse/active-locations", requireAuth, async (req, res) => {
+    try {
+      const locations = await storage.getAllActiveLocations();
+      return res.json(locations);
+    } catch (error: any) {
+      console.error("Get active locations error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/warehouse/active-locations", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { locations } = req.body;
+
+      if (!Array.isArray(locations)) {
+        return res.status(400).json({ error: "locations must be an array" });
+      }
+
+      await storage.setActiveLocations(locations);
+      const saved = await storage.getAllActiveLocations();
+      return res.json(saved);
+    } catch (error: any) {
+      console.error("Set active locations error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/warehouse/active-locations", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      await storage.clearActiveLocations();
+      return res.status(204).send();
+    } catch (error: any) {
+      console.error("Clear active locations error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Stock-Out (Picking) routes
   app.post("/api/inventory/pick", requireAuth, async (req, res) => {
     try {
