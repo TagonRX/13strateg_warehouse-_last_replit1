@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
+import { Plus } from "lucide-react";
 
 interface LocationGroup {
   location: string;
@@ -39,6 +40,116 @@ interface ActiveLocation {
 interface WarehouseLoadingViewProps {
   locationGroups: LocationGroup[];
   userRole: "admin" | "worker";
+}
+
+// Settings Panel Component
+function WarehouseSettingsPanel({ 
+  settings, 
+  onUpdate 
+}: { 
+  settings: WarehouseSetting[]; 
+  onUpdate: (setting: { locationPattern: string; tsku: number; maxq: number }) => void;
+}) {
+  const [newPattern, setNewPattern] = useState("");
+  const [newTsku, setNewTsku] = useState("4");
+  const [newMaxq, setNewMaxq] = useState("10");
+
+  const handleAdd = () => {
+    if (!newPattern.trim()) return;
+    onUpdate({
+      locationPattern: newPattern.toUpperCase(),
+      tsku: parseInt(newTsku) || 4,
+      maxq: parseInt(newMaxq) || 10,
+    });
+    setNewPattern("");
+    setNewTsku("4");
+    setNewMaxq("10");
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Existing settings */}
+      {settings.length > 0 && (
+        <div className="rounded-md border">
+          <div className="grid grid-cols-4 gap-4 p-3 font-medium bg-muted/50">
+            <div>Группа локаций</div>
+            <div>TSKU</div>
+            <div>MAXQ</div>
+            <div>Действия</div>
+          </div>
+          {settings.map((setting) => (
+            <div key={setting.id} className="grid grid-cols-4 gap-4 p-3 border-t" data-testid={`setting-row-${setting.locationPattern}`}>
+              <div className="font-mono font-semibold">{setting.locationPattern}</div>
+              <div>{setting.tsku}</div>
+              <div>{setting.maxq}</div>
+              <div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setNewPattern(setting.locationPattern);
+                    setNewTsku(setting.tsku.toString());
+                    setNewMaxq(setting.maxq.toString());
+                  }}
+                  data-testid={`button-edit-${setting.locationPattern}`}
+                >
+                  Редактировать
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add new setting */}
+      <div className="rounded-md border p-4">
+        <h3 className="text-sm font-semibold mb-3">Добавить/обновить настройку</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="pattern">Группа (например, A1, B1)</Label>
+            <Input
+              id="pattern"
+              placeholder="A1"
+              value={newPattern}
+              onChange={(e) => setNewPattern(e.target.value.toUpperCase())}
+              className="font-mono"
+              data-testid="input-pattern"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="tsku">TSKU</Label>
+            <Input
+              id="tsku"
+              type="number"
+              value={newTsku}
+              onChange={(e) => setNewTsku(e.target.value)}
+              data-testid="input-tsku"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="maxq">MAXQ</Label>
+            <Input
+              id="maxq"
+              type="number"
+              value={newMaxq}
+              onChange={(e) => setNewMaxq(e.target.value)}
+              data-testid="input-maxq"
+            />
+          </div>
+          <div className="flex items-end">
+            <Button onClick={handleAdd} className="w-full" data-testid="button-add-setting">
+              <Plus className="w-4 h-4 mr-2" />
+              Добавить
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-sm text-muted-foreground">
+        Группа локаций определяется первой буквой и первой цифрой (например, A1 для A100-A199)
+      </p>
+    </div>
+  );
 }
 
 export default function WarehouseLoadingView({ locationGroups, userRole }: WarehouseLoadingViewProps) {
@@ -200,33 +311,47 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     <div className="space-y-4">
       {/* Admin: Location Management */}
       {userRole === "admin" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Управление локациями (Администратор)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="location-input">
-                Введите все локации (через пробел, запятую или с новой строки)
-              </Label>
-              <Textarea
-                id="location-input"
-                placeholder="A101 A102 B101 или через запятую/новую строку"
-                value={locationInput}
-                onChange={(e) => setLocationInput(e.target.value)}
-                rows={6}
-                className="font-mono"
-                data-testid="textarea-admin-locations"
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Управление локациями (Администратор)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="location-input">
+                  Введите все локации (через пробел, запятую или с новой строки)
+                </Label>
+                <Textarea
+                  id="location-input"
+                  placeholder="A101 A102 B101 или через запятую/новую строку"
+                  value={locationInput}
+                  onChange={(e) => setLocationInput(e.target.value)}
+                  rows={6}
+                  className="font-mono"
+                  data-testid="textarea-admin-locations"
+                />
+                <p className="text-sm text-muted-foreground">
+                  {parseLocationInput(locationInput).size} локаций введено
+                </p>
+              </div>
+              <Button onClick={handleSaveLocations} data-testid="button-save-locations">
+                Сохранить локации
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Настройки TSKU/MAXQ для групп локаций</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <WarehouseSettingsPanel
+                settings={warehouseSettings}
+                onUpdate={(setting) => upsertSettingMutation.mutate(setting)}
               />
-              <p className="text-sm text-muted-foreground">
-                {parseLocationInput(locationInput).size} локаций введено
-              </p>
-            </div>
-            <Button onClick={handleSaveLocations} data-testid="button-save-locations">
-              Сохранить локации
-            </Button>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {/* Filters */}
