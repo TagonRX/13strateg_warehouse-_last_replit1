@@ -31,7 +31,10 @@ export default function DailyPickingView() {
   // Sync selected list across devices via WebSocket
   useEffect(() => {
     if (lastMessage?.type === "sync_picking_list") {
-      setSelectedListId(lastMessage.listId);
+      const listId = lastMessage.listId;
+      setSelectedListId(listId);
+      // Force refetch the list data to ensure it's loaded
+      queryClient.invalidateQueries({ queryKey: ["/api/picking/lists", listId] });
     }
   }, [lastMessage]);
 
