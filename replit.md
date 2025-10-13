@@ -10,6 +10,20 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 13, 2025 - Bulk Stock-In (Массовое добавление товара)
+- **Bulk Stock-In Dialog**:
+  - Added "Массовое добавление" button in Stock In page
+  - Opens dialog for bulk barcode scanning workflow
+  - Enter SKU and Location once, then scan multiple barcodes
+  - Supports duplicate barcodes (same barcode can be scanned multiple times)
+  - Real-time table display of all scanned barcodes
+  - Automatic quantity calculation (count of scanned barcodes)
+  - Individual barcode removal from list
+  - Integrated BarcodeScanner component (USB/mobile/remote)
+  - Submit button shows total quantity: "Подтвердить (X шт.)"
+  - Form validation: requires SKU, Location, and at least 1 barcode
+  - Auto-clears and closes on successful submission
+
 ### October 13, 2025 - Warehouse Settings Delete & Location Management UI
 - **Delete Functionality for Location Group Settings**:
   - Added delete button (trash icon) next to Edit button in settings table
