@@ -21,6 +21,7 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
 
@@ -78,8 +79,13 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
         (decodedText) => {
           // Success callback
           if (mode === "remote") {
-            // Remote mode: save code and keep camera active
-            setLastScanned(decodedText);
+            // Remote mode: save code only if different and not currently sending
+            setLastScanned(prev => {
+              if (prev === decodedText || isSending) {
+                return prev; // Don't update if same code or currently sending
+              }
+              return decodedText;
+            });
           } else {
             // Mobile mode: scan and close
             onScan(decodedText);
@@ -115,12 +121,18 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
   };
 
   const handleRemoteSend = () => {
-    if (lastScanned) {
+    if (lastScanned && !isSending) {
+      setIsSending(true);
       sendMessage({
         type: "remote_scan",
         barcode: lastScanned
       });
-      setLastScanned(null); // Clear after sending
+      
+      // Clear after 1 second to allow scanning new code
+      setTimeout(() => {
+        setLastScanned(null);
+        setIsSending(false);
+      }, 1000);
     }
   };
 
@@ -274,12 +286,12 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
                   <Button
                     type="button"
                     onClick={handleRemoteSend}
-                    disabled={!lastScanned || !isConnected}
+                    disabled={!lastScanned || !isConnected || isSending}
                     className="w-full h-14 text-lg"
                     data-testid="button-send-to-computer"
                   >
                     <Wifi className="w-5 h-5 mr-2" />
-                    Отправить на компьютер
+                    {isSending ? "Отправлено ✓" : "Отправить на компьютер"}
                   </Button>
 
                   <Button
