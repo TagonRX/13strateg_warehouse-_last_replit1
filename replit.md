@@ -20,6 +20,21 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 ### October 13, 2025
+- **Warehouse Settings & Admin Configuration**: Complete admin interface for warehouse configuration
+  - **Database Schema**: Added `warehouse_settings` and `active_locations` tables
+    - `warehouse_settings`: Stores TSKU/MAXQ per location pattern (A1, B1, etc.)
+    - `active_locations`: Persists admin-defined location list until deletion
+  - **Admin Panels** (visible only to admins):
+    - Location Management: Textarea for bulk location entry (space/comma/newline-separated)
+    - TSKU/MAXQ Settings: Configure per-location-group thresholds with add/edit interface
+  - **Authorization**:
+    - GET /api/warehouse/settings: All authenticated users (for filters)
+    - POST/DELETE endpoints: Admin-only
+  - **Worker Access**: Workers can view and use TSKU/MAXQ filters without admin panels
+  - **Vertical Column Layout**: Locations displayed in alphabetical letter columns (A, B, C)
+  - **Smart Filters**: TSKU/MAXQ filters work with custom settings from database
+  - **Color Indicators**: SKU count and quantity badges color-coded based on settings
+  - **Limit Options**: 100/200/300 location display limit
 - **Warehouse Loading Filter Redesign**: Complete overhaul of location filtering interface
   - **Old**: Checkbox-based letter filter (A, B, C) - was not working properly
   - **New**: Textarea input for flexible location filtering
