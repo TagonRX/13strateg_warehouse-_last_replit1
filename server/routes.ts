@@ -75,7 +75,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Login error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -86,7 +86,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(items);
     } catch (error: any) {
       console.error("Get inventory error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -150,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error: any) {
       console.error("Create inventory item error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -164,7 +164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get existing item
       const existing = await storage.getInventoryItemById(id);
       if (!existing) {
-        return res.status(404).json({ error: "Item not found" });
+        return res.status(404).json({ error: "Товар не найден" });
       }
 
       // Update item
@@ -199,7 +199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(updated);
     } catch (error: any) {
       console.error("Update inventory item error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -212,7 +212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get existing item for logging
       const existing = await storage.getInventoryItemById(id);
       if (!existing) {
-        return res.status(404).json({ error: "Item not found" });
+        return res.status(404).json({ error: "Товар не найден" });
       }
 
       // Delete item
@@ -232,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ success: true });
     } catch (error: any) {
       console.error("Delete inventory item error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -247,11 +247,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (!Array.isArray(items)) {
-        return res.status(400).json({ error: "Items must be an array" });
+        return res.status(400).json({ error: "Товары должны быть массивом" });
       }
 
       if (items.length === 0) {
-        return res.status(400).json({ error: "No items to upload" });
+        return res.status(400).json({ error: "Нет товаров для загрузки" });
       }
 
       // Force createdBy to authenticated user ID for all items
@@ -272,7 +272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(result);
     } catch (error: any) {
       console.error("Bulk upload error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -289,12 +289,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         fileContent = await fs.readFile(filePath, "utf-8");
       } catch (error) {
-        return res.status(404).json({ error: "CSV file not found. Please create data/inventory_sync.csv" });
+        return res.status(404).json({ error: "CSV файл не найден. Создайте data/inventory_sync.csv" });
       }
 
       const lines = fileContent.trim().split("\n");
       if (lines.length < 2) {
-        return res.status(400).json({ error: "CSV file is empty or has no data rows" });
+        return res.status(400).json({ error: "CSV файл пуст или не содержит данных" });
       }
 
       // Parse CSV with auto-detection of delimiter
@@ -409,7 +409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("File sync error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -420,7 +420,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(loading);
     } catch (error: any) {
       console.error("Get warehouse loading error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -431,7 +431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(settings);
     } catch (error: any) {
       console.error("Get warehouse settings error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -440,14 +440,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { locationPattern, tsku, maxq } = req.body;
 
       if (!locationPattern || !tsku || !maxq) {
-        return res.status(400).json({ error: "locationPattern, tsku, and maxq are required" });
+        return res.status(400).json({ error: "Требуются locationPattern, tsku и maxq" });
       }
 
       const setting = await storage.upsertWarehouseSetting({ locationPattern, tsku, maxq });
       return res.json(setting);
     } catch (error: any) {
       console.error("Upsert warehouse setting error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -458,7 +458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(204).send();
     } catch (error: any) {
       console.error("Delete warehouse setting error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -469,7 +469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(locations);
     } catch (error: any) {
       console.error("Get active locations error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -478,7 +478,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { locations } = req.body;
 
       if (!Array.isArray(locations)) {
-        return res.status(400).json({ error: "locations must be an array" });
+        return res.status(400).json({ error: "locations должен быть массивом" });
       }
 
       await storage.setActiveLocations(locations);
@@ -486,7 +486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(saved);
     } catch (error: any) {
       console.error("Set active locations error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -496,7 +496,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(204).send();
     } catch (error: any) {
       console.error("Clear active locations error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -507,19 +507,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { barcode } = req.body;
 
       if (!barcode) {
-        return res.status(400).json({ error: "Barcode is required" });
+        return res.status(400).json({ error: "Требуется штрихкод" });
       }
 
       const item = await storage.pickItemByBarcode(barcode, userId);
 
       if (!item) {
-        return res.status(404).json({ error: "Item not found or already picked" });
+        return res.status(404).json({ error: "Товар не найден или уже собран" });
       }
 
       return res.json(item);
     } catch (error: any) {
       console.error("Pick item error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -531,13 +531,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const deleted = await storage.deleteInventoryItem(id, userId);
 
       if (!deleted) {
-        return res.status(404).json({ error: "Item not found" });
+        return res.status(404).json({ error: "Товар не найден" });
       }
 
       return res.status(204).send();
     } catch (error: any) {
       console.error("Delete item error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -549,13 +549,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const count = await storage.deleteItemsByLocation(location, userId);
 
       if (count === 0) {
-        return res.status(404).json({ error: "Location not found" });
+        return res.status(404).json({ error: "Местоположение не найдено" });
       }
 
       return res.json({ deleted: count });
     } catch (error: any) {
       console.error("Delete location error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -566,7 +566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { name, tasks } = req.body;
 
       if (!name || !tasks || !Array.isArray(tasks)) {
-        return res.status(400).json({ error: "Name and tasks are required" });
+        return res.status(400).json({ error: "Требуются название и задачи" });
       }
 
       const result = await storage.createPickingList({
@@ -578,7 +578,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(result);
     } catch (error: any) {
       console.error("Create picking list error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -588,7 +588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(lists);
     } catch (error: any) {
       console.error("Get picking lists error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -598,13 +598,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await storage.getPickingListWithTasks(id);
 
       if (!result) {
-        return res.status(404).json({ error: "Picking list not found" });
+        return res.status(404).json({ error: "Список сборки не найден" });
       }
 
       return res.json(result);
     } catch (error: any) {
       console.error("Get picking list error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -614,7 +614,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { barcode, taskId } = req.body;
 
       if (!barcode || !taskId) {
-        return res.status(400).json({ error: "Barcode and taskId are required" });
+        return res.status(400).json({ error: "Требуются штрихкод и taskId" });
       }
 
       const result = await storage.scanBarcodeForPickingTask(barcode, taskId, userId);
@@ -626,7 +626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(result);
     } catch (error: any) {
       console.error("Scan barcode error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -638,13 +638,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const deleted = await storage.deletePickingList(id, userId);
 
       if (!deleted) {
-        return res.status(404).json({ error: "Picking list not found" });
+        return res.status(404).json({ error: "Список сборки не найден" });
       }
 
       return res.status(204).send();
     } catch (error: any) {
       console.error("Delete picking list error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -657,7 +657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(safeUsers);
     } catch (error: any) {
       console.error("Get users error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -674,7 +674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existing = await storage.getUserByLogin(validation.data.login);
       
       if (existing) {
-        return res.status(400).json({ error: "User with this login already exists" });
+        return res.status(400).json({ error: "Пользователь с таким логином уже существует" });
       }
 
       // Hash the password before storing
@@ -690,7 +690,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(201).json(safeUser);
     } catch (error: any) {
       console.error("Create user error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -717,7 +717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(204).send();
     } catch (error: any) {
       console.error("Delete user error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -727,7 +727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { password } = req.body;
 
       if (!password || password.length < 6) {
-        return res.status(400).json({ error: "Password must be at least 6 characters" });
+        return res.status(400).json({ error: "Пароль должен быть не менее 6 символов" });
       }
 
       const hashedPassword = await hashPassword(password);
@@ -736,7 +736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ message: "Password updated successfully" });
     } catch (error: any) {
       console.error("Update password error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -797,7 +797,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(errors);
     } catch (error: any) {
       console.error("Get SKU errors error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -808,14 +808,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req as any).userId;
 
       if (!correctedSku) {
-        return res.status(400).json({ error: "Corrected SKU is required" });
+        return res.status(400).json({ error: "Требуется исправленный SKU" });
       }
 
       await storage.resolveSkuError(id, correctedSku, userId);
       return res.json({ message: "SKU error resolved successfully" });
     } catch (error: any) {
       console.error("Resolve SKU error:", error);
-      return res.status(500).json({ error: error.message || "Internal server error" });
+      return res.status(500).json({ error: error.message || "Внутренняя ошибка сервера" });
     }
   });
 
@@ -826,7 +826,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ message: "SKU error deleted successfully" });
     } catch (error: any) {
       console.error("Delete SKU error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -845,7 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(logs);
     } catch (error: any) {
       console.error("Get logs error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -857,7 +857,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(analytics);
     } catch (error: any) {
       console.error("Get analytics error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -874,7 +874,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ message: "Logged out successfully" });
     } catch (error: any) {
       console.error("Logout error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
