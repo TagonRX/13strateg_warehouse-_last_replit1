@@ -482,6 +482,10 @@ export class DbStorage implements IStorage {
       userId,
       action: "STOCK_OUT",
       details: `Picked item: ${item.name} (${item.sku}) - Barcode: ${barcode}`,
+      productId: item.productId || null,
+      itemName: item.name || null,
+      sku: item.sku,
+      location: item.location,
     });
 
     return item;
@@ -508,6 +512,10 @@ export class DbStorage implements IStorage {
       userId,
       action: "DELETE_ITEM",
       details: `Deleted item: ${item.name} (${item.sku})`,
+      productId: item.productId || null,
+      itemName: item.name || null,
+      sku: item.sku,
+      location: item.location,
     });
 
     return true;
@@ -653,6 +661,10 @@ export class DbStorage implements IStorage {
       userId,
       action: "PICK_ITEM",
       details: `Picked ${item.name} (${item.sku}) for picking list task`,
+      productId: item.productId || null,
+      itemName: item.name || null,
+      sku: item.sku,
+      location: item.location,
     });
 
     return { 
@@ -783,6 +795,10 @@ export class DbStorage implements IStorage {
       userId,
       action: "SKU_ERROR_RESOLVED",
       details: `Resolved SKU error for ${error.name} (${error.productId}): ${error.csvSku} → ${correctedSku}, quantity added: ${error.quantity}`,
+      productId: error.productId,
+      itemName: error.name,
+      sku: correctedSku,
+      location: correctedSku,
     });
   }
 

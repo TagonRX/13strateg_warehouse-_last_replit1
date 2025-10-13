@@ -120,6 +120,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId,
           action: "STOCK_IN_UPDATE",
           details: `Updated ${validation.data.name} (${validation.data.productId}): +${quantityToAdd}`,
+          productId: validation.data.productId || null,
+          itemName: validation.data.name || null,
+          sku: validation.data.sku,
+          location: validation.data.location,
         });
 
         return res.json(updated);
@@ -135,6 +139,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId,
           action: "STOCK_IN",
           details: `Added ${validation.data.name} (${validation.data.productId}): ${validation.data.quantity}`,
+          productId: validation.data.productId || null,
+          itemName: validation.data.name || null,
+          sku: validation.data.sku,
+          location: validation.data.location,
         });
 
         return res.status(201).json(item);
@@ -166,6 +174,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
         action: "INVENTORY_UPDATE",
         details: `Updated item ${existing.sku} (${id})`,
+        productId: existing.productId || null,
+        itemName: existing.name || null,
+        sku: existing.sku,
+        location: existing.location,
       });
 
       // Check if quantity is 0 and delete if so
@@ -175,6 +187,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId,
           action: "AUTO_DELETE",
           details: `Auto-deleted item ${existing.sku} (${id}) - quantity reached 0`,
+          productId: existing.productId || null,
+          itemName: existing.name || null,
+          sku: existing.sku,
+          location: existing.location,
         });
         return res.json({ deleted: true, item: updated });
       }
@@ -206,6 +222,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
         action: "INVENTORY_DELETE",
         details: `Deleted item ${existing.sku} (${id})`,
+        productId: existing.productId || null,
+        itemName: existing.name || null,
+        sku: existing.sku,
+        location: existing.location,
       });
 
       return res.json({ success: true });
@@ -363,6 +383,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId,
           action: "ITEM_DELETED",
           details: `Deleted from file sync: ${item.name} (${item.productId}), quantity: ${item.quantity}`,
+          productId: item.productId || null,
+          itemName: item.name || null,
+          sku: item.sku,
+          location: item.location,
         });
       }
 
