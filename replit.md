@@ -49,11 +49,13 @@ Preferred communication style: Simple, everyday language.
 *   **Warehouse Loading Filter Performance**: Optimized filter calculations by separating activeLocationsSet memoization, added NaN validation for numeric filters, and added "50" option to limit selector. Filters no longer hang when changing values.
 *   **Warehouse Loading Empty Locations**: Modified warehouse loading view to show ALL active locations from location management, even if they are currently empty (showing 0 SKUs, 0 quantity). This ensures visibility of all configured locations regardless of current inventory status.
 *   **Warehouse Loading Natural Sorting**: Implemented natural/numeric sorting for warehouse locations. Locations now sort logically: X1, X2...X10, X11...X100, X101...X199, X200+ (not alphabetically X1, X10, X100, X11, X2...). Sorting is first by letter prefix alphabetically, then by number numerically within same letter group.
+*   **Warehouse Settings Extended**: Added warehouse settings for letters E-Z (22 letters × 6 locations each = 132 settings). Each location configured with TSKU=3 and MAXQ=7. Pattern: E1-E6, F1-F6, G1-G6... Z1-Z6.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.
 *   **Production**: `npm run build` creates optimized frontend and server bundles; `npm start` runs the production server.
 *   **Database Operations**: `npm run db:push` for schema changes via Drizzle Kit.
+*   **Seed Scripts**: `npx tsx server/seed-warehouse-settings.ts` to seed warehouse settings for letters E-Z (132 locations with TSKU=3, MAXQ=7).
 
 ## External Dependencies
 
