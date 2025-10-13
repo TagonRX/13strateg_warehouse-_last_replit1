@@ -286,17 +286,20 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     return warehouseSettings.find(s => s.locationPattern === pattern);
   };
 
+  // Parse active locations set for filtering (memoized separately)
+  const activeLocationsSet = useMemo(() => {
+    return parseLocationInput(locationInput);
+  }, [locationInput]);
+
   // Filter locations based on active locations and TSKU/MAXQ filters
   const filteredLocations = useMemo(() => {
-    const activeSet = parseLocationInput(locationInput);
-    
     // Start with appropriate base: 
     // If letter filter is active, use all locations and ignore active locations filter
     // Otherwise, filter by active locations if specified
     let filtered = letterFilter.length > 0
       ? locationGroups 
-      : (activeSet.size > 0
-          ? locationGroups.filter(loc => activeSet.has(loc.location.toUpperCase()))
+      : (activeLocationsSet.size > 0
+          ? locationGroups.filter(loc => activeLocationsSet.has(loc.location.toUpperCase()))
           : locationGroups);
 
     // Filter by letters (if specified) - multi-select
@@ -310,13 +313,17 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     // Filter by TSKU - exact value match
     if (tskuFilter) {
       const tskuValue = parseInt(tskuFilter);
-      filtered = filtered.filter(loc => loc.skuCount === tskuValue);
+      if (!isNaN(tskuValue)) {
+        filtered = filtered.filter(loc => loc.skuCount === tskuValue);
+      }
     }
 
     // Filter by MAXQ - exact value match
     if (maxqFilter) {
       const maxqValue = parseInt(maxqFilter);
-      filtered = filtered.filter(loc => loc.totalQuantity === maxqValue);
+      if (!isNaN(maxqValue)) {
+        filtered = filtered.filter(loc => loc.totalQuantity === maxqValue);
+      }
     }
 
     // Apply limit
@@ -346,7 +353,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       // Single letter or no letter filter - apply limit to total
       return filtered.slice(0, limit);
     }
-  }, [locationGroups, locationInput, letterFilter, tskuFilter, maxqFilter, limitFilter]);
+  }, [locationGroups, activeLocationsSet, letterFilter, tskuFilter, maxqFilter, limitFilter]);
 
   // Group locations by letter for column layout
   const locationsByLetter = useMemo(() => {
@@ -578,6 +585,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="50">50</SelectItem>
                 <SelectItem value="100">100</SelectItem>
                 <SelectItem value="200">200</SelectItem>
                 <SelectItem value="300">300</SelectItem>
