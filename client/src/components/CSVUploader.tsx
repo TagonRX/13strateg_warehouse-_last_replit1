@@ -5,7 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Upload, FileText, CheckCircle, XCircle, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface CSVUploaderProps {
@@ -24,6 +24,8 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
     success: number;
     updated: number;
     errors: number;
+    deleted?: number;
+    isSync?: boolean;
   } | null>(null);
 
   const syncMutation = useMutation({
@@ -32,18 +34,22 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       return response.json();
     },
     onSuccess: (data) => {
+      const deletedCount = data.deleted ?? 0;
       setResult({
-        success: data.created,
-        updated: data.updated,
-        errors: 0,
+        success: data.created ?? 0,
+        updated: data.updated ?? 0,
+        errors: data.errors ?? 0,
+        deleted: deletedCount,
+        isSync: true,
       });
       toast({
         title: "Синхронизация завершена",
-        description: `Создано: ${data.created}, Обновлено: ${data.updated}, Удалено: ${data.deleted}`,
+        description: `Создано: ${data.created ?? 0}, Обновлено: ${data.updated ?? 0}, Удалено: ${deletedCount}`,
       });
       if (data.deletedItems && data.deletedItems.length > 0) {
         console.log("[FILE SYNC] Deleted items:", data.deletedItems);
       }
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
     },
     onError: (error: Error) => {
       toast({
@@ -139,7 +145,10 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
                 <div className="mt-2 space-y-1 text-sm">
                   <p>✓ Новых записей: {result.success}</p>
                   <p>↻ Обновлено: {result.updated}</p>
-                  {result.errors > 0 && (
+                  {result.isSync && (
+                    <p className="text-muted-foreground">Удалено: {result.deleted ?? 0}</p>
+                  )}
+                  {!result.isSync && result.errors > 0 && (
                     <p className="text-destructive">✗ Ошибок: {result.errors}</p>
                   )}
                 </div>

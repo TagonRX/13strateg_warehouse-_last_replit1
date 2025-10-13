@@ -1,1 +1,3 @@
 productId;name;sku;location;quantity;barcode
+SYNC-TEST-1;Sync Test Item 1;A101-TEST;A101;15;BC001
+SYNC-TEST-2;Sync Test Item 2;B202-TEST;B202;8;BC002
