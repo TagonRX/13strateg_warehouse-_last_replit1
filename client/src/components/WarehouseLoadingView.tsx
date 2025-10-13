@@ -219,6 +219,10 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   const deleteSettingMutation = useMutation({
     mutationFn: async (locationPattern: string) => {
       const res = await apiRequest("DELETE", `/api/warehouse/settings/${locationPattern}`, undefined);
+      // 204 No Content returns empty body, don't parse JSON
+      if (res.status === 204) {
+        return;
+      }
       return res.json();
     },
     onSuccess: () => {
