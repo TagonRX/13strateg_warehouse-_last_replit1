@@ -10,6 +10,21 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 13, 2025 - Mobile Camera & Physical Scanner Support
+- **Real Camera Scanning**:
+  - Implemented html5-qrcode for mobile barcode scanning
+  - Uses back camera (environment mode) for better scanning
+  - Error handling for camera permissions
+  - Proper camera cleanup on unmount/tab switch
+- **Auto-Focus for Physical Scanners**:
+  - Added auto-focus on barcode input fields (Stock In, Stock Out, Picking)
+  - Focus returns to input after each scan
+  - Works seamlessly with USB/wired barcode scanners
+- **Multi-Device Workflow**:
+  - Use phone camera to scan barcodes
+  - Use computer to enter data (location, etc.) simultaneously
+  - Physical scanner works without clicking on input field
+
 ### October 13, 2025 - Picking List Excel Support
 - **Auto-Detect Delimiter for Picking Lists**:
   - Added support for Excel data (tab-separated)

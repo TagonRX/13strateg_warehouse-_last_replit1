@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getWarehouseLoading, pickItemByBarcode, deleteInventoryItem, deleteLocation } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
@@ -33,6 +33,12 @@ export default function StockOutView({ user }: { user: { role: string } }) {
   const [limitFilter, setLimitFilter] = useState<string>("10");
   const [lastPickedItem, setLastPickedItem] = useState<any>(null);
   const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus on mount and after operations
+  useEffect(() => {
+    barcodeInputRef.current?.focus();
+  }, [lastPickedItem]);
 
   const { data: locations = [], isLoading } = useQuery<LocationData[]>({
     queryKey: ["/api/warehouse/loading"],
@@ -367,6 +373,7 @@ export default function StockOutView({ user }: { user: { role: string } }) {
               <label className="text-sm font-medium">Scan or Enter Barcode</label>
               <div className="flex gap-2">
                 <Input
+                  ref={barcodeInputRef}
                   data-testid="input-barcode"
                   placeholder="Scan barcode here..."
                   value={barcodeInput}

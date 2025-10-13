@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +21,14 @@ export default function DailyPickingView() {
   const [letterFilter, setLetterFilter] = useState<string>("all");
   const [pageLimit, setPageLimit] = useState<string>("50");
   const [lastResult, setLastResult] = useState<any>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus on mount and after operations
+  useEffect(() => {
+    if (selectedListId) {
+      barcodeInputRef.current?.focus();
+    }
+  }, [selectedListId, lastResult]);
 
   const { data: lists = [] } = useQuery<PickingList[]>({
     queryKey: ["/api/picking/lists"],
@@ -253,6 +261,7 @@ export default function DailyPickingView() {
                   <label className="text-sm font-medium">Barcode</label>
                   <div className="flex gap-2">
                     <Input
+                      ref={barcodeInputRef}
                       data-testid="input-barcode-scan"
                       placeholder="Scan or enter barcode"
                       value={barcodeInput}
