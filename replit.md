@@ -10,7 +10,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-### October 13, 2025 - Remote Scanner (Phone as Wireless Scanner)
+### October 13, 2025 - Remote Scanner & Picking List Synchronization
 - **WebSocket Real-Time Communication**:
   - Created WebSocket server for device-to-device communication
   - Supports multiple concurrent connections per user (Set-based storage)
@@ -23,15 +23,22 @@ Preferred communication style: Simple, everyday language.
   - Manual "Send to Computer" button (like camera shutter)
   - Visual feedback with green preview for scanned codes
   - Connection status indicators (🟢 Connected / 🟡 Connecting)
+  - **Flood Prevention**: lastScanned state prevents duplicate barcode submissions; isSending flag prevents concurrent submissions (fixed 50+ duplicate requests/sec issue)
 - **Dual-Device Workflow**:
   - Use phone as wireless scanner for computer
   - Phone scans → shows preview → click "Send to Computer"
   - Computer receives scan instantly via WebSocket (on any tab)
   - Status indicator shows "🟢 Принимает сканы с телефона" on desktop USB tab
+- **Picking List Synchronization** (NEW):
+  - When user selects picking list on one device, all other devices automatically sync
+  - WebSocket message type: `sync_picking_list`
+  - Receiving device: ensureQueryData → setSelectedListId → fetchQuery → tasks auto-load
+  - No manual click required on receiving device
+  - E2E tested and verified with console logging
 - **Implementation Details**:
   - WebSocket path: `/ws`
   - Server: Map<userId, Set<WebSocket>> for multiple connections
-  - Messages: `auth`, `remote_scan`, `barcode_scanned`
+  - Messages: `auth`, `remote_scan`, `barcode_scanned`, `sync_picking_list` (new)
   - Unique camera mount IDs: `qr-reader-mobile` and `qr-reader-remote`
   - Receives WebSocket scans regardless of active tab
 

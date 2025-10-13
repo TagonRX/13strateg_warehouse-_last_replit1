@@ -30,12 +30,29 @@ export default function DailyPickingView() {
 
   // Sync selected list across devices via WebSocket
   useEffect(() => {
-    if (lastMessage?.type === "sync_picking_list") {
-      const listId = lastMessage.listId;
-      setSelectedListId(listId);
-      // Force refetch the list data to ensure it's loaded
-      queryClient.invalidateQueries({ queryKey: ["/api/picking/lists", listId] });
-    }
+    const syncList = async () => {
+      if (lastMessage?.type === "sync_picking_list") {
+        const listId = lastMessage.listId;
+        console.log("[Picking] Syncing list from WebSocket:", listId);
+        
+        // First ensure lists are loaded
+        await queryClient.ensureQueryData({
+          queryKey: ["/api/picking/lists"],
+        });
+        
+        // Then set the selected list and fetch its details
+        setSelectedListId(listId);
+        await queryClient.fetchQuery({
+          queryKey: ["/api/picking/lists", listId],
+        });
+        
+        console.log("[Picking] List synced successfully:", listId);
+      }
+    };
+    
+    syncList().catch(err => {
+      console.error("Failed to sync picking list:", err);
+    });
   }, [lastMessage]);
 
   const { data: currentList } = useQuery<{ list: PickingList; tasks: PickingTask[] }>({
