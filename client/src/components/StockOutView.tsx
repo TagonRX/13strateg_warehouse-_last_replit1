@@ -5,6 +5,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,6 +34,8 @@ export default function StockOutView({ user }: { user: { role: string } }) {
   const [limitFilter, setLimitFilter] = useState<string>("10");
   const [lastPickedItem, setLastPickedItem] = useState<any>(null);
   const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
+  const [barcodeInput, setBarcodeInput] = useState("");
+  const [lastAction, setLastAction] = useState<{ type: string; data: any } | null>(null);
 
   const { data: locations = [], isLoading } = useQuery<LocationData[]>({
     queryKey: ["/api/warehouse/loading"],
@@ -42,16 +45,18 @@ export default function StockOutView({ user }: { user: { role: string } }) {
     mutationFn: pickItemByBarcode,
     onSuccess: (item) => {
       setLastPickedItem(item);
+      setLastAction({ type: 'pick', data: { ...item, barcode: barcodeInput } });
+      setBarcodeInput("");
       queryClient.invalidateQueries({ queryKey: ["/api/warehouse/loading"] });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
       toast({
-        title: "Item Picked",
-        description: `${item.name} (${item.sku}) has been picked successfully`,
+        title: "Товар списан",
+        description: `${item.name} (${item.sku}) успешно списан`,
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Pick Failed",
+        title: "Ошибка списания",
         description: error.message,
         variant: "destructive",
       });
@@ -99,13 +104,39 @@ export default function StockOutView({ user }: { user: { role: string } }) {
   const handleScan = (barcode: string) => {
     if (!barcode.trim()) {
       toast({
-        title: "Error",
-        description: "Please enter a barcode",
+        title: "Ошибка",
+        description: "Введите штрихкод",
         variant: "destructive",
       });
       return;
     }
+    setBarcodeInput(barcode.trim());
     pickMutation.mutate(barcode.trim());
+  };
+
+  const handleItemClick = (barcode: string) => {
+    setBarcodeInput(barcode);
+  };
+
+  const handleUndo = async () => {
+    if (!lastAction) {
+      toast({
+        title: "Нет действия для отмены",
+        description: "История действий пуста",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // For now, we can only undo pick actions
+    if (lastAction.type === 'pick') {
+      toast({
+        title: "Отмена невозможна",
+        description: "Функция отмены в разработке. Используйте 'Приход товара' для возврата товара на склад.",
+        variant: "destructive",
+      });
+      setLastAction(null);
+    }
   };
 
   const handleDeleteItem = (id: string, name: string) => {
@@ -229,7 +260,9 @@ export default function StockOutView({ user }: { user: { role: string } }) {
                   <SelectItem value="10">10</SelectItem>
                   <SelectItem value="20">20</SelectItem>
                   <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="200">200</SelectItem>
+                  <SelectItem value="all">Все</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -307,37 +340,47 @@ export default function StockOutView({ user }: { user: { role: string } }) {
                       </div>
                       <AccordionContent>
                         <div className="space-y-2 px-4 pt-2">
-                          {location.items.map((item) => (
+                          {location.items.flatMap((item) => 
+                            Array.from({ length: item.quantity }, (_, index) => ({
+                              ...item,
+                              displayIndex: index + 1,
+                              uniqueKey: `${item.id}-${index}`
+                            }))
+                          ).map((expandedItem) => (
                             <div
-                              key={item.id}
-                              data-testid={`item-${item.id}`}
-                              className="flex items-center justify-between p-3 rounded-md bg-muted/50 hover-elevate"
+                              key={expandedItem.uniqueKey}
+                              data-testid={`item-${expandedItem.uniqueKey}`}
+                              onClick={() => handleItemClick(expandedItem.barcode || expandedItem.sku)}
+                              className="flex items-center justify-between p-3 rounded-md bg-muted/50 hover-elevate cursor-pointer active-elevate-2"
                             >
                               <div className="flex-1 space-y-1">
                                 <div className="flex items-center gap-2">
-                                  <span className="font-mono text-sm font-medium" data-testid={`text-sku-${item.id}`}>
-                                    {item.sku}
+                                  <span className="font-mono text-sm font-medium" data-testid={`text-sku-${expandedItem.uniqueKey}`}>
+                                    {expandedItem.sku}
                                   </span>
-                                  <Badge variant="outline" className="text-xs" data-testid={`badge-qty-${item.id}`}>
-                                    Qty: {item.quantity}
+                                  <Badge variant="outline" className="text-xs" data-testid={`badge-num-${expandedItem.uniqueKey}`}>
+                                    #{expandedItem.displayIndex}
                                   </Badge>
                                 </div>
-                                <div className="text-sm text-muted-foreground" data-testid={`text-name-${item.id}`}>
-                                  {item.name}
+                                <div className="text-sm text-muted-foreground" data-testid={`text-name-${expandedItem.uniqueKey}`}>
+                                  {expandedItem.name}
                                 </div>
-                                {item.barcode && (
+                                {expandedItem.barcode && (
                                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                     <Barcode className="h-3 w-3" />
-                                    <span data-testid={`text-barcode-${item.id}`}>{item.barcode}</span>
+                                    <span data-testid={`text-barcode-${expandedItem.uniqueKey}`}>{expandedItem.barcode}</span>
                                   </div>
                                 )}
                               </div>
                               {user.role === "admin" && (
                                 <Button
-                                  data-testid={`button-delete-item-${item.id}`}
+                                  data-testid={`button-delete-item-${expandedItem.id}`}
                                   size="icon"
                                   variant="ghost"
-                                  onClick={() => handleDeleteItem(item.id, item.name)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteItem(expandedItem.id, expandedItem.name);
+                                  }}
                                   className="h-8 w-8"
                                 >
                                   <Trash2 className="h-4 w-4 text-destructive" />
@@ -358,6 +401,51 @@ export default function StockOutView({ user }: { user: { role: string } }) {
 
       {/* Right Panel: Barcode Scanning */}
       <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Списание товара</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="barcode-input">Отсканируйте или введите штрихкод</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="barcode-input"
+                  data-testid="input-barcode-manual"
+                  placeholder="Штрихкод..."
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleScan(barcodeInput);
+                    }
+                  }}
+                  className="flex-1 font-mono"
+                />
+                <Button
+                  data-testid="button-confirm-pick"
+                  onClick={() => handleScan(barcodeInput)}
+                  disabled={!barcodeInput.trim() || pickMutation.isPending}
+                >
+                  Подтвердить
+                </Button>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button
+                data-testid="button-undo"
+                variant="outline"
+                onClick={handleUndo}
+                disabled={!lastAction}
+                className="flex-1"
+              >
+                Отменить последнее
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         <BarcodeScanner onScan={handleScan} />
 
         {lastPickedItem && (
@@ -368,7 +456,7 @@ export default function StockOutView({ user }: { user: { role: string } }) {
                 {lastPickedItem.name}
               </div>
               <div className="text-sm" data-testid="text-last-picked-sku">
-                SKU: {lastPickedItem.sku} | Qty: {lastPickedItem.quantity}
+                SKU: {lastPickedItem.sku} | Осталось: {lastPickedItem.quantity}
               </div>
             </AlertDescription>
           </Alert>
@@ -376,13 +464,14 @@ export default function StockOutView({ user }: { user: { role: string } }) {
 
         <Card>
           <CardContent className="pt-6">
-            <h3 className="text-sm font-medium mb-2">Instructions</h3>
+            <h3 className="text-sm font-medium mb-2">Инструкция</h3>
             <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Scan or enter the barcode of the item to pick</li>
-              <li>• Item will be marked as PICKED and removed from stock</li>
-              <li>• Use the location list on the left to view available items</li>
+              <li>• Нажмите на товар в списке слева - штрихкод автоматически появится в поле ввода</li>
+              <li>• Или отсканируйте штрихкод сканером/телефоном</li>
+              <li>• Нажмите "Подтвердить" для списания товара</li>
+              <li>• Товар будет помечен как СПИСАН и удален из склада</li>
               {user.role === "admin" && (
-                <li>• As admin, you can delete individual items or entire locations</li>
+                <li>• Администратор может удалять товары и локации целиком</li>
               )}
             </ul>
           </CardContent>
