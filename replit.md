@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 13, 2025 - Picking List Excel Support
+- **Auto-Detect Delimiter for Picking Lists**:
+  - Added support for Excel data (tab-separated)
+  - Auto-detects delimiter: tab (`\t`), comma (`,`), semicolon (`;`), or whitespace
+  - Can now paste directly from Excel without formatting
+  - Example formats: `R356-X    1` (tab), `R356-X,1` (comma), `R356-X 1` (space)
+  - Tested with 5 SKUs from Excel - all parsed correctly
+
 ### October 13, 2025 - CSV Bulk Upload Fix & Location Extraction Correction
 - **CSV Upload Fixed**:
   - Fixed "PayloadTooLargeError" - increased request limit to 50MB

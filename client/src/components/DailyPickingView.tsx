@@ -88,8 +88,25 @@ export default function DailyPickingView() {
     const lines = csvText.split("\n").filter(line => line.trim());
     const tasks: { sku: string; requiredQuantity: number }[] = [];
 
+    // Auto-detect delimiter: tab, comma, semicolon, or whitespace
+    let delimiter = ",";
+    const firstLine = lines[0] || "";
+    if (firstLine.includes("\t")) {
+      delimiter = "\t";
+    } else if (firstLine.includes(";")) {
+      delimiter = ";";
+    } else if (firstLine.includes(",")) {
+      delimiter = ",";
+    } else if (/\s+/.test(firstLine)) {
+      // If no delimiter found, try splitting by whitespace
+      delimiter = "whitespace";
+    }
+
     for (const line of lines) {
-      const parts = line.split(",").map(p => p.trim());
+      const parts = delimiter === "whitespace" 
+        ? line.trim().split(/\s+/).map(p => p.trim())
+        : line.split(delimiter).map(p => p.trim());
+        
       if (parts.length >= 2) {
         tasks.push({
           sku: parts[0],
