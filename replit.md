@@ -8,6 +8,24 @@ This project is a comprehensive warehouse management system designed to streamli
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### October 13, 2025 - Warehouse Loading Filter Improvements
+- **Multi-Select Letter Filter**: 
+  - Replaced single-select dropdown with Popover + checkboxes for multi-select
+  - Selected letters displayed as badges in trigger button
+  - Shows locations matching ANY selected letter (OR logic)
+  - "Очистить" button to clear all selections
+- **Exact Value Filters**:
+  - TSKU filter: Changed from minimum value (`>=`) to exact match (`===`)
+  - MAXQ filter: Changed from minimum value (`>=`) to exact match (`===`)
+  - UI labels updated to "точное значение" instead of "мин. значение"
+- **Color Indicators - Gradient System**:
+  - Changed from step-based to ratio-based gradient colors
+  - Transition: green (0%) → lime (25%) → yellow (50%) → orange (75%) → red (100%)
+  - Uses warehouse settings (TSKU/MAXQ) as maximum thresholds
+  - Example: Location with TSKU=9 setting shows green at 0-2 SKUs, yellow at 4-5, red at 9+
+
 ## System Architecture
 
 ### Frontend Architecture
