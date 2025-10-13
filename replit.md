@@ -10,6 +10,23 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 13, 2025 - Stock In Form Redesign
+- **Field Order Redesign**:
+  - Reordered fields: Location (1st) → Product ID (2nd) → Name (3rd) → SKU (4th) → Quantity (5th) → Barcode (6th)
+  - Location field now required and first (was second)
+  - All fields remain editable with uppercase transforms for location/SKU
+  - Removed SKU auto-fill to location (location is now independent)
+- **Barcode Scanning Enhancement**:
+  - Added "Добавить штрихкод" button next to barcode field
+  - Button activates scanner mode: focuses barcode input, shows visual indicator (border-primary + ring)
+  - Placeholder changes to "Ожидание сканирования..." when active
+  - Works with USB scanners (auto-fill on focus) and phone scanners (via BarcodeScanner component)
+  - Visual indicator auto-hides after 5 seconds or on scan
+- **Form Cleanup**:
+  - Removed status field (not needed for stock in)
+  - Form clears after successful submission
+  - Maintains integration with existing BarcodeScanner for multi-device scanning
+
 ### October 13, 2025 - File Sync UI Button
 - **Sync from File Button in Bulk Upload Page**:
   - Added "Обновить из файла" button in CSVUploader component
