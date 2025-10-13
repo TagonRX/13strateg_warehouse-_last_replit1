@@ -7,6 +7,7 @@ import { verifyPassword, hashPassword, createSession, requireAuth, requireAdmin 
 import { setupWebSocket } from "./websocket";
 import fs from "fs/promises";
 import path from "path";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user (check token validity)
@@ -16,7 +17,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       
       if (!user) {
-        return res.status(404).json({ error: "User not found" });
+        return res.status(404).json({ error: "Пользователь не найден" });
       }
 
       return res.json({
@@ -27,7 +28,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Get current user error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 
@@ -37,20 +38,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { login, password } = req.body;
       
       if (!login || !password) {
-        return res.status(400).json({ error: "Login and password are required" });
+        return res.status(400).json({ error: "Требуется логин и пароль" });
       }
 
       const user = await storage.getUserByLogin(login);
       
       if (!user) {
-        return res.status(401).json({ error: "Invalid credentials" });
+        return res.status(401).json({ error: "Неверный логин или пароль" });
       }
 
       // Verify password using bcrypt
       const isValid = await verifyPassword(password, user.password);
       
       if (!isValid) {
-        return res.status(401).json({ error: "Invalid credentials" });
+        return res.status(401).json({ error: "Неверный логин или пароль" });
       }
 
       // Create session and return token
@@ -742,19 +743,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/users/:id/name", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { name } = req.body;
+      const currentUserId = (req as any).userId;
+      
+      // Validate request body with Zod
+      const updateNameSchema = z.object({
+        name: z.string().min(1, "Имя не может быть пустым").trim()
+      });
 
-      if (!name || name.trim().length === 0) {
-        return res.status(400).json({ error: "Имя не может быть пустым" });
+      const validation = updateNameSchema.safeParse(req.body);
+      if (!validation.success) {
+        const error = fromZodError(validation.error);
+        return res.status(400).json({ error: error.message });
       }
 
-      const updatedUser = await storage.updateUserName(id, name.trim());
+      // Validate UUID format
+      const uuidSchema = z.string().uuid("Неверный формат ID пользователя");
+      const idValidation = uuidSchema.safeParse(id);
+      if (!idValidation.success) {
+        return res.status(400).json({ error: "Неверный формат ID пользователя" });
+      }
+
+      // Get user before update for logging
+      const userBefore = await storage.getUser(id);
+      if (!userBefore) {
+        return res.status(404).json({ error: "Пользователь не найден" });
+      }
+
+      const updatedUser = await storage.updateUserName(id, validation.data.name);
+      if (!updatedUser) {
+        return res.status(404).json({ error: "Пользователь не найден" });
+      }
+
+      // Log the name change
+      await storage.createEventLog({
+        userId: currentUserId,
+        action: "USER_NAME_UPDATED",
+        details: `Изменено имя пользователя ${userBefore.login}: "${userBefore.name}" → "${validation.data.name}"`,
+      });
+
       const { password, ...safeUser } = updatedUser;
       
       return res.json(safeUser);
     } catch (error: any) {
       console.error("Update user name error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 

@@ -68,13 +68,13 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const token = req.headers.authorization?.replace("Bearer ", "");
   
   if (!token) {
-    return res.status(401).json({ error: "Authentication required" });
+    return res.status(401).json({ error: "Требуется авторизация" });
   }
 
   const session = getSession(token);
   
   if (!session) {
-    return res.status(401).json({ error: "Invalid or expired session" });
+    return res.status(401).json({ error: "Недействительная или истекшая сессия" });
   }
 
   // Attach user info to request
@@ -89,7 +89,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const userRole = (req as any).userRole;
   
   if (userRole !== "admin") {
-    return res.status(403).json({ error: "Admin access required" });
+    return res.status(403).json({ error: "Требуется доступ администратора" });
   }
   
   next();
