@@ -24,6 +24,7 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const lastProcessedMessageRef = useRef<any>(null);
 
   // Auto-focus для USB сканера
   useEffect(() => {
@@ -35,8 +36,12 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
   // Handle incoming WebSocket messages (for receiving scans from phone)
   useEffect(() => {
     if (lastMessage?.type === "barcode_scanned") {
-      const scannedBarcode = lastMessage.barcode;
-      onScan(scannedBarcode);
+      // Prevent duplicate processing of the same message object
+      if (lastProcessedMessageRef.current !== lastMessage) {
+        lastProcessedMessageRef.current = lastMessage;
+        const scannedBarcode = lastMessage.barcode;
+        onScan(scannedBarcode);
+      }
     }
   }, [lastMessage, onScan]);
 
