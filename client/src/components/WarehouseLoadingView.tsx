@@ -602,7 +602,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
           <CardTitle>Загрузка склада ({filteredLocations.length} локаций)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4 overflow-x-auto pb-4">
+          <div className="flex gap-8 overflow-x-auto pb-4">
             {locationsByLetter.map(([letter, locations]) => (
               <div key={letter} className="flex-shrink-0">
                 <div className="text-sm font-bold mb-2 text-center">{letter}</div>
@@ -615,11 +615,11 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                     return (
                       <div
                         key={loc.location}
-                        className="flex items-center gap-2 text-xs border-b py-1"
+                        className="flex items-center gap-1 text-xs border-b py-1"
                         data-testid={`location-row-${loc.location}`}
                       >
                         <div className="w-12 font-mono font-semibold">{loc.location}</div>
-                        <div className="w-6 text-center">{loc.skuCount}</div>
+                        <div className="w-5 text-center">{loc.skuCount}</div>
                         <div className={`w-3 h-3 rounded-full ${getSkuColor(loc.location, loc.skuCount)}`} />
                         <div className="w-6 text-center">{loc.totalQuantity}</div>
                         <div className={`w-3 h-3 rounded-full ${getQuantityColor(loc.location, loc.totalQuantity)}`} />
