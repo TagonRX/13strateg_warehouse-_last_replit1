@@ -17,6 +17,12 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import * as api from "@/lib/api";
+import BarcodeEditor from "./BarcodeEditor";
+
+interface BarcodeMapping {
+  code: string;
+  qty: number;
+}
 
 interface InventoryItem {
   id: string;
@@ -26,6 +32,7 @@ interface InventoryItem {
   location: string;
   quantity: number;
   barcode?: string;
+  barcodeMappings?: string; // JSON string
   length?: number;
   width?: number;
   height?: number;
@@ -46,6 +53,7 @@ interface EditingRow {
   location: string;
   quantity: number;
   barcode: string;
+  barcodeMappings: BarcodeMapping[];
   length: string;
   width: string;
   height: string;
@@ -259,6 +267,16 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   };
 
   const startEdit = (item: InventoryItem) => {
+    let barcodeMappings: BarcodeMapping[] = [];
+    
+    try {
+      if (item.barcodeMappings) {
+        barcodeMappings = JSON.parse(item.barcodeMappings);
+      }
+    } catch (e) {
+      console.error("Failed to parse barcodeMappings:", e);
+    }
+
     setEditingRow({
       id: item.id,
       productId: item.productId || "",
@@ -267,6 +285,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       location: item.location,
       quantity: item.quantity,
       barcode: item.barcode || "",
+      barcodeMappings,
       length: item.length?.toString() || "",
       width: item.width?.toString() || "",
       height: item.height?.toString() || "",
@@ -286,6 +305,10 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     const height = editingRow.height ? parseInt(editingRow.height) : undefined;
     const volume = length && width && height ? length * width * height : undefined;
 
+    const barcodeMappingsJson = editingRow.barcodeMappings.length > 0 
+      ? JSON.stringify(editingRow.barcodeMappings)
+      : undefined;
+
     updateMutation.mutate({
       id: editingRow.id,
       updates: {
@@ -295,6 +318,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         location: editingRow.location,
         quantity: editingRow.quantity,
         barcode: editingRow.barcode || undefined,
+        barcodeMappings: barcodeMappingsJson,
         length,
         width,
         height,
@@ -369,10 +393,10 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
             />
           </TableCell>
           <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }}>
-            <Input
-              value={editingRow.barcode}
-              onChange={(e) => setEditingRow({...editingRow, barcode: e.target.value})}
-              className="h-8 w-full font-mono text-xs"
+            <BarcodeEditor
+              value={editingRow.barcodeMappings}
+              onChange={(mappings) => setEditingRow({...editingRow, barcodeMappings: mappings})}
+              totalQuantity={editingRow.quantity}
             />
           </TableCell>
           <TableCell style={{ width: `${columnWidths.dimensions}px`, minWidth: `${columnWidths.dimensions}px` }}>
