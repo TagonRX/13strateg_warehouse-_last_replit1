@@ -63,8 +63,8 @@ export async function getAllInventory(): Promise<InventoryItem[]> {
 
 export async function createInventoryItem(
   item: {
-    productId: string;
-    name: string;
+    productId?: string;
+    name?: string;
     sku: string;
     location: string;
     quantity: number;
@@ -87,8 +87,8 @@ export async function createInventoryItem(
 
 export async function bulkUploadInventory(
   items: Array<{
-    productId: string;
-    name: string;
+    productId?: string;
+    name?: string;
     sku: string;
     location: string;
     quantity: number;

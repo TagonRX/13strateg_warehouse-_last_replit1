@@ -68,8 +68,8 @@ function AppContent() {
 
   const createItemMutation = useMutation({
     mutationFn: (data: {
-      productId: string;
-      name: string;
+      productId?: string;
+      name?: string;
       sku: string;
       quantity: number;
       barcode?: string;

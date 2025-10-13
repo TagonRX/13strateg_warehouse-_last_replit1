@@ -16,10 +16,10 @@ export const users = pgTable("users", {
 // Товары в инвентаре
 export const inventoryItems = pgTable("inventory_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  productId: text("product_id").notNull(), // ID товара для проверки дублей
-  name: text("name").notNull(),
-  sku: text("sku").notNull(), // SKU = Локация
-  location: text("location").notNull(), // То же что SKU
+  productId: text("product_id"), // ID товара (опционально, может синхронизироваться через CSV)
+  name: text("name"), // Название (опционально, может добавиться через CSV)
+  sku: text("sku").notNull(), // SKU = Локация (обязательно)
+  location: text("location").notNull(), // То же что SKU (автоматически)
   quantity: integer("quantity").notNull().default(1),
   barcode: text("barcode"), // Опционально
   status: text("status").notNull().default("IN_STOCK"), // IN_STOCK, PICKED

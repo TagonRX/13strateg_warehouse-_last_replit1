@@ -7,8 +7,8 @@ import BarcodeScanner from "./BarcodeScanner";
 
 interface StockInFormProps {
   onSubmit: (data: {
-    productId: string;
-    name: string;
+    productId?: string;
+    name?: string;
     sku: string;
     quantity: number;
     barcode?: string;
@@ -29,8 +29,8 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
-      productId,
-      name,
+      productId: productId || undefined,
+      name: name || undefined,
       sku,
       quantity,
       barcode: barcode || undefined,
@@ -54,30 +54,6 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="productId">ID товара *</Label>
-              <Input
-                id="productId"
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-                placeholder="PROD001"
-                required
-                data-testid="input-product-id"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="name">Название товара *</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Название товара"
-                required
-                data-testid="input-name"
-              />
-            </div>
-            
-            <div className="space-y-2">
               <Label htmlFor="sku">SKU / Локация *</Label>
               <Input
                 id="sku"
@@ -87,6 +63,9 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
                 required
                 data-testid="input-sku"
               />
+              <p className="text-xs text-muted-foreground">
+                Локация автоматически = SKU
+              </p>
             </div>
             
             <div className="space-y-2">
@@ -101,9 +80,31 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
                 data-testid="input-quantity"
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="productId">ID товара (опционально)</Label>
+              <Input
+                id="productId"
+                value={productId}
+                onChange={(e) => setProductId(e.target.value)}
+                placeholder="Можно добавить позже через CSV"
+                data-testid="input-product-id"
+              />
+            </div>
             
             <div className="space-y-2">
-              <Label htmlFor="barcode">Штрихкод</Label>
+              <Label htmlFor="name">Название (опционально)</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Можно добавить позже через CSV"
+                data-testid="input-name"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="barcode">Штрихкод (опционально)</Label>
               <Input
                 id="barcode"
                 value={barcode}
