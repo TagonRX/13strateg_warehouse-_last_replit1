@@ -279,12 +279,21 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
 
   // Get setting for location pattern (e.g., "A1" from "A101")
   const getSettingForLocation = (location: string): WarehouseSetting | undefined => {
-    // Extract pattern: first letter(s) + first digit
-    const match = location.match(/^([A-Z]+)(\d)/);
+    // Extract letter and full number from location
+    const match = location.match(/^([A-Z]+)(\d+)/);
     if (!match) return undefined;
     
-    const pattern = match[1] + match[2]; // e.g., "A1", "B1"
-    return warehouseSettings.find(s => s.locationPattern === pattern);
+    const letter = match[1];
+    const number = parseInt(match[2], 10);
+    
+    // If number < 100, use X0 pattern (e.g., N0 for N1-N99)
+    // If number >= 100, use X{first_digit} pattern (e.g., N1 for N101-N199)
+    const pattern = number < 100 ? `${letter}0` : `${letter}${match[2][0]}`;
+    
+    // Find setting that contains this pattern in locationPattern
+    return warehouseSettings.find(s => 
+      s.locationPattern.split(',').map(p => p.trim()).includes(pattern)
+    );
   };
 
   // Parse active locations set for filtering (memoized separately)

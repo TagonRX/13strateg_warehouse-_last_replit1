@@ -49,7 +49,7 @@ Preferred communication style: Simple, everyday language.
 *   **Warehouse Loading Filter Performance**: Optimized filter calculations by separating activeLocationsSet memoization, added NaN validation for numeric filters, and added "50" option to limit selector. Filters no longer hang when changing values.
 *   **Warehouse Loading Empty Locations**: Modified warehouse loading view to show ALL active locations from location management, even if they are currently empty (showing 0 SKUs, 0 quantity). This ensures visibility of all configured locations regardless of current inventory status.
 *   **Warehouse Loading Natural Sorting**: Implemented natural/numeric sorting for warehouse locations. Locations now sort logically: X1, X2...X10, X11...X100, X101...X199, X200+ (not alphabetically X1, X10, X100, X11, X2...). Sorting is first by letter prefix alphabetically, then by number numerically within same letter group.
-*   **Warehouse Settings Extended**: Added warehouse settings for letters E-Z (22 grouped settings). Each group contains 6 locations (e.g., "E1,E2,E3,E4,E5,E6") with TSKU=3 and MAXQ=7. Groups: E1-E6, F1-F6, G1-G6... Z1-Z6.
+*   **Warehouse Settings Extended**: Added warehouse settings for all letters A-Z (26 grouped settings). Each group includes X0 and contains 7 locations (e.g., "A0, A1, A2, A3, A4, A5, A6"). A-B use TSKU=4/MAXQ=10, C-Z use TSKU=3/MAXQ=7. X0 pattern applies to all locations with numbers < 100.
 *   **Warehouse Loading Table Styling**: Improved table readability - increased gap between letter columns (gap-8), reduced spacing between location and TSKU (gap-1), optimized TSKU column width (w-5) for 2-digit numbers.
 *   **Warehouse Settings Formatting**: All warehouse settings now use consistent formatting with spaces after commas (e.g., "E1, E2, E3, E4, E5, E6"). Settings table optimized with smaller text (text-sm), reduced padding (p-2), and tighter gaps (gap-2) to prevent horizontal stretching.
 
@@ -57,7 +57,7 @@ Preferred communication style: Simple, everyday language.
 *   **Development**: `npm run dev` starts Express server with Vite HMR.
 *   **Production**: `npm run build` creates optimized frontend and server bundles; `npm start` runs the production server.
 *   **Database Operations**: `npm run db:push` for schema changes via Drizzle Kit.
-*   **Seed Scripts**: `npx tsx server/seed-warehouse-settings.ts` to seed warehouse settings for letters E-Z (22 grouped settings, each containing 6 locations with TSKU=3, MAXQ=7).
+*   **Seed Scripts**: `npx tsx server/seed-warehouse-settings.ts` to seed warehouse settings for all letters A-Z (26 grouped settings, each containing 7 locations including X0, with A-B: TSKU=4/MAXQ=10, C-Z: TSKU=3/MAXQ=7).
 
 ## External Dependencies
 
