@@ -31,7 +31,7 @@ Preferred communication style: Simple, everyday language.
 *   **Tables**:
     *   `users`: Stores worker and admin accounts with role-based access.
     *   `inventory_items`: Tracks product inventory, including SKU, location, quantity, and status.
-    *   `event_logs`: Comprehensive audit trail of all operations.
+    *   `event_logs`: Comprehensive audit trail of all operations with enhanced product tracking. Stores `productId`, `itemName`, `sku`, `location` to enable complete product history tracking from first scan to picking and deletion. Supports search by any product field (ID, name, SKU, location).
     *   `worker_analytics`: Stores daily worker performance metrics.
     *   `picking_lists`: Manages daily picking lists, supporting multiple tasks per list.
     *   `picking_tasks`: Individual pick items within a picking list, tracking required and picked quantities.

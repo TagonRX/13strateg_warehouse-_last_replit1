@@ -124,33 +124,37 @@ export default function EventLogsView({ users }: EventLogsViewProps) {
         </div>
 
         {/* Table */}
-        <div className="border rounded-md">
+        <div className="border rounded-md overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Дата и время</TableHead>
                 <TableHead>Работник</TableHead>
                 <TableHead>Действие</TableHead>
+                <TableHead>ID товара</TableHead>
+                <TableHead>Название</TableHead>
+                <TableHead>SKU</TableHead>
+                <TableHead>Локация</TableHead>
                 <TableHead>Детали</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Загрузка...
                   </TableCell>
                 </TableRow>
               ) : logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Логи не найдены
                   </TableCell>
                 </TableRow>
               ) : (
                 logs.map((log) => (
                   <TableRow key={log.id} data-testid={`row-log-${log.id}`}>
-                    <TableCell className="font-mono text-sm">
+                    <TableCell className="font-mono text-sm whitespace-nowrap">
                       {new Date(log.createdAt).toLocaleString("ru-RU")}
                     </TableCell>
                     <TableCell data-testid={`text-user-${log.id}`}>
@@ -160,6 +164,18 @@ export default function EventLogsView({ users }: EventLogsViewProps) {
                       <Badge variant={getActionBadge(log.action)} data-testid={`badge-action-${log.id}`}>
                         {log.action}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm" data-testid={`text-product-id-${log.id}`}>
+                      {log.productId || "-"}
+                    </TableCell>
+                    <TableCell className="text-sm" data-testid={`text-item-name-${log.id}`}>
+                      {log.itemName || "-"}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm" data-testid={`text-sku-${log.id}`}>
+                      {log.sku || "-"}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm" data-testid={`text-location-${log.id}`}>
+                      {log.location || "-"}
                     </TableCell>
                     <TableCell className="text-sm" data-testid={`text-details-${log.id}`}>
                       {log.details}
