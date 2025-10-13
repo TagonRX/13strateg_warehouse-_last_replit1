@@ -172,6 +172,9 @@ export class DbStorage implements IStorage {
     // Process all items in memory first
     for (const item of items) {
       try {
+        // Extract location from SKU if not provided
+        const location = item.location || this.extractLocation(item.sku);
+        
         // If productId provided, check by productId
         if (item.productId && existingByProductId.has(item.productId)) {
           const existing = existingByProductId.get(item.productId)!;
@@ -185,7 +188,7 @@ export class DbStorage implements IStorage {
                 quantity: item.quantity,
                 barcode: item.barcode,
                 name: item.name,
-                location: item.location,
+                location: location,
               }
             });
           } else {
@@ -204,7 +207,7 @@ export class DbStorage implements IStorage {
           // ProductId provided but not found
           // Check for duplicates within this upload
           if (!createdProductIds.has(item.productId)) {
-            itemsToCreate.push(item);
+            itemsToCreate.push({ ...item, location });
             createdProductIds.add(item.productId);
           } else {
             // Duplicate productId in same upload - skip with error
@@ -223,6 +226,7 @@ export class DbStorage implements IStorage {
                 quantity: matchBySku.quantity + (item.quantity || 1),
                 name: item.name || matchBySku.name,
                 barcode: item.barcode || matchBySku.barcode,
+                location: location,
               }
             });
           } else if (matchBySkuOnly) {
@@ -232,11 +236,12 @@ export class DbStorage implements IStorage {
                 quantity: matchBySkuOnly.quantity + (item.quantity || 1),
                 name: item.name || matchBySkuOnly.name,
                 barcode: item.barcode || matchBySkuOnly.barcode,
+                location: location,
               }
             });
           } else {
             // Create new item
-            itemsToCreate.push(item);
+            itemsToCreate.push({ ...item, location });
           }
         }
       } catch (error) {
@@ -351,21 +356,17 @@ export class DbStorage implements IStorage {
 
   // Helper function to extract location from SKU
   // SKU format examples:
-  // - A101-F → Location: A101 (remove single letter after dash)
-  // - E501-N → Location: E501 (remove single letter after dash)
-  // - ZW-F232 → Location: ZW-F232 (no change, multi-char after dash)
-  // - ABC123 → Location: ABC123 (no change, no dash)
+  // - A101-F → Location: A101 (letter + 1-3 digits)
+  // - A107Y-E → Location: A107 (letter + 1-3 digits, ignore rest)
+  // - E501-N → Location: E501 (letter + 1-3 digits)
+  // - kjkhk → Location: kjkhk (no pattern match, use full SKU)
   private extractLocation(sku: string): string {
-    const parts = sku.split('-');
-    // Only process if there's a dash AND last segment is exactly 1 letter
-    if (parts.length > 1) {
-      const lastPart = parts[parts.length - 1];
-      if (lastPart.length === 1 && /[A-Z]/i.test(lastPart)) {
-        // Remove the dash and single letter suffix
-        return parts.slice(0, -1).join('-');
-      }
+    // Match: single letter followed by 1-3 digits at the start
+    const match = sku.match(/^([A-Z]\d{1,3})/i);
+    if (match) {
+      return match[1].toUpperCase();
     }
-    // For all other cases (no dash, or multi-char suffix), return as-is
+    // If no pattern match, return the full SKU as location
     return sku;
   }
 
