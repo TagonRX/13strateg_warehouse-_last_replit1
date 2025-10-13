@@ -413,13 +413,25 @@ export class DbStorage implements IStorage {
 
   // Stock-Out (Picking) operations
   async pickItemByBarcode(barcode: string, userId: string): Promise<InventoryItem | null> {
-    const items = await db
+    // Try to find by barcode first
+    let items = await db
       .select()
       .from(inventoryItems)
       .where(and(
         eq(inventoryItems.barcode, barcode),
         eq(inventoryItems.status, "IN_STOCK")
       ));
+
+    // If not found by barcode, try by SKU
+    if (items.length === 0) {
+      items = await db
+        .select()
+        .from(inventoryItems)
+        .where(and(
+          eq(inventoryItems.sku, barcode),
+          eq(inventoryItems.status, "IN_STOCK")
+        ));
+    }
 
     if (items.length === 0) {
       return null;
