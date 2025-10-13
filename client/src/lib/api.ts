@@ -257,6 +257,21 @@ export async function updateUserPassword(id: string, password: string): Promise<
   }
 }
 
+export async function updateUserName(id: string, name: string): Promise<Omit<User, "password">> {
+  const response = await fetch(`/api/users/${id}/name`, {
+    method: "PATCH",
+    headers: getHeaders(),
+    body: JSON.stringify({ name }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to update user name");
+  }
+
+  return response.json();
+}
+
 export async function logout(): Promise<void> {
   const response = await fetch("/api/auth/logout", {
     method: "POST",

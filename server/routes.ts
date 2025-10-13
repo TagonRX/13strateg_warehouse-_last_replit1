@@ -696,6 +696,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/users/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
+      const currentUserId = (req as any).userId;
+
+      // Don't allow deleting yourself
+      if (id === currentUserId) {
+        return res.status(400).json({ error: "Нельзя удалить самого себя" });
+      }
+
+      // Check if this is the last admin
+      const allUsers = await storage.getAllUsers();
+      const admins = allUsers.filter(u => u.role === 'admin');
+      const userToDelete = allUsers.find(u => u.id === id);
+
+      if (userToDelete?.role === 'admin' && admins.length === 1) {
+        return res.status(400).json({ error: "Нельзя удалить последнего администратора" });
+      }
+
       await storage.deleteUser(id);
       return res.status(204).send();
     } catch (error: any) {
@@ -719,6 +735,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ message: "Password updated successfully" });
     } catch (error: any) {
       console.error("Update password error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/users/:id/name", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name } = req.body;
+
+      if (!name || name.trim().length === 0) {
+        return res.status(400).json({ error: "Имя не может быть пустым" });
+      }
+
+      const updatedUser = await storage.updateUserName(id, name.trim());
+      const { password, ...safeUser } = updatedUser;
+      
+      return res.json(safeUser);
+    } catch (error: any) {
+      console.error("Update user name error:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });

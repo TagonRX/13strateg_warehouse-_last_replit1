@@ -274,6 +274,25 @@ function AppContent() {
     },
   });
 
+  const updateNameMutation = useMutation({
+    mutationFn: ({ userId, name }: { userId: string; name: string }) =>
+      api.updateUserName(userId, name),
+    onSuccess: () => {
+      refetchUsers();
+      toast({
+        title: "Имя изменено",
+        description: "Имя пользователя успешно обновлено",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleLogin = (login: string, password: string) => {
     loginMutation.mutate({ login, password });
   };
@@ -306,6 +325,10 @@ function AppContent() {
 
   const handleUpdatePassword = (userId: string, password: string) => {
     updatePasswordMutation.mutate({ userId, password });
+  };
+
+  const handleUpdateName = (userId: string, name: string) => {
+    updateNameMutation.mutate({ userId, name });
   };
 
   if (isCheckingAuth) {
@@ -383,7 +406,9 @@ function AppContent() {
                 onCreateUser={handleCreateUser}
                 onDeleteUser={handleDeleteUser}
                 onUpdatePassword={handleUpdatePassword}
+                onUpdateName={handleUpdateName}
                 isUpdatingPassword={updatePasswordMutation.isPending}
+                isUpdatingName={updateNameMutation.isPending}
               />
             </div>
           </Route>

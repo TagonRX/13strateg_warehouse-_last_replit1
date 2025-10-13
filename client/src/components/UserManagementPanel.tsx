@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Key, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, Key, Eye, EyeOff, Edit } from "lucide-react";
 
 interface User {
   id: string;
@@ -42,10 +42,12 @@ interface UserManagementPanelProps {
   onCreateUser: (user: { name: string; login: string; password: string; role: "admin" | "worker" }) => void;
   onDeleteUser: (userId: string) => void;
   onUpdatePassword: (userId: string, password: string) => void;
+  onUpdateName: (userId: string, name: string) => void;
   isUpdatingPassword?: boolean;
+  isUpdatingName?: boolean;
 }
 
-export default function UserManagementPanel({ users, onCreateUser, onDeleteUser, onUpdatePassword, isUpdatingPassword = false }: UserManagementPanelProps) {
+export default function UserManagementPanel({ users, onCreateUser, onDeleteUser, onUpdatePassword, onUpdateName, isUpdatingPassword = false, isUpdatingName = false }: UserManagementPanelProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [login, setLogin] = useState("");
@@ -57,6 +59,9 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
+
+  const [nameDialogOpen, setNameDialogOpen] = useState(false);
+  const [editingName, setEditingName] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +86,22 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
   const openPasswordDialog = (userId: string) => {
     setSelectedUserId(userId);
     setPasswordDialogOpen(true);
+  };
+
+  const handleNameChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedUserId && editingName.trim()) {
+      onUpdateName(selectedUserId, editingName.trim());
+      setEditingName("");
+      setSelectedUserId(null);
+      setNameDialogOpen(false);
+    }
+  };
+
+  const openNameDialog = (userId: string, currentName: string) => {
+    setSelectedUserId(userId);
+    setEditingName(currentName);
+    setNameDialogOpen(true);
   };
 
   return (
@@ -202,8 +223,18 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
                       <Button
                         variant="ghost"
                         size="sm"
+                        onClick={() => openNameDialog(user.id, user.name)}
+                        data-testid={`button-edit-name-${user.id}`}
+                        title="Редактировать имя"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => openPasswordDialog(user.id)}
                         data-testid={`button-change-password-${user.id}`}
+                        title="Изменить пароль"
                       >
                         <Key className="w-4 h-4" />
                       </Button>
@@ -212,6 +243,7 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
                         size="sm"
                         onClick={() => onDeleteUser(user.id)}
                         data-testid={`button-delete-${user.id}`}
+                        title="Удалить пользователя"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -266,6 +298,38 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
             <DialogFooter>
               <Button type="submit" data-testid="button-save-password" disabled={isUpdatingPassword}>
                 {isUpdatingPassword ? "Сохранение..." : "Сохранить"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={nameDialogOpen} onOpenChange={setNameDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleNameChange}>
+            <DialogHeader>
+              <DialogTitle>Редактировать имя</DialogTitle>
+              <DialogDescription>
+                Введите новое имя для пользователя
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Имя</Label>
+                <Input
+                  id="edit-name"
+                  type="text"
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  placeholder="Иван Петров"
+                  required
+                  data-testid="input-edit-name"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" data-testid="button-save-name" disabled={isUpdatingName}>
+                {isUpdatingName ? "Сохранение..." : "Сохранить"}
               </Button>
             </DialogFooter>
           </form>

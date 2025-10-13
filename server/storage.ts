@@ -35,6 +35,7 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
   deleteUser(id: string): Promise<void>;
   updateUserPassword(id: string, hashedPassword: string): Promise<void>;
+  updateUserName(id: string, name: string): Promise<User>;
 
   // Inventory methods
   getAllInventoryItems(): Promise<InventoryItem[]>;
@@ -122,6 +123,11 @@ export class DbStorage implements IStorage {
 
   async updateUserPassword(id: string, hashedPassword: string): Promise<void> {
     await db.update(users).set({ password: hashedPassword }).where(eq(users.id, id));
+  }
+
+  async updateUserName(id: string, name: string): Promise<User> {
+    const result = await db.update(users).set({ name }).where(eq(users.id, id)).returning();
+    return result[0];
   }
 
   // Inventory methods
