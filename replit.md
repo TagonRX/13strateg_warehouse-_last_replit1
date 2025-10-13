@@ -52,6 +52,8 @@ Preferred communication style: Simple, everyday language.
 *   **Warehouse Settings Extended**: Added warehouse settings for all letters A-Z (26 grouped settings). Each group includes X0 and contains 7 locations (e.g., "A0, A1, A2, A3, A4, A5, A6"). A-B use TSKU=4/MAXQ=10, C-Z use TSKU=3/MAXQ=7. X0 pattern applies to all locations with numbers < 100.
 *   **Warehouse Loading Table Styling**: Improved table readability - increased gap between letter columns (gap-8), reduced spacing between location and TSKU (gap-1), optimized TSKU column width (w-5) for 2-digit numbers.
 *   **Warehouse Settings Formatting**: All warehouse settings now use consistent formatting with spaces after commas (e.g., "E1, E2, E3, E4, E5, E6"). Settings table optimized with smaller text (text-sm), reduced padding (p-2), and tighter gaps (gap-2) to prevent horizontal stretching.
+*   **Warehouse Settings Inline Editing**: Settings table now supports inline editing - clicking "Редактировать" opens input fields directly in the row with "Подтвердить" and "Отмена" buttons. Improved column spacing: wider gap between "Группа локаций" and "TSKU" (w-48, w-20), tighter gap between "TSKU" and "MAXQ" (w-16).
+*   **Warehouse Loading Compact Layout**: All Card components (Filters, Settings, Warehouse Loading table, Legend) now use w-fit to prevent full-width stretching and create a more compact interface.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.

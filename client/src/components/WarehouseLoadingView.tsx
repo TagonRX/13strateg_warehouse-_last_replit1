@@ -56,9 +56,31 @@ function WarehouseSettingsPanel({
   onDelete: (locationPattern: string) => void;
   isDeleting?: boolean;
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTsku, setEditTsku] = useState("");
+  const [editMaxq, setEditMaxq] = useState("");
   const [newPattern, setNewPattern] = useState("");
   const [newTsku, setNewTsku] = useState("4");
   const [newMaxq, setNewMaxq] = useState("10");
+
+  const handleEdit = (setting: WarehouseSetting) => {
+    setEditingId(setting.id);
+    setEditTsku(setting.tsku.toString());
+    setEditMaxq(setting.maxq.toString());
+  };
+
+  const handleSave = (locationPattern: string) => {
+    onUpdate({
+      locationPattern,
+      tsku: parseInt(editTsku) || 4,
+      maxq: parseInt(editMaxq) || 10,
+    });
+    setEditingId(null);
+  };
+
+  const handleCancel = () => {
+    setEditingId(null);
+  };
 
   const handleAdd = () => {
     if (!newPattern.trim()) return;
@@ -77,41 +99,83 @@ function WarehouseSettingsPanel({
       {/* Existing settings */}
       {settings.length > 0 && (
         <div className="rounded-md border overflow-x-auto">
-          <div className="grid grid-cols-4 gap-2 p-2 text-sm font-medium bg-muted/50">
-            <div>Группа локаций</div>
-            <div>TSKU</div>
-            <div>MAXQ</div>
-            <div>Действия</div>
+          <div className="flex p-2 text-sm font-medium bg-muted/50">
+            <div className="w-48">Группа локаций</div>
+            <div className="w-20">TSKU</div>
+            <div className="w-16">MAXQ</div>
+            <div className="flex-1">Действия</div>
           </div>
           {settings.map((setting) => (
-            <div key={setting.id} className="grid grid-cols-4 gap-2 p-2 text-sm border-t" data-testid={`setting-row-${setting.locationPattern}`}>
-              <div className="font-mono font-semibold truncate" title={setting.locationPattern}>{setting.locationPattern}</div>
-              <div>{setting.tsku}</div>
-              <div>{setting.maxq}</div>
-              <div className="flex gap-1">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setNewPattern(setting.locationPattern);
-                    setNewTsku(setting.tsku.toString());
-                    setNewMaxq(setting.maxq.toString());
-                  }}
-                  data-testid={`button-edit-${setting.locationPattern}`}
-                  className="text-xs px-2"
-                >
-                  Редактировать
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => onDelete(setting.locationPattern)}
-                  disabled={isDeleting}
-                  data-testid={`button-delete-${setting.locationPattern}`}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
-              </div>
+            <div key={setting.id} className="flex p-2 text-sm border-t items-center" data-testid={`setting-row-${setting.locationPattern}`}>
+              {editingId === setting.id ? (
+                <>
+                  <div className="w-48 font-mono font-semibold">{setting.locationPattern}</div>
+                  <div className="w-20">
+                    <Input
+                      type="number"
+                      value={editTsku}
+                      onChange={(e) => setEditTsku(e.target.value)}
+                      className="h-8"
+                      data-testid={`input-edit-tsku-${setting.locationPattern}`}
+                    />
+                  </div>
+                  <div className="w-16">
+                    <Input
+                      type="number"
+                      value={editMaxq}
+                      onChange={(e) => setEditMaxq(e.target.value)}
+                      className="h-8"
+                      data-testid={`input-edit-maxq-${setting.locationPattern}`}
+                    />
+                  </div>
+                  <div className="flex-1 flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => handleSave(setting.locationPattern)}
+                      data-testid={`button-save-${setting.locationPattern}`}
+                      className="text-xs px-2"
+                    >
+                      Подтвердить
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleCancel}
+                      data-testid={`button-cancel-${setting.locationPattern}`}
+                      className="text-xs px-2"
+                    >
+                      Отмена
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-48 font-mono font-semibold truncate" title={setting.locationPattern}>{setting.locationPattern}</div>
+                  <div className="w-20">{setting.tsku}</div>
+                  <div className="w-16">{setting.maxq}</div>
+                  <div className="flex-1 flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleEdit(setting)}
+                      data-testid={`button-edit-${setting.locationPattern}`}
+                      className="text-xs px-2"
+                    >
+                      Редактировать
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onDelete(setting.locationPattern)}
+                      disabled={isDeleting}
+                      data-testid={`button-delete-${setting.locationPattern}`}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -119,7 +183,7 @@ function WarehouseSettingsPanel({
 
       {/* Add new setting */}
       <div className="rounded-md border p-4">
-        <h3 className="text-sm font-semibold mb-3">Добавить/обновить настройку</h3>
+        <h3 className="text-sm font-semibold mb-3">Добавить настройку</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="space-y-2">
             <Label htmlFor="pattern">Группа (например, A1, B1)</Label>
