@@ -5,6 +5,8 @@ import { insertUserSchema, insertInventoryItemSchema, insertEventLogSchema } fro
 import { fromZodError } from "zod-validation-error";
 import { verifyPassword, hashPassword, createSession, requireAuth, requireAdmin } from "./auth";
 import { setupWebSocket } from "./websocket";
+import fs from "fs/promises";
+import path from "path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user (check token validity)
@@ -179,6 +181,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(result);
     } catch (error: any) {
       console.error("Bulk upload error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Sync inventory from CSV file
+  app.post("/api/inventory/sync-from-file", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const filePath = path.join(process.cwd(), "data", "inventory_sync.csv");
+
+      console.log("[FILE SYNC] Reading file:", filePath);
+
+      // Read CSV file
+      let fileContent: string;
+      try {
+        fileContent = await fs.readFile(filePath, "utf-8");
+      } catch (error) {
+        return res.status(404).json({ error: "CSV file not found. Please create data/inventory_sync.csv" });
+      }
+
+      const lines = fileContent.trim().split("\n");
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV file is empty or has no data rows" });
+      }
+
+      // Parse CSV with auto-detection of delimiter
+      const detectDelimiter = (line: string): string => {
+        const delimiters = [";", ",", "\t", " "];
+        for (const delimiter of delimiters) {
+          if (line.includes(delimiter)) {
+            return delimiter;
+          }
+        }
+        return ";";
+      };
+
+      const delimiter = detectDelimiter(lines[0]);
+      const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase());
+      
+      console.log("[FILE SYNC] Detected delimiter:", delimiter === "\t" ? "TAB" : delimiter);
+      console.log("[FILE SYNC] Headers:", headers);
+
+      // Parse data rows
+      const csvItems = [];
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(delimiter).map(v => v.trim());
+        if (values.length === headers.length && values.some(v => v)) {
+          const item: any = {};
+          headers.forEach((header, index) => {
+            item[header] = values[index];
+          });
+          csvItems.push(item);
+        }
+      }
+
+      console.log("[FILE SYNC] Parsed items:", csvItems.length);
+
+      // Get all current inventory items
+      const allItems = await storage.getAllInventoryItems();
+      const currentItemsMap = new Map(allItems.map(item => [item.productId, item]));
+
+      console.log("[FILE SYNC] Current inventory items:", allItems.length);
+
+      // Track changes
+      let updated = 0;
+      let created = 0;
+      let deleted = 0;
+      const deletedItems: string[] = [];
+
+      // Create/update items from CSV
+      for (const csvItem of csvItems) {
+        const productId = csvItem.productid || csvItem.product_id;
+        const quantity = parseInt(csvItem.quantity) || 0;
+        
+        if (!productId || quantity <= 0) {
+          continue; // Skip invalid items
+        }
+
+        const itemData = {
+          productId,
+          name: csvItem.name || "",
+          sku: csvItem.sku || csvItem.location || productId,
+          location: csvItem.location || csvItem.sku || productId,
+          quantity,
+          barcode: csvItem.barcode || "",
+          createdBy: userId,
+        };
+
+        if (currentItemsMap.has(productId)) {
+          // Update existing item
+          const existingItem = currentItemsMap.get(productId)!;
+          await storage.updateInventoryItem(existingItem.id, itemData);
+          updated++;
+          currentItemsMap.delete(productId); // Mark as processed
+        } else {
+          // Create new item
+          await storage.createInventoryItem(itemData);
+          created++;
+        }
+      }
+
+      // Delete items not in CSV
+      for (const [productId, item] of Array.from(currentItemsMap.entries())) {
+        await storage.deleteInventoryItem(item.id, userId);
+        deleted++;
+        deletedItems.push(`${item.name} (${item.productId})`);
+
+        // Log deletion
+        await storage.createEventLog({
+          userId,
+          action: "ITEM_DELETED",
+          details: `Deleted from file sync: ${item.name} (${item.productId}), quantity: ${item.quantity}`,
+        });
+      }
+
+      // Log the sync event
+      await storage.createEventLog({
+        userId,
+        action: "FILE_SYNC",
+        details: `File sync: ${created} created, ${updated} updated, ${deleted} deleted`,
+      });
+
+      console.log("[FILE SYNC] Results:", { created, updated, deleted });
+
+      return res.json({ 
+        success: true, 
+        created, 
+        updated, 
+        deleted,
+        deletedItems 
+      });
+    } catch (error: any) {
+      console.error("File sync error:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
