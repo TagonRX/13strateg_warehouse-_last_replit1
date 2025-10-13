@@ -154,78 +154,145 @@ export class DbStorage implements IStorage {
     let updated = 0;
     let errors = 0;
 
+    // Load all existing items ONCE at the start (optimized)
+    const allExistingItems = await this.getAllInventoryItems();
+    const existingByProductId = new Map(
+      allExistingItems
+        .filter(i => i.productId)
+        .map(i => [i.productId!, i])
+    );
+
+    const itemsToCreate: InsertInventoryItem[] = [];
+    const itemsToUpdate: { id: string; updates: Partial<InsertInventoryItem> }[] = [];
+    const skuErrorsToCreate: InsertSkuError[] = [];
+    
+    // Track items being created to avoid duplicates within same upload
+    const createdProductIds = new Set<string>();
+
+    // Process all items in memory first
     for (const item of items) {
       try {
         // If productId provided, check by productId
-        if (item.productId) {
-          const existing = await this.getInventoryItemByProductId(item.productId);
+        if (item.productId && existingByProductId.has(item.productId)) {
+          const existing = existingByProductId.get(item.productId)!;
           
-          if (existing) {
-            // Check if SKU matches
-            if (existing.sku === item.sku) {
-              // SKU matches - update quantity
-              await this.updateInventoryItem(item.productId, {
+          // Check if SKU matches
+          if (existing.sku === item.sku) {
+            // SKU matches - prepare update
+            itemsToUpdate.push({
+              id: existing.id,
+              updates: {
                 quantity: item.quantity,
                 barcode: item.barcode,
-                name: item.name, // Update name if provided
-              });
-              updated++;
-            } else {
-              // SKU mismatch - create SKU error record
-              await this.createSkuError({
-                productId: item.productId,
-                name: item.name || "",
-                csvSku: item.sku,
-                existingSku: existing.sku,
-                quantity: item.quantity,
-                barcode: item.barcode,
-                status: "PENDING",
-              });
-              errors++;
-            }
+                name: item.name,
+                location: item.location,
+              }
+            });
           } else {
-            // Create new item
-            await this.createInventoryItem(item);
-            success++;
+            // SKU mismatch - prepare SKU error record
+            skuErrorsToCreate.push({
+              productId: item.productId,
+              name: item.name || "",
+              csvSku: item.sku,
+              existingSku: existing.sku,
+              quantity: item.quantity,
+              barcode: item.barcode,
+              status: "PENDING",
+            });
+          }
+        } else if (item.productId) {
+          // ProductId provided but not found
+          // Check for duplicates within this upload
+          if (!createdProductIds.has(item.productId)) {
+            itemsToCreate.push(item);
+            createdProductIds.add(item.productId);
+          } else {
+            // Duplicate productId in same upload - skip with error
+            errors++;
+            console.warn(`Duplicate productId in CSV: ${item.productId}`);
           }
         } else {
-          // No productId - try to find by SKU and name for synchronization
-          const allItems = await this.getAllInventoryItems();
-          const matchBySku = allItems.find(i => i.sku === item.sku && i.name === item.name);
-          const matchBySkuOnly = allItems.find(i => i.sku === item.sku && !i.productId);
+          // No productId - try to find by SKU and name
+          const matchBySku = allExistingItems.find(i => i.sku === item.sku && i.name === item.name);
+          const matchBySkuOnly = allExistingItems.find(i => i.sku === item.sku && !i.productId);
 
           if (matchBySku && !matchBySku.productId) {
-            // Found item with same SKU+name but no productId - sync it
-            // But we don't have productId in CSV either, so just add quantity
-            await db.update(inventoryItems)
-              .set({
+            itemsToUpdate.push({
+              id: matchBySku.id,
+              updates: {
                 quantity: matchBySku.quantity + (item.quantity || 1),
                 name: item.name || matchBySku.name,
                 barcode: item.barcode || matchBySku.barcode,
-                updatedAt: new Date(),
-              })
-              .where(eq(inventoryItems.id, matchBySku.id));
-            updated++;
+              }
+            });
           } else if (matchBySkuOnly) {
-            // Found item with same SKU but no productId - update it
-            await db.update(inventoryItems)
-              .set({
+            itemsToUpdate.push({
+              id: matchBySkuOnly.id,
+              updates: {
                 quantity: matchBySkuOnly.quantity + (item.quantity || 1),
                 name: item.name || matchBySkuOnly.name,
                 barcode: item.barcode || matchBySkuOnly.barcode,
-                updatedAt: new Date(),
-              })
-              .where(eq(inventoryItems.id, matchBySkuOnly.id));
-            updated++;
+              }
+            });
           } else {
             // Create new item
-            await this.createInventoryItem(item);
-            success++;
+            itemsToCreate.push(item);
           }
         }
       } catch (error) {
-        console.error(`Error upserting item:`, error);
+        console.error(`Error processing item:`, error);
         errors++;
+      }
+    }
+
+    // Batch insert new items (chunks of 100) with fallback to individual inserts on error
+    if (itemsToCreate.length > 0) {
+      const chunkSize = 100;
+      for (let i = 0; i < itemsToCreate.length; i += chunkSize) {
+        const chunk = itemsToCreate.slice(i, i + chunkSize);
+        try {
+          await db.insert(inventoryItems).values(chunk);
+          success += chunk.length; // Count success AFTER successful insert
+        } catch (error) {
+          console.error(`Batch insert error, retrying item-by-item:`, error);
+          // Fallback: insert one by one to avoid losing entire chunk
+          for (const item of chunk) {
+            try {
+              await db.insert(inventoryItems).values(item);
+              success++;
+            } catch (itemError) {
+              console.error(`Individual insert error for ${item.productId}:`, itemError);
+              errors++;
+            }
+          }
+        }
+      }
+    }
+
+    // Batch update items
+    for (const { id, updates } of itemsToUpdate) {
+      try {
+        await db
+          .update(inventoryItems)
+          .set({ ...updates, updatedAt: new Date() })
+          .where(eq(inventoryItems.id, id));
+        updated++; // Count AFTER successful update
+      } catch (error) {
+        console.error(`Update error:`, error);
+        errors++;
+      }
+    }
+
+    // Batch insert SKU errors (chunks of 100)
+    if (skuErrorsToCreate.length > 0) {
+      const chunkSize = 100;
+      for (let i = 0; i < skuErrorsToCreate.length; i += chunkSize) {
+        const chunk = skuErrorsToCreate.slice(i, i + chunkSize);
+        try {
+          await db.insert(skuErrors).values(chunk);
+        } catch (error) {
+          console.error(`SKU errors batch insert error:`, error);
+        }
       }
     }
 

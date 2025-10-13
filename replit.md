@@ -10,6 +10,23 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 13, 2025 - CSV Bulk Upload Fix & Optimization
+- **CSV Upload Fixed**:
+  - Fixed "PayloadTooLargeError" - increased request limit to 50MB
+  - Fixed CSV parsing for files with encoding issues (fallback to column positions)
+  - Added auto-detection for delimiter (`;` or `,`)
+- **Location Extraction from SKU**:
+  - Location automatically extracted from SKU using pattern matching
+  - Pattern: `A101-G` → location: `A101` (letter + 1-3 digits)
+  - Non-standard SKU like `kjkhk` → location: `kjkhk` (entire SKU)
+- **Performance Optimization**:
+  - Optimized from 2655+ database queries to 1 query + batch processing
+  - Batch insert in chunks of 100 items
+  - Reduced processing time from timeout to ~102 seconds for 2655 items
+- **Tested Successfully**:
+  - 2655 items processed: 1310 new, 1345 updated
+  - Verified in inventory with locations T92, N45, G316, etc.
+
 ### October 13, 2025 - Warehouse Loading Filter Improvements
 - **Multi-Select Letter Filter**: 
   - Replaced single-select dropdown with Popover + checkboxes for multi-select
