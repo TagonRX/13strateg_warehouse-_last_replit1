@@ -100,12 +100,12 @@ function ResizableHeader({
   );
 }
 
-// Group items by location + SKU (to show all barcodes for same SKU in same location)
-function groupItemsByLocationAndSku(items: InventoryItem[]): Map<string, InventoryItem[]> {
+// Group items by location only (to show all items in same location in expandable menu)
+function groupItemsByLocation(items: InventoryItem[]): Map<string, InventoryItem[]> {
   const groups = new Map<string, InventoryItem[]>();
   
   items.forEach(item => {
-    const key = `${item.location}-${item.sku}`;
+    const key = item.location;
     const existing = groups.get(key) || [];
     groups.set(key, [...existing, item]);
   });
@@ -179,7 +179,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     )
     .slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit));
 
-  const groupedItems = groupItemsByLocationAndSku(filteredItems);
+  const groupedItems = groupItemsByLocation(filteredItems);
 
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string; updates: Partial<InventoryItem> }) => {
@@ -536,43 +536,41 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
             <TableBody>
               {Array.from(groupedItems.entries()).map(([groupKey, groupItems]) => {
                 if (groupItems.length === 1) {
-                  // Single barcode: render normally
+                  // Single item in location: render normally
                   return renderRow(groupItems[0]);
                 } else {
-                  // Multiple barcodes with same location+SKU: use collapsible
+                  // Multiple items in same location: use collapsible
                   const isExpanded = expandedGroups.has(groupKey);
                   const firstItem = groupItems[0];
                   const totalQuantity = groupItems.reduce((sum, item) => sum + item.quantity, 0);
-                  const barcodes = groupItems.map(item => item.barcode).filter(Boolean);
+                  const uniqueSkus = new Set(groupItems.map(item => item.sku)).size;
+                  const totalBarcodes = groupItems.filter(item => item.barcode).length;
                   
                   return (
                     <Fragment key={`group-${groupKey}`}>
                       <TableRow 
                         className="cursor-pointer hover-elevate"
                         onClick={() => toggleGroup(groupKey)}
+                        data-testid={`group-row-${groupKey}`}
                       >
                         <TableCell style={{ width: `${columnWidths.actions}px`, minWidth: `${columnWidths.actions}px` }}>
                           {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </TableCell>
                         <TableCell style={{ width: `${columnWidths.location}px`, minWidth: `${columnWidths.location}px` }} className="font-mono text-xs font-bold">{firstItem.location}</TableCell>
-                        <TableCell style={{ width: `${columnWidths.productId}px`, minWidth: `${columnWidths.productId}px` }} className="font-mono text-xs">{firstItem.productId || "-"}</TableCell>
-                        <TableCell style={{ width: `${columnWidths.name}px`, minWidth: `${columnWidths.name}px` }} className="text-xs">{firstItem.name || "-"}</TableCell>
-                        <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="font-mono text-xs font-bold">{firstItem.sku}</TableCell>
+                        <TableCell style={{ width: `${columnWidths.productId}px`, minWidth: `${columnWidths.productId}px` }} className="text-xs text-muted-foreground">
+                          {groupItems.length} позиций
+                        </TableCell>
+                        <TableCell style={{ width: `${columnWidths.name}px`, minWidth: `${columnWidths.name}px` }} className="text-xs text-muted-foreground">
+                          {uniqueSkus} SKU
+                        </TableCell>
+                        <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.quantity}px`, minWidth: `${columnWidths.quantity}px` }} className="text-right text-xs font-medium">{totalQuantity}</TableCell>
                         <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="text-xs text-muted-foreground">
-                          {barcodes.length} штрихкодов
+                          {totalBarcodes} штрихкодов
                         </TableCell>
-                        <TableCell style={{ width: `${columnWidths.dimensions}px`, minWidth: `${columnWidths.dimensions}px` }} className="text-xs">
-                          {firstItem.length || firstItem.width || firstItem.height ? (
-                            <span className="text-muted-foreground">
-                              {firstItem.length || "-"}×{firstItem.width || "-"}×{firstItem.height || "-"}
-                            </span>
-                          ) : "-"}
-                        </TableCell>
-                        <TableCell style={{ width: `${columnWidths.volume}px`, minWidth: `${columnWidths.volume}px` }} className="text-xs text-muted-foreground">
-                          {firstItem.volume ? firstItem.volume.toLocaleString() : "-"}
-                        </TableCell>
-                        <TableCell style={{ width: `${columnWidths.weight}px`, minWidth: `${columnWidths.weight}px` }} className="text-xs">{firstItem.weight || "-"}</TableCell>
+                        <TableCell style={{ width: `${columnWidths.dimensions}px`, minWidth: `${columnWidths.dimensions}px` }} className="text-xs text-muted-foreground">-</TableCell>
+                        <TableCell style={{ width: `${columnWidths.volume}px`, minWidth: `${columnWidths.volume}px` }} className="text-xs text-muted-foreground">-</TableCell>
+                        <TableCell style={{ width: `${columnWidths.weight}px`, minWidth: `${columnWidths.weight}px` }} className="text-xs text-muted-foreground">-</TableCell>
                       </TableRow>
                       {isExpanded && groupItems.map(item => renderRow(item, true))}
                     </Fragment>
