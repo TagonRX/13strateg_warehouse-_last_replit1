@@ -54,6 +54,7 @@ Preferred communication style: Simple, everyday language.
 *   **Warehouse Settings Formatting**: All warehouse settings now use consistent formatting with spaces after commas (e.g., "E1, E2, E3, E4, E5, E6"). Settings table optimized with smaller text (text-sm), reduced padding (p-2), and tighter gaps (gap-2) to prevent horizontal stretching.
 *   **Warehouse Settings Inline Editing**: Settings table now supports inline editing - clicking "Редактировать" opens input fields directly in the row with "Подтвердить" and "Отмена" buttons. Improved column spacing: wider gap between "Группа локаций" and "TSKU" (w-48, w-20), tighter gap between "TSKU" and "MAXQ" (w-16).
 *   **Warehouse Loading Compact Layout**: All Card components (Filters, Settings, Warehouse Loading table, Legend) now use w-fit to prevent full-width stretching and create a more compact interface.
+*   **Inventory Barcode Scanning**: Added barcode scanning support in Inventory table editing. When editing an item, users can scan barcodes using USB scanner or mobile camera. Supports multiple barcodes per item with quantity tracking. BarcodeEditor component integrates html5-qrcode for camera scanning and provides real-time barcode management with quantity validation.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.

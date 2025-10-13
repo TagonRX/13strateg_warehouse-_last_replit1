@@ -88,8 +88,18 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
 
     const existing = value.find(m => m.code === scannedCode);
     
+    // Check if adding would exceed total quantity
+    if (mappedQuantity >= totalQuantity) {
+      alert(`Нельзя добавить баркод: все ${totalQuantity} товар(ов) уже имеют баркоды`);
+      return;
+    }
+    
     if (existing) {
       // Increment quantity if barcode already exists
+      if (existing.qty + 1 + (mappedQuantity - existing.qty) > totalQuantity) {
+        alert(`Нельзя увеличить количество: превышен лимит ${totalQuantity} товар(ов)`);
+        return;
+      }
       onChange(value.map(m => 
         m.code === scannedCode 
           ? { ...m, qty: m.qty + 1 }
@@ -110,6 +120,16 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
     if (qty <= 0) {
       onChange(value.filter(m => m.code !== code));
     } else {
+      // Calculate new total mapped quantity
+      const currentQty = value.find(m => m.code === code)?.qty || 0;
+      const newMappedQty = mappedQuantity - currentQty + qty;
+      
+      // Validate against total quantity
+      if (newMappedQty > totalQuantity) {
+        alert(`Нельзя установить количество ${qty}: превышен лимит ${totalQuantity} товар(ов)`);
+        return;
+      }
+      
       onChange(value.map(m => 
         m.code === code ? { ...m, qty } : m
       ));
