@@ -321,7 +321,31 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
 
     // Apply limit
     const limit = limitFilter === "all" ? filtered.length : parseInt(limitFilter);
-    return filtered.slice(0, limit);
+    
+    // If showing all letters (no filter) or multiple letters selected, apply limit PER LETTER
+    // Otherwise (single letter selected), apply limit to total
+    if (letterFilter.length === 0 || letterFilter.length > 1) {
+      // Group by letter first
+      const byLetter = new Map<string, LocationGroup[]>();
+      filtered.forEach(loc => {
+        const letter = loc.location.match(/^([A-Z]+)/)?.[1] || "OTHER";
+        if (!byLetter.has(letter)) {
+          byLetter.set(letter, []);
+        }
+        byLetter.get(letter)!.push(loc);
+      });
+      
+      // Apply limit to each letter group
+      const result: LocationGroup[] = [];
+      byLetter.forEach((locations) => {
+        result.push(...locations.slice(0, limit));
+      });
+      
+      return result;
+    } else {
+      // Single letter or no letter filter - apply limit to total
+      return filtered.slice(0, limit);
+    }
   }, [locationGroups, locationInput, letterFilter, tskuFilter, maxqFilter, limitFilter]);
 
   // Group locations by letter for column layout

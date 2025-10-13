@@ -42,6 +42,7 @@ Preferred communication style: Simple, everyday language.
 *   **Pick Operation Cache Invalidation**: Fixed issue where inventory table didn't update after picking items. All stock-out mutations (pick, delete item, delete location, bulk delete) now invalidate both `/api/warehouse/loading` and `/api/inventory` query keys to ensure UI updates immediately after operations.
 *   **Event Logging Product Tracking**: Enhanced event logs with complete product information (productId, itemName, sku, location) for all STOCK_OUT and STOCK_IN events, enabling full product movement history tracking.
 *   **Pick Item Return Data**: Fixed pickItemByBarcode to return updated item quantity instead of original quantity, ensuring frontend receives correct data after pick operations.
+*   **Warehouse Loading Per-Letter Limit**: Fixed limit filter in Warehouse Loading view to apply per letter when multiple letters or all letters are selected. Example: with limit 100 and letters A, B, C selected, shows 100 items from A + 100 from B + 100 from C (not 100 total). Single letter selection still applies limit to total as before.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.
