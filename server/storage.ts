@@ -347,10 +347,15 @@ export class DbStorage implements IStorage {
     }
     
     if (filters?.search) {
+      // Search across all relevant fields including new product fields
       conditions.push(
         or(
           ilike(eventLogs.details, `%${filters.search}%`),
-          ilike(eventLogs.action, `%${filters.search}%`)
+          ilike(eventLogs.action, `%${filters.search}%`),
+          ilike(eventLogs.productId, `%${filters.search}%`),
+          ilike(eventLogs.itemName, `%${filters.search}%`),
+          ilike(eventLogs.sku, `%${filters.search}%`),
+          ilike(eventLogs.location, `%${filters.search}%`)
         )!
       );
     }

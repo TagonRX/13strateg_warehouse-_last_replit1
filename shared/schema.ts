@@ -38,6 +38,11 @@ export const eventLogs = pgTable("event_logs", {
   userId: varchar("user_id").references(() => users.id),
   action: text("action").notNull(), // STOCK_IN, STOCK_OUT, CSV_UPLOAD, etc
   details: text("details").notNull(),
+  // Дополнительная информация о товаре для отслеживания истории
+  productId: text("product_id"), // ID товара (для отслеживания одного товара с разными SKU)
+  itemName: text("item_name"), // Название товара
+  sku: text("sku"), // SKU/Локация на момент действия
+  location: text("location"), // Локация на момент действия
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
