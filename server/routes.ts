@@ -145,6 +145,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update inventory item (PATCH)
+  app.patch("/api/inventory/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { id } = req.params;
+      const updates = req.body;
+
+      // Get existing item
+      const existing = await storage.getInventoryItemById(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+
+      // Update item
+      const updated = await storage.updateInventoryItemById(id, updates);
+
+      // Log the event
+      await storage.createEventLog({
+        userId,
+        action: "INVENTORY_UPDATE",
+        details: `Updated item ${existing.sku} (${id})`,
+      });
+
+      // Check if quantity is 0 and delete if so
+      if (updated.quantity === 0) {
+        await storage.deleteInventoryItem(id, userId);
+        await storage.createEventLog({
+          userId,
+          action: "AUTO_DELETE",
+          details: `Auto-deleted item ${existing.sku} (${id}) - quantity reached 0`,
+        });
+        return res.json({ deleted: true, item: updated });
+      }
+
+      return res.json(updated);
+    } catch (error: any) {
+      console.error("Update inventory item error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delete inventory item (DELETE)
+  app.delete("/api/inventory/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { id } = req.params;
+
+      // Get existing item for logging
+      const existing = await storage.getInventoryItemById(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+
+      // Delete item
+      await storage.deleteInventoryItem(id, userId);
+
+      // Log the event
+      await storage.createEventLog({
+        userId,
+        action: "INVENTORY_DELETE",
+        details: `Deleted item ${existing.sku} (${id})`,
+      });
+
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete inventory item error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.post("/api/inventory/bulk-upload", requireAuth, async (req, res) => {
     try {
       const userId = (req as any).userId; // From requireAuth middleware

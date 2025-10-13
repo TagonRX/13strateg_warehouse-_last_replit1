@@ -365,7 +365,7 @@ function AppContent() {
         <Route path="/inventory">
           <div className="space-y-4">
             <h1 className="text-3xl font-bold">Инвентаризация</h1>
-            <InventoryTable items={inventory} />
+            <InventoryTable items={inventory} userRole={user.role} />
           </div>
         </Route>
         <Route path="/warehouse">

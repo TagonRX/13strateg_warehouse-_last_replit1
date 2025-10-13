@@ -38,9 +38,12 @@ export interface IStorage {
 
   // Inventory methods
   getAllInventoryItems(): Promise<InventoryItem[]>;
+  getInventoryItemById(id: string): Promise<InventoryItem | undefined>;
   getInventoryItemByProductId(productId: string): Promise<InventoryItem | undefined>;
   createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem>;
   updateInventoryItem(productId: string, updates: Partial<InsertInventoryItem>): Promise<InventoryItem>;
+  updateInventoryItemById(id: string, updates: Partial<InsertInventoryItem>): Promise<InventoryItem>;
+  deleteInventoryItem(id: string, userId: string): Promise<boolean>;
   bulkUpsertInventoryItems(items: InsertInventoryItem[]): Promise<{ success: number; updated: number; errors: number }>;
   
   // Event log methods
@@ -147,6 +150,29 @@ export class DbStorage implements IStorage {
       .where(eq(inventoryItems.productId, productId))
       .returning();
     return result[0];
+  }
+
+  async getInventoryItemById(id: string): Promise<InventoryItem | undefined> {
+    const result = await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async updateInventoryItemById(id: string, updates: Partial<InsertInventoryItem>): Promise<InventoryItem> {
+    const result = await db
+      .update(inventoryItems)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(inventoryItems.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteInventoryItem(id: string, userId: string): Promise<boolean> {
+    await db.delete(inventoryItems).where(eq(inventoryItems.id, id));
+    return true;
   }
 
   async bulkUpsertInventoryItems(items: InsertInventoryItem[]): Promise<{ success: number; updated: number; errors: number }> {

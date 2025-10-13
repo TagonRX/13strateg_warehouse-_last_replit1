@@ -22,7 +22,11 @@ export const inventoryItems = pgTable("inventory_items", {
   location: text("location").notNull(), // То же что SKU (автоматически)
   quantity: integer("quantity").notNull().default(1),
   barcode: text("barcode"), // Опционально
-  status: text("status").notNull().default("IN_STOCK"), // IN_STOCK, PICKED
+  length: integer("length"), // Длина в см (до 3 знаков, макс 999)
+  width: integer("width"), // Ширина в см (до 3 знаков, макс 999)
+  height: integer("height"), // Высота в см (до 3 знаков, макс 999)
+  volume: integer("volume"), // Объем (перемножение length * width * height)
+  weight: integer("weight"), // Вес в кг (до 3 знаков, макс 999)
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
