@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery, useMutation } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -23,6 +23,7 @@ import type { InventoryItem } from "@shared/schema";
 
 function AppContent() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [user, setUser] = useState<{ id: string; name: string; role: "admin" | "worker" } | null>(null);
 
   const { data: inventory = [], refetch: refetchInventory } = useQuery<any[]>({
@@ -52,6 +53,7 @@ function AppContent() {
         name: data.user.name,
         role: data.user.role as "admin" | "worker",
       });
+      setLocation("/"); // Navigate to home page after successful login
       toast({
         title: "Вход выполнен",
         description: `Добро пожаловать, ${data.user.name}!`,
@@ -241,24 +243,24 @@ function AppContent() {
   return (
     <AppLayout userRole={user.role} userName={user.name} onLogout={handleLogout}>
       <Switch>
-        <Route path="/">
-          <div className="space-y-6">
+        <Route path="/" data-testid="route-home">
+          <div className="space-y-6" data-testid="dashboard-content">
             <div>
-              <h1 className="text-3xl font-bold mb-2">Добро пожаловать, {user.name}!</h1>
+              <h1 className="text-3xl font-bold mb-2" data-testid="text-welcome">Добро пожаловать, {user.name}!</h1>
               <p className="text-muted-foreground">
                 Выберите раздел в меню для начала работы
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-card p-6 rounded-md border">
+              <div className="bg-card p-6 rounded-md border" data-testid="card-inventory-count">
                 <h3 className="text-lg font-semibold mb-2">Товаров в наличии</h3>
                 <p className="text-3xl font-bold text-primary">{inventory.length}</p>
               </div>
-              <div className="bg-card p-6 rounded-md border">
+              <div className="bg-card p-6 rounded-md border" data-testid="card-locations-count">
                 <h3 className="text-lg font-semibold mb-2">Локаций</h3>
                 <p className="text-3xl font-bold text-primary">{warehouseLoading.length}</p>
               </div>
-              <div className="bg-card p-6 rounded-md border">
+              <div className="bg-card p-6 rounded-md border" data-testid="card-users-count">
                 <h3 className="text-lg font-semibold mb-2">Пользователей</h3>
                 <p className="text-3xl font-bold text-primary">{users.length}</p>
               </div>
