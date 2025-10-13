@@ -20,6 +20,22 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 ### October 13, 2025
+- **Warehouse Loading Filter Redesign**: Complete overhaul of location filtering interface
+  - **Old**: Checkbox-based letter filter (A, B, C) - was not working properly
+  - **New**: Textarea input for flexible location filtering
+  - Supports multiple input formats:
+    - Space-separated: `A101 B101 C101`
+    - Comma-separated: `A101, B101, C101`
+    - Newline-separated (paste from Excel):
+      ```
+      A101
+      B101
+      C101
+      ```
+  - Case-insensitive (auto-converts to UPPERCASE)
+  - Shows active filter count: "Фильтр активен: X локаций"
+  - Empty filter shows all locations
+  - Matches Excel-style workflow for easy data entry
 - **Login Navigation Fix**: After successful login, app now navigates to dashboard (/) instead of staying on /login
   - Uses wouter's `setLocation("/")` in login mutation onSuccess
   - Prevents showing 404 page after authentication

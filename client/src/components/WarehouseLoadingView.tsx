@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
@@ -30,100 +30,37 @@ interface LetterData {
 export default function WarehouseLoadingView({ locationGroups }: WarehouseLoadingViewProps) {
   const [tsku, setTsku] = useState(4);
   const [maxq, setMaxq] = useState(10);
-  const [selectedLetters, setSelectedLetters] = useState<Set<string>>(new Set());
+  const [locationFilter, setLocationFilter] = useState<string>("");
   const [limitFilter, setLimitFilter] = useState<string>("50");
 
-  // Extract letter from location (e.g., "A101" -> "A", "ZW-F232" -> "ZW")
-  const extractLetter = (location: string): string => {
-    const match = location.match(/^([A-Z]+)/);
-    return match ? match[1] : "OTHER";
+  // Parse location filter input - support comma, space, or newline separated
+  const parseLocationFilter = (input: string): Set<string> => {
+    if (!input.trim()) return new Set();
+    
+    return new Set(
+      input
+        .toUpperCase()
+        .split(/[\s,\n]+/)
+        .map(loc => loc.trim())
+        .filter(loc => loc.length > 0)
+    );
   };
 
-  // Group locations by letter only (NO range grouping)
-  const letterData = useMemo<LetterData[]>(() => {
-    const letterMap = new Map<string, LocationGroup[]>();
-
-    locationGroups.forEach((group) => {
-      const letter = extractLetter(group.location);
-
-      if (!letterMap.has(letter)) {
-        letterMap.set(letter, []);
-      }
-
-      letterMap.get(letter)!.push(group);
-    });
-
-    // Convert to array
-    const result: LetterData[] = [];
-    letterMap.forEach((locations, letter) => {
-      result.push({ letter, locations });
-    });
-
-    // Sort: regular letters alphabetically, OTHER at the end
-    return result.sort((a, b) => {
-      if (a.letter === "OTHER") return 1;
-      if (b.letter === "OTHER") return -1;
-      return a.letter.localeCompare(b.letter);
-    });
-  }, [locationGroups]);
-
-  // Get all unique letters for checkboxes
-  const allLetters = useMemo(() => {
-    return letterData.map(ld => ld.letter);
-  }, [letterData]);
-
-  // Toggle letter selection
-  const toggleLetter = (letter: string) => {
-    setSelectedLetters(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(letter)) {
-        newSet.delete(letter);
-      } else {
-        newSet.add(letter);
-      }
-      return newSet;
-    });
-  };
-
-  // Select all/none
-  const selectAll = () => {
-    setSelectedLetters(new Set(allLetters));
-  };
-
-  const selectNone = () => {
-    setSelectedLetters(new Set());
-  };
-
-  // Filter data based on selected letters and apply limit
-  const filteredData = useMemo(() => {
-    let data = selectedLetters.size === 0 ? letterData : letterData.filter(ld => selectedLetters.has(ld.letter));
+  // Filter locations based on input
+  const filteredLocations = useMemo(() => {
+    const filterSet = parseLocationFilter(locationFilter);
     
-    // Flatten all locations and apply limit
-    const allLocations = data.flatMap(ld => ld.locations);
-    const limit = limitFilter === "all" ? allLocations.length : parseInt(limitFilter);
-    const limitedLocations = allLocations.slice(0, limit);
+    // If no filter, show all locations
+    if (filterSet.size === 0) {
+      const limit = limitFilter === "all" ? locationGroups.length : parseInt(limitFilter);
+      return locationGroups.slice(0, limit);
+    }
     
-    // Re-group limited locations by letter
-    const letterMap = new Map<string, LocationGroup[]>();
-    limitedLocations.forEach((loc) => {
-      const letter = extractLetter(loc.location);
-      if (!letterMap.has(letter)) {
-        letterMap.set(letter, []);
-      }
-      letterMap.get(letter)!.push(loc);
-    });
-    
-    const result: LetterData[] = [];
-    letterMap.forEach((locations, letter) => {
-      result.push({ letter, locations });
-    });
-    
-    return result.sort((a, b) => {
-      if (a.letter === "OTHER") return 1;
-      if (b.letter === "OTHER") return -1;
-      return a.letter.localeCompare(b.letter);
-    });
-  }, [letterData, selectedLetters, limitFilter]);
+    // Filter by exact location match
+    const filtered = locationGroups.filter(loc => filterSet.has(loc.location.toUpperCase()));
+    const limit = limitFilter === "all" ? filtered.length : parseInt(limitFilter);
+    return filtered.slice(0, limit);
+  }, [locationGroups, locationFilter, limitFilter]);
 
   const getSkuColor = (skuCount: number) => {
     if (skuCount >= tsku) return "bg-red-500/20 text-red-700 dark:text-red-400";
@@ -190,47 +127,30 @@ export default function WarehouseLoadingView({ locationGroups }: WarehouseLoadin
         </CardContent>
       </Card>
 
-      {/* Letter filter */}
+      {/* Location filter */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Фильтр по буквам</CardTitle>
-            <div className="flex gap-2">
-              <button
-                onClick={selectAll}
-                className="text-sm text-primary hover:underline"
-                data-testid="button-select-all"
-              >
-                Все
-              </button>
-              <button
-                onClick={selectNone}
-                className="text-sm text-primary hover:underline"
-                data-testid="button-select-none"
-              >
-                Сброс
-              </button>
-            </div>
-          </div>
+          <CardTitle>Фильтр локаций</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-3">
-            {allLetters.map((letter) => (
-              <div key={letter} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`letter-${letter}`}
-                  checked={selectedLetters.has(letter)}
-                  onCheckedChange={() => toggleLetter(letter)}
-                  data-testid={`checkbox-letter-${letter}`}
-                />
-                <label
-                  htmlFor={`letter-${letter}`}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  {letter === "OTHER" ? "Прочее" : letter}
-                </label>
-              </div>
-            ))}
+          <div className="space-y-2">
+            <Label htmlFor="location-filter">
+              Введите локации (через пробел, запятую или с новой строки)
+            </Label>
+            <Textarea
+              id="location-filter"
+              placeholder="Например: A101 A102 B101 или A101, A102, B101"
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              rows={4}
+              data-testid="textarea-location-filter"
+              className="font-mono"
+            />
+            <p className="text-sm text-muted-foreground">
+              {locationFilter.trim() 
+                ? `Фильтр активен: ${parseLocationFilter(locationFilter).size} локаций` 
+                : "Показываются все локации"}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -238,41 +158,39 @@ export default function WarehouseLoadingView({ locationGroups }: WarehouseLoadin
       {/* Warehouse loading data - grid layout for individual locations */}
       <Card>
         <CardHeader>
-          <CardTitle>Загрузка склада</CardTitle>
+          <CardTitle>Загрузка склада ({filteredLocations.length} локаций)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {filteredData.flatMap((letterGroup) =>
-              letterGroup.locations.map((location) => (
-                <div
-                  key={location.location}
-                  className="border rounded-md p-3 space-y-2 hover-elevate"
-                  data-testid={`location-${location.location}`}
-                >
-                  <div className="font-mono font-semibold text-sm truncate" title={location.location}>
-                    {location.location}
-                  </div>
-                  <div className="flex justify-between items-center gap-2">
-                    <div className="text-xs text-muted-foreground">SKU:</div>
-                    <Badge
-                      variant="outline"
-                      className={`${getSkuColor(location.skuCount)} border-0 text-xs px-2 py-0`}
-                    >
-                      {location.skuCount}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center gap-2">
-                    <div className="text-xs text-muted-foreground">Товары:</div>
-                    <Badge
-                      variant="outline"
-                      className={`${getQuantityColor(location.totalQuantity)} border-0 text-xs px-2 py-0`}
-                    >
-                      {location.totalQuantity}
-                    </Badge>
-                  </div>
+            {filteredLocations.map((location) => (
+              <div
+                key={location.location}
+                className="border rounded-md p-3 space-y-2 hover-elevate"
+                data-testid={`location-${location.location}`}
+              >
+                <div className="font-mono font-semibold text-sm truncate" title={location.location}>
+                  {location.location}
                 </div>
-              ))
-            )}
+                <div className="flex justify-between items-center gap-2">
+                  <div className="text-xs text-muted-foreground">SKU:</div>
+                  <Badge
+                    variant="outline"
+                    className={`${getSkuColor(location.skuCount)} border-0 text-xs px-2 py-0`}
+                  >
+                    {location.skuCount}
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                  <div className="text-xs text-muted-foreground">Товары:</div>
+                  <Badge
+                    variant="outline"
+                    className={`${getQuantityColor(location.totalQuantity)} border-0 text-xs px-2 py-0`}
+                  >
+                    {location.totalQuantity}
+                  </Badge>
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
