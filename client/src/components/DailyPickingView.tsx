@@ -1,34 +1,25 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileUp, Barcode, List, Trash2, CheckCircle2, Circle } from "lucide-react";
+import { FileUp, List, Trash2, CheckCircle2, Circle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import type { PickingList, PickingTask } from "@shared/schema";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 
 export default function DailyPickingView() {
   const { toast } = useToast();
   const [csvText, setCsvText] = useState("");
   const [listName, setListName] = useState("");
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
-  const [barcodeInput, setBarcodeInput] = useState("");
   const [letterFilter, setLetterFilter] = useState<string>("all");
   const [pageLimit, setPageLimit] = useState<string>("50");
   const [lastResult, setLastResult] = useState<any>(null);
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
-
-  // Auto-focus on mount and after operations
-  useEffect(() => {
-    if (selectedListId) {
-      barcodeInputRef.current?.focus();
-    }
-  }, [selectedListId, lastResult]);
 
   const { data: lists = [] } = useQuery<PickingList[]>({
     queryKey: ["/api/picking/lists"],
@@ -63,7 +54,6 @@ export default function DailyPickingView() {
     },
     onSuccess: (data) => {
       setLastResult(data);
-      setBarcodeInput("");
       queryClient.invalidateQueries({ queryKey: ["/api/picking/lists", selectedListId] });
       toast({
         title: data.success ? "Item Picked" : "Error",
@@ -131,12 +121,20 @@ export default function DailyPickingView() {
     createListMutation.mutate({ name: listName, tasks });
   };
 
-  const handleScanBarcode = (taskId: string) => {
-    if (!barcodeInput.trim()) {
+  const handleScan = (barcode: string) => {
+    if (!barcode.trim()) {
       toast({ title: "Error", description: "Please enter a barcode", variant: "destructive" });
       return;
     }
-    scanMutation.mutate({ barcode: barcodeInput.trim(), taskId });
+    
+    // Find first pending task
+    const nextPending = filteredTasks.find(t => t.status === "PENDING");
+    if (!nextPending) {
+      toast({ title: "No Pending Tasks", description: "All tasks are completed", variant: "destructive" });
+      return;
+    }
+    
+    scanMutation.mutate({ barcode: barcode.trim(), taskId: nextPending.id });
   };
 
   const handleDeleteList = (id: string) => {
@@ -249,33 +247,10 @@ export default function DailyPickingView() {
       <div className="space-y-4">
         {selectedListId && currentList ? (
           <>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Barcode className="h-5 w-5" />
-                  Scan Items
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Barcode</label>
-                  <div className="flex gap-2">
-                    <Input
-                      ref={barcodeInputRef}
-                      data-testid="input-barcode-scan"
-                      placeholder="Scan or enter barcode"
-                      value={barcodeInput}
-                      onChange={(e) => setBarcodeInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && filteredTasks.length > 0) {
-                          const nextPending = filteredTasks.find(t => t.status === "PENDING");
-                          if (nextPending) handleScanBarcode(nextPending.id);
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
+            <BarcodeScanner onScan={handleScan} />
 
+            <Card>
+              <CardContent className="pt-6 space-y-4">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
                     <span>Progress</span>
@@ -346,21 +321,9 @@ export default function DailyPickingView() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={task.status === "COMPLETED" ? "default" : "secondary"}>
-                          {task.status}
-                        </Badge>
-                        {task.status === "PENDING" && (
-                          <Button
-                            data-testid={`button-scan-task-${task.id}`}
-                            size="sm"
-                            onClick={() => handleScanBarcode(task.id)}
-                            disabled={!barcodeInput.trim()}
-                          >
-                            Scan
-                          </Button>
-                        )}
-                      </div>
+                      <Badge variant={task.status === "COMPLETED" ? "default" : "secondary"}>
+                        {task.status}
+                      </Badge>
                     </div>
                   ))}
                 </div>
