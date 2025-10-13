@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -11,6 +11,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import {
   Package,
@@ -27,6 +28,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
+import type { SkuError } from "@shared/schema";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -42,10 +45,65 @@ export default function AppLayout({
   onLogout 
 }: AppLayoutProps) {
   const [location] = useLocation();
+  const [skuErrorsViewed, setSkuErrorsViewed] = useState(false);
+
+  // Fetch unresolved SKU errors count
+  const { data: skuErrors = [], isFetched } = useQuery<SkuError[]>({
+    queryKey: ["/api/sku-errors"],
+    enabled: userRole === "admin",
+  });
+
+  const unresolvedCount = skuErrors.filter((error) => error.status === "PENDING").length;
+  
+  // Restore viewed state from localStorage when data is fetched
+  useEffect(() => {
+    // Only run after data is fetched
+    if (!isFetched) return;
+    
+    if (unresolvedCount === 0) {
+      setSkuErrorsViewed(true);
+      return;
+    }
+    
+    const lastViewed = localStorage.getItem("sku-errors-last-viewed");
+    if (!lastViewed) {
+      // No last viewed timestamp - treat as unseen
+      setSkuErrorsViewed(false);
+      return;
+    }
+    
+    const lastViewedTime = parseInt(lastViewed);
+    if (isNaN(lastViewedTime)) {
+      // Invalid timestamp - treat as unseen and clear bad data
+      localStorage.removeItem("sku-errors-last-viewed");
+      setSkuErrorsViewed(false);
+      return;
+    }
+    
+    const hasNewerErrors = skuErrors.some((error) => {
+      if (error.status !== "PENDING") return false;
+      const errorTime = new Date(error.createdAt).getTime();
+      // Treat errors with invalid timestamp as new (always show badge)
+      if (isNaN(errorTime)) return true;
+      return errorTime > lastViewedTime;
+    });
+    
+    // If all errors are older than last visit, mark as viewed
+    setSkuErrorsViewed(!hasNewerErrors);
+  }, [skuErrors, unresolvedCount, isFetched]);
+  
+  const hasUnresolvedErrors = unresolvedCount > 0 && !skuErrorsViewed;
+
+  // Mark SKU errors as viewed when user visits the page
+  useEffect(() => {
+    if (location === "/sku-errors" && unresolvedCount > 0) {
+      setSkuErrorsViewed(true);
+      localStorage.setItem("sku-errors-last-viewed", Date.now().toString());
+    }
+  }, [location, unresolvedCount]);
 
   const workerMenuItems = [
     { title: "Приход товара", url: "/stock-in", icon: PackagePlus },
-    { title: "Массовая загрузка", url: "/bulk-upload", icon: Upload },
     { title: "Сборка/Списание", url: "/stock-out", icon: PackageMinus },
     { title: "Picking List", url: "/picking", icon: ClipboardList },
     { title: "Инвентаризация", url: "/inventory", icon: Package },
@@ -53,15 +111,12 @@ export default function AppLayout({
   ];
 
   const adminMenuItems = [
-    { title: "SKU Errors", url: "/sku-errors", icon: AlertCircle },
-    { title: "Аналитика", url: "/analytics", icon: BarChart3 },
-    { title: "Логи событий", url: "/logs", icon: FileText },
     { title: "Пользователи", url: "/users", icon: Users },
+    { title: "Массовая загрузка", url: "/bulk-upload", icon: Upload },
+    { title: "Логи событий", url: "/logs", icon: FileText },
+    { title: "SKU Errors", url: "/sku-errors", icon: AlertCircle, showBadge: hasUnresolvedErrors },
+    { title: "Аналитика", url: "/analytics", icon: BarChart3 },
   ];
-
-  const allMenuItems = userRole === "admin" 
-    ? [...workerMenuItems, ...adminMenuItems]
-    : workerMenuItems;
 
   const sidebarStyle = {
     "--sidebar-width": "16rem",
@@ -78,7 +133,7 @@ export default function AppLayout({
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {allMenuItems.map((item) => (
+                  {workerMenuItems.map((item) => (
                     <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton asChild isActive={location === item.url}>
                         <Link href={item.url} data-testid={`link-${item.url.slice(1)}`}>
@@ -91,6 +146,34 @@ export default function AppLayout({
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
+
+            {userRole === "admin" && (
+              <>
+                <SidebarSeparator className="my-2" />
+                <SidebarGroup>
+                  <SidebarGroupLabel className="text-xs text-muted-foreground px-4 py-2">
+                    Администрирование
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {adminMenuItems.map((item) => (
+                        <SidebarMenuItem key={item.url}>
+                          <SidebarMenuButton asChild isActive={location === item.url}>
+                            <Link href={item.url} data-testid={`link-${item.url.slice(1)}`}>
+                              <item.icon className="w-4 h-4" />
+                              <span>{item.title}</span>
+                              {item.showBadge && (
+                                <AlertCircle className="w-4 h-4 text-destructive ml-auto" data-testid="badge-sku-errors-alert" />
+                              )}
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            )}
           </SidebarContent>
         </Sidebar>
         
