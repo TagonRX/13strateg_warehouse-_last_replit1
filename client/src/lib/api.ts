@@ -10,13 +10,23 @@ export interface LoginResponse {
   };
 }
 
-let authToken: string | null = null;
+const AUTH_TOKEN_KEY = "auth_token";
+
+let authToken: string | null = localStorage.getItem(AUTH_TOKEN_KEY);
 
 export function setAuthToken(token: string | null) {
   authToken = token;
+  if (token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
 }
 
 export function getAuthToken(): string | null {
+  if (!authToken) {
+    authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+  }
   return authToken;
 }
 
@@ -47,6 +57,24 @@ export async function login(login: string, password: string): Promise<LoginRespo
   const data = await response.json();
   setAuthToken(data.token);
   return data;
+}
+
+export async function getCurrentUser(): Promise<{
+  id: string;
+  name: string;
+  login: string;
+  role: string;
+}> {
+  const response = await fetch("/api/auth/me", {
+    headers: getHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to get current user");
+  }
+
+  return response.json();
 }
 
 export async function getAllInventory(): Promise<InventoryItem[]> {

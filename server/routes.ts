@@ -7,6 +7,28 @@ import { verifyPassword, hashPassword, createSession, requireAuth, requireAdmin 
 import { setupWebSocket } from "./websocket";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Get current user (check token validity)
+  app.get("/api/auth/me", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      return res.json({
+        id: user.id,
+        name: user.name,
+        login: user.login,
+        role: user.role,
+      });
+    } catch (error: any) {
+      console.error("Get current user error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Authentication routes
   app.post("/api/auth/login", async (req, res) => {
     try {

@@ -25,6 +25,30 @@ function AppContent() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [user, setUser] = useState<{ id: string; name: string; role: "admin" | "worker" } | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check for existing token on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = api.getAuthToken();
+      if (token) {
+        try {
+          const currentUser = await api.getCurrentUser();
+          setUser({
+            id: currentUser.id,
+            name: currentUser.name,
+            role: currentUser.role as "admin" | "worker",
+          });
+        } catch (error) {
+          // Token is invalid, clear it
+          api.setAuthToken(null);
+        }
+      }
+      setIsCheckingAuth(false);
+    };
+
+    checkAuth();
+  }, []);
 
   const { data: inventory = [], refetch: refetchInventory } = useQuery<any[]>({
     queryKey: ["/api/inventory"],
@@ -283,6 +307,17 @@ function AppContent() {
   const handleUpdatePassword = (userId: string, password: string) => {
     updatePasswordMutation.mutate({ userId, password });
   };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return <LoginForm onLogin={handleLogin} />;
