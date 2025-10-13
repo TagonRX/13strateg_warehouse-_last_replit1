@@ -476,7 +476,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="w-fit">
             <CardHeader>
               <CardTitle>Настройки TSKU/MAXQ для групп локаций</CardTitle>
             </CardHeader>
@@ -493,7 +493,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       )}
 
       {/* Filters */}
-      <Card>
+      <Card className="w-fit">
         <CardHeader>
           <CardTitle>Фильтры</CardTitle>
         </CardHeader>
@@ -607,7 +607,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       </Card>
 
       {/* Compact vertical table by letters */}
-      <Card>
+      <Card className="w-fit">
         <CardHeader>
           <CardTitle>Загрузка склада ({filteredLocations.length} локаций)</CardTitle>
         </CardHeader>
@@ -644,7 +644,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       </Card>
 
       {/* Legend */}
-      <Card>
+      <Card className="w-fit">
         <CardHeader>
           <CardTitle className="text-base">Легенда</CardTitle>
         </CardHeader>
