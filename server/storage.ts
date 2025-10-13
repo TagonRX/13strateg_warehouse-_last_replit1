@@ -170,11 +170,6 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async deleteInventoryItem(id: string, userId: string): Promise<boolean> {
-    await db.delete(inventoryItems).where(eq(inventoryItems.id, id));
-    return true;
-  }
-
   async bulkUpsertInventoryItems(items: InsertInventoryItem[]): Promise<{ success: number; updated: number; errors: number }> {
     let success = 0;
     let updated = 0;
@@ -405,8 +400,7 @@ export class DbStorage implements IStorage {
   }[]> {
     const items = await db
       .select()
-      .from(inventoryItems)
-      .where(eq(inventoryItems.status, "IN_STOCK"));
+      .from(inventoryItems);
 
     // Group by extracted location
     const locationMap = new Map<string, InventoryItem[]>();
@@ -443,20 +437,14 @@ export class DbStorage implements IStorage {
     let items = await db
       .select()
       .from(inventoryItems)
-      .where(and(
-        eq(inventoryItems.barcode, barcode),
-        eq(inventoryItems.status, "IN_STOCK")
-      ));
+      .where(eq(inventoryItems.barcode, barcode));
 
     // If not found by barcode, try by SKU
     if (items.length === 0) {
       items = await db
         .select()
         .from(inventoryItems)
-        .where(and(
-          eq(inventoryItems.sku, barcode),
-          eq(inventoryItems.status, "IN_STOCK")
-        ));
+        .where(eq(inventoryItems.sku, barcode));
     }
 
     if (items.length === 0) {
@@ -465,14 +453,24 @@ export class DbStorage implements IStorage {
 
     const item = items[0];
     
-    // Update status to PICKED
-    await db
-      .update(inventoryItems)
-      .set({ 
-        status: "PICKED",
-        updatedAt: new Date()
-      })
-      .where(eq(inventoryItems.id, item.id));
+    // Decrease quantity by 1
+    const newQuantity = item.quantity - 1;
+    
+    if (newQuantity <= 0) {
+      // Delete item if quantity reaches 0
+      await db
+        .delete(inventoryItems)
+        .where(eq(inventoryItems.id, item.id));
+    } else {
+      // Update quantity
+      await db
+        .update(inventoryItems)
+        .set({ 
+          quantity: newQuantity,
+          updatedAt: new Date()
+        })
+        .where(eq(inventoryItems.id, item.id));
+    }
 
     // Log the pick event
     await this.createEventLog({
@@ -514,8 +512,7 @@ export class DbStorage implements IStorage {
     // Get all items in this location
     const items = await db
       .select()
-      .from(inventoryItems)
-      .where(eq(inventoryItems.status, "IN_STOCK"));
+      .from(inventoryItems);
 
     const itemsToDelete = items.filter(item => 
       this.extractLocation(item.sku) === location
@@ -598,15 +595,12 @@ export class DbStorage implements IStorage {
       return { success: false, message: "Task not found" };
     }
 
-    // Find item with matching barcode (IN_STOCK only)
+    // Find item with matching barcode
     const [item] = await db.select().from(inventoryItems)
-      .where(and(
-        eq(inventoryItems.barcode, barcode),
-        eq(inventoryItems.status, "IN_STOCK")
-      ));
+      .where(eq(inventoryItems.barcode, barcode));
 
     if (!item) {
-      return { success: false, message: "Item not found or already picked" };
+      return { success: false, message: "Item not found" };
     }
 
     // Check if SKU matches
@@ -622,10 +616,16 @@ export class DbStorage implements IStorage {
       return { success: false, message: "Task already completed" };
     }
 
-    // Mark item as PICKED
-    await db.update(inventoryItems)
-      .set({ status: "PICKED", updatedAt: new Date() })
-      .where(eq(inventoryItems.id, item.id));
+    // Decrease item quantity by 1 or delete if quantity reaches 0
+    const newQuantity = item.quantity - 1;
+    if (newQuantity <= 0) {
+      await db.delete(inventoryItems)
+        .where(eq(inventoryItems.id, item.id));
+    } else {
+      await db.update(inventoryItems)
+        .set({ quantity: newQuantity, updatedAt: new Date() })
+        .where(eq(inventoryItems.id, item.id));
+    }
 
     // Update task progress
     const pickedIds = task.pickedItemIds || [];
@@ -764,7 +764,6 @@ export class DbStorage implements IStorage {
         location: correctedSku,
         quantity: error.quantity,
         barcode: error.barcode,
-        status: "IN_STOCK",
         createdBy: userId,
       });
     }
