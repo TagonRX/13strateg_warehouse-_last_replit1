@@ -10,6 +10,28 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 13, 2025 - Remote Scanner (Phone as Wireless Scanner)
+- **WebSocket Real-Time Communication**:
+  - Created WebSocket server for device-to-device communication
+  - Supports multiple concurrent connections per user
+  - Auto-reconnect on disconnect
+  - Session-based authentication
+- **Remote Scanner Mode**:
+  - Third tab "Телефон" in BarcodeScanner component
+  - Phone camera stays active (doesn't auto-close after scan)
+  - Manual "Send to Computer" button (like camera shutter)
+  - Visual feedback with green preview for scanned codes
+  - Connection status indicators (🟢 Connected / 🟡 Connecting)
+- **Dual-Device Workflow**:
+  - Use phone as wireless scanner for computer
+  - Phone scans → shows preview → click "Send to Computer"
+  - Computer (USB tab) receives scan instantly via WebSocket
+  - Status indicator shows "🟢 Принимает сканы с телефона" on desktop
+- **Implementation Details**:
+  - WebSocket path: `/ws`
+  - Messages: `auth`, `remote_scan`, `barcode_scanned`
+  - Broadcasts to all other devices of same user
+
 ### October 13, 2025 - Mobile Camera & Physical Scanner Support
 - **Real Camera Scanning**:
   - Implemented html5-qrcode for mobile barcode scanning

@@ -7,7 +7,7 @@ interface AuthenticatedWebSocket extends WebSocket {
   isAlive?: boolean;
 }
 
-const clients = new Map<string, AuthenticatedWebSocket>();
+const clients = new Map<string, Set<AuthenticatedWebSocket>>();
 
 export function setupWebSocket(server: Server) {
   const wss = new WebSocketServer({ 
@@ -20,7 +20,13 @@ export function setupWebSocket(server: Server) {
     wss.clients.forEach((ws: AuthenticatedWebSocket) => {
       if (ws.isAlive === false) {
         if (ws.userId) {
-          clients.delete(ws.userId);
+          const userClients = clients.get(ws.userId);
+          if (userClients) {
+            userClients.delete(ws);
+            if (userClients.size === 0) {
+              clients.delete(ws.userId);
+            }
+          }
         }
         return ws.terminate();
       }
@@ -52,13 +58,13 @@ export function setupWebSocket(server: Server) {
           if (session) {
             ws.userId = session.userId;
             
-            // Remove old connection for this user if exists
-            const oldConnection = clients.get(session.userId);
-            if (oldConnection && oldConnection !== ws) {
-              oldConnection.close();
+            // Add this WebSocket to the user's set of connections
+            let userClients = clients.get(session.userId);
+            if (!userClients) {
+              userClients = new Set();
+              clients.set(session.userId, userClients);
             }
-            
-            clients.set(session.userId, ws);
+            userClients.add(ws);
             
             ws.send(JSON.stringify({ 
               type: "auth_success",
@@ -77,13 +83,17 @@ export function setupWebSocket(server: Server) {
         if (message.type === "remote_scan" && ws.userId) {
           const { barcode } = message;
           
-          // Send to the same user's other devices
-          const client = clients.get(ws.userId);
-          if (client && client !== ws) {
-            client.send(JSON.stringify({
-              type: "barcode_scanned",
-              barcode
-            }));
+          // Send to all other devices of the same user
+          const userClients = clients.get(ws.userId);
+          if (userClients) {
+            userClients.forEach((client) => {
+              if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                  type: "barcode_scanned",
+                  barcode
+                }));
+              }
+            });
           }
         }
 
@@ -91,13 +101,17 @@ export function setupWebSocket(server: Server) {
         if (message.type === "scanner_mode" && ws.userId) {
           const { enabled } = message;
           
-          // Notify all devices of this user about scanner mode
-          const client = clients.get(ws.userId);
-          if (client) {
-            client.send(JSON.stringify({
-              type: "scanner_mode_update",
-              enabled
-            }));
+          // Notify all other devices of this user about scanner mode
+          const userClients = clients.get(ws.userId);
+          if (userClients) {
+            userClients.forEach((client) => {
+              if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                  type: "scanner_mode_update",
+                  enabled
+                }));
+              }
+            });
           }
         }
       } catch (error) {
@@ -107,9 +121,12 @@ export function setupWebSocket(server: Server) {
 
     ws.on("close", () => {
       if (ws.userId) {
-        const client = clients.get(ws.userId);
-        if (client === ws) {
-          clients.delete(ws.userId);
+        const userClients = clients.get(ws.userId);
+        if (userClients) {
+          userClients.delete(ws);
+          if (userClients.size === 0) {
+            clients.delete(ws.userId);
+          }
         }
       }
     });
@@ -117,7 +134,13 @@ export function setupWebSocket(server: Server) {
     ws.on("error", (error) => {
       console.error("WebSocket error:", error);
       if (ws.userId) {
-        clients.delete(ws.userId);
+        const userClients = clients.get(ws.userId);
+        if (userClients) {
+          userClients.delete(ws);
+          if (userClients.size === 0) {
+            clients.delete(ws.userId);
+          }
+        }
       }
     });
   });
