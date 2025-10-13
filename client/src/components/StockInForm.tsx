@@ -10,6 +10,7 @@ interface StockInFormProps {
     productId?: string;
     name?: string;
     sku: string;
+    location: string;
     quantity: number;
     barcode?: string;
   }) => void;
@@ -19,11 +20,19 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
   const [productId, setProductId] = useState("");
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
+  const [location, setLocation] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [barcode, setBarcode] = useState("");
 
   const handleScan = (scannedBarcode: string) => {
     setBarcode(scannedBarcode);
+  };
+
+  const handleSkuChange = (value: string) => {
+    const upperValue = value.toUpperCase();
+    setSku(upperValue);
+    // Auto-fill location with SKU value
+    setLocation(upperValue);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -32,6 +41,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       productId: productId || undefined,
       name: name || undefined,
       sku,
+      location: location || sku, // Use location if set, otherwise fall back to SKU
       quantity,
       barcode: barcode || undefined,
     });
@@ -39,6 +49,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
     setProductId("");
     setName("");
     setSku("");
+    setLocation("");
     setQuantity(1);
     setBarcode("");
   };
@@ -54,17 +65,29 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="sku">SKU / Локация *</Label>
+              <Label htmlFor="sku">SKU *</Label>
               <Input
                 id="sku"
                 value={sku}
-                onChange={(e) => setSku(e.target.value.toUpperCase())}
+                onChange={(e) => handleSkuChange(e.target.value)}
                 placeholder="A101 или A101-J"
                 required
                 data-testid="input-sku"
               />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="location">Локация *</Label>
+              <Input
+                id="location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value.toUpperCase())}
+                placeholder="A101 (авто-заполняется из SKU)"
+                required
+                data-testid="input-location"
+              />
               <p className="text-xs text-muted-foreground">
-                Локация автоматически = SKU
+                По умолчанию = SKU, можно изменить вручную
               </p>
             </div>
             

@@ -71,13 +71,11 @@ function AppContent() {
       productId?: string;
       name?: string;
       sku: string;
+      location: string;
       quantity: number;
       barcode?: string;
     }) =>
-      api.createInventoryItem({
-        ...data,
-        location: data.sku,
-      }),
+      api.createInventoryItem(data),
     onSuccess: () => {
       refetchInventory();
       toast({
