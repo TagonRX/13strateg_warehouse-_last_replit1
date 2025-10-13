@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getWarehouseLoading, pickItemByBarcode, deleteInventoryItem, deleteLocation } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
@@ -12,6 +12,7 @@ import { Trash2, Search, Package, Barcode, ChevronDown, Trash } from "lucide-rea
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
+import BarcodeScanner from "./BarcodeScanner";
 
 type LocationData = {
   location: string;
@@ -28,17 +29,10 @@ type LocationData = {
 
 export default function StockOutView({ user }: { user: { role: string } }) {
   const { toast } = useToast();
-  const [barcodeInput, setBarcodeInput] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
   const [limitFilter, setLimitFilter] = useState<string>("10");
   const [lastPickedItem, setLastPickedItem] = useState<any>(null);
   const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
-
-  // Auto-focus on mount and after operations
-  useEffect(() => {
-    barcodeInputRef.current?.focus();
-  }, [lastPickedItem]);
 
   const { data: locations = [], isLoading } = useQuery<LocationData[]>({
     queryKey: ["/api/warehouse/loading"],
@@ -48,7 +42,6 @@ export default function StockOutView({ user }: { user: { role: string } }) {
     mutationFn: pickItemByBarcode,
     onSuccess: (item) => {
       setLastPickedItem(item);
-      setBarcodeInput("");
       queryClient.invalidateQueries({ queryKey: ["/api/warehouse/loading"] });
       toast({
         title: "Item Picked",
@@ -100,8 +93,8 @@ export default function StockOutView({ user }: { user: { role: string } }) {
     },
   });
 
-  const handlePickItem = () => {
-    if (!barcodeInput.trim()) {
+  const handleScan = (barcode: string) => {
+    if (!barcode.trim()) {
       toast({
         title: "Error",
         description: "Please enter a barcode",
@@ -109,7 +102,7 @@ export default function StockOutView({ user }: { user: { role: string } }) {
       });
       return;
     }
-    pickMutation.mutate(barcodeInput.trim());
+    pickMutation.mutate(barcode.trim());
   };
 
   const handleDeleteItem = (id: string, name: string) => {
@@ -361,65 +354,33 @@ export default function StockOutView({ user }: { user: { role: string } }) {
 
       {/* Right Panel: Barcode Scanning */}
       <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Barcode className="h-5 w-5" />
-              Pick Items
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Scan or Enter Barcode</label>
-              <div className="flex gap-2">
-                <Input
-                  ref={barcodeInputRef}
-                  data-testid="input-barcode"
-                  placeholder="Scan barcode here..."
-                  value={barcodeInput}
-                  onChange={(e) => setBarcodeInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handlePickItem();
-                    }
-                  }}
-                  autoFocus
-                />
-                <Button
-                  data-testid="button-pick-item"
-                  onClick={handlePickItem}
-                  disabled={pickMutation.isPending}
-                >
-                  {pickMutation.isPending ? "Picking..." : "Pick"}
-                </Button>
+        <BarcodeScanner onScan={handleScan} />
+
+        {lastPickedItem && (
+          <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
+            <Package className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-700 dark:text-green-300">
+              <div className="font-semibold" data-testid="text-last-picked-name">
+                {lastPickedItem.name}
               </div>
-            </div>
+              <div className="text-sm" data-testid="text-last-picked-sku">
+                SKU: {lastPickedItem.sku} | Qty: {lastPickedItem.quantity}
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
 
-            {lastPickedItem && (
-              <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-                <Package className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-700 dark:text-green-300">
-                  <div className="font-semibold" data-testid="text-last-picked-name">
-                    {lastPickedItem.name}
-                  </div>
-                  <div className="text-sm" data-testid="text-last-picked-sku">
-                    SKU: {lastPickedItem.sku} | Qty: {lastPickedItem.quantity}
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <div className="pt-4 border-t space-y-2">
-              <h3 className="text-sm font-medium">Instructions</h3>
-              <ul className="text-sm text-muted-foreground space-y-1">
-                <li>• Scan or enter the barcode of the item to pick</li>
-                <li>• Item will be marked as PICKED and removed from stock</li>
-                <li>• Use the location list on the left to view available items</li>
-                {user.role === "admin" && (
-                  <li>• As admin, you can delete individual items or entire locations</li>
-                )}
-              </ul>
-            </div>
+        <Card>
+          <CardContent className="pt-6">
+            <h3 className="text-sm font-medium mb-2">Instructions</h3>
+            <ul className="text-sm text-muted-foreground space-y-1">
+              <li>• Scan or enter the barcode of the item to pick</li>
+              <li>• Item will be marked as PICKED and removed from stock</li>
+              <li>• Use the location list on the left to view available items</li>
+              {user.role === "admin" && (
+                <li>• As admin, you can delete individual items or entire locations</li>
+              )}
+            </ul>
           </CardContent>
         </Card>
       </div>
