@@ -53,7 +53,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       <CardHeader>
         <CardTitle>Массовая загрузка CSV</CardTitle>
         <CardDescription>
-          Формат: ID товара, Название, SKU (локация), Количество, Штрихкод (опц.)
+          Формат: ID товара; Название; SKU; Количество; Штрихкод (опц.)
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -119,9 +119,9 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
         <div className="bg-muted rounded-md p-4">
           <h4 className="text-sm font-medium mb-2">Правила обработки:</h4>
           <ul className="text-sm text-muted-foreground space-y-1">
-            <li>• При совпадении ID товара - обновляется количество и локация</li>
-            <li>• Обрабатываются только первые 5 столбцов</li>
-            <li>• SKU = Локация товара</li>
+            <li>• При совпадении ID товара - обновляется количество</li>
+            <li>• Локация извлекается из SKU (A101-G → локация A101)</li>
+            <li>• Если SKU без формата (kjkhk) → локация = SKU</li>
             <li>• Штрихкод опционален (5-й столбец)</li>
           </ul>
         </div>

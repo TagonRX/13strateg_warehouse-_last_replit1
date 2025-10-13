@@ -125,17 +125,40 @@ function AppContent() {
       if (quantityIndex === -1 && header.length >= 5) quantityIndex = 3;
       if (barcodeIndex === -1 && header.length >= 5) barcodeIndex = 4;
 
+      // Helper function to extract location from SKU
+      const extractLocation = (sku: string): string => {
+        if (!sku) return "";
+        
+        // Pattern: Letter + 1-3 digits (e.g., A101, B23, C1)
+        // Everything before the first dash is the location
+        const match = sku.match(/^([A-Z]\d{1,3})/);
+        
+        if (match) {
+          // Found standard format: return letter + digits part
+          return match[1];
+        }
+        
+        // No standard format found: return the whole SKU as location
+        return sku;
+      };
+
       const items = lines.slice(1).map(line => {
         const parts = line.split(delimiter).map(p => p.trim().replace(/^"|"$/g, '')); // Remove quotes
         
         const productId = productIdIndex >= 0 && parts[productIdIndex] ? parts[productIdIndex] : undefined;
         const name = nameIndex >= 0 && parts[nameIndex] ? parts[nameIndex] : undefined;
         const sku = skuIndex >= 0 && parts[skuIndex] ? parts[skuIndex].toUpperCase() : "";
-        // Try to get location from CSV; if not present, use SKU as fallback
-        let location = locationIndex >= 0 && parts[locationIndex] ? parts[locationIndex].toUpperCase() : "";
-        if (!location && sku) {
-          location = sku; // Fallback: if no location column, use SKU
+        
+        // Extract location from SKU using the pattern
+        let location = "";
+        if (locationIndex >= 0 && parts[locationIndex]) {
+          // If CSV has location column, use it
+          location = parts[locationIndex].toUpperCase();
+        } else if (sku) {
+          // Extract location from SKU
+          location = extractLocation(sku);
         }
+        
         const quantity = quantityIndex >= 0 && parts[quantityIndex] ? parseInt(parts[quantityIndex]) || 1 : 1;
         const barcode = barcodeIndex >= 0 && parts[barcodeIndex] ? parts[barcodeIndex] : undefined;
 

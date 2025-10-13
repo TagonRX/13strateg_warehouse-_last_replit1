@@ -76,9 +76,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if item with same productId already exists
-      const existing = await storage.getInventoryItemByProductId(validation.data.productId);
+      const existing = validation.data.productId 
+        ? await storage.getInventoryItemByProductId(validation.data.productId)
+        : undefined;
       
-      if (existing) {
+      if (existing && validation.data.productId) {
         // Update existing item
         const quantityToAdd = validation.data.quantity ?? 1;
         const updated = await storage.updateInventoryItem(validation.data.productId, {
