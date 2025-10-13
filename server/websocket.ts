@@ -106,6 +106,29 @@ export function setupWebSocket(server: Server) {
           }
         }
 
+        // Sync picking list selection across devices
+        if (message.type === "sync_picking_list" && ws.userId) {
+          const { listId } = message;
+          
+          console.log(`[WS] Syncing picking list ${listId} for user ${ws.userId}`);
+          
+          // Send to all other devices of the same user
+          const userClients = clients.get(ws.userId);
+          if (userClients) {
+            let sentCount = 0;
+            userClients.forEach((client) => {
+              if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                  type: "sync_picking_list",
+                  listId
+                }));
+                sentCount++;
+              }
+            });
+            console.log(`[WS] Synced picking list to ${sentCount} other device(s)`);
+          }
+        }
+
         // Scan mode toggle (phone becomes scanner, desktop receives)
         if (message.type === "scanner_mode" && ws.userId) {
           const { enabled } = message;

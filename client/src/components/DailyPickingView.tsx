@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -12,9 +12,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import type { PickingList, PickingTask } from "@shared/schema";
 import BarcodeScanner from "@/components/BarcodeScanner";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 export default function DailyPickingView() {
   const { toast } = useToast();
+  const { lastMessage, sendMessage } = useWebSocket();
   const [csvText, setCsvText] = useState("");
   const [listName, setListName] = useState("");
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
@@ -25,6 +27,13 @@ export default function DailyPickingView() {
   const { data: lists = [] } = useQuery<PickingList[]>({
     queryKey: ["/api/picking/lists"],
   });
+
+  // Sync selected list across devices via WebSocket
+  useEffect(() => {
+    if (lastMessage?.type === "sync_picking_list") {
+      setSelectedListId(lastMessage.listId);
+    }
+  }, [lastMessage]);
 
   const { data: currentList } = useQuery<{ list: PickingList; tasks: PickingTask[] }>({
     queryKey: ["/api/picking/lists", selectedListId],
@@ -144,6 +153,15 @@ export default function DailyPickingView() {
     }
   };
 
+  const handleListSelect = (listId: string) => {
+    setSelectedListId(listId);
+    // Sync selection to other devices
+    sendMessage({
+      type: "sync_picking_list",
+      listId: listId
+    });
+  };
+
   // Filter tasks
   const filteredTasks = currentList?.tasks
     .filter(task => {
@@ -218,7 +236,7 @@ export default function DailyPickingView() {
                   className={`flex items-center justify-between p-3 rounded-md border ${
                     selectedListId === list.id ? "bg-accent" : "hover-elevate"
                   }`}
-                  onClick={() => setSelectedListId(list.id)}
+                  onClick={() => handleListSelect(list.id)}
                 >
                   <div className="flex-1 cursor-pointer">
                     <div className="font-medium">{list.name}</div>
