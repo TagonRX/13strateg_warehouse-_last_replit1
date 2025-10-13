@@ -10,6 +10,18 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 13, 2025 - File Sync UI Button
+- **Sync from File Button in Bulk Upload Page**:
+  - Added "Обновить из файла" button in CSVUploader component
+  - Calls POST /api/inventory/sync-from-file endpoint
+  - Shows loading state with spinning icon during sync
+  - Displays toast notification with sync results (created/updated/deleted counts)
+  - Result panel shows detailed breakdown: new records, updated, deleted
+  - Query cache invalidation ensures inventory table refreshes automatically
+  - Properly handles all edge cases with null coalescing operators
+  - Deleted count always displayed for sync operations
+  - Located in bulk upload page at /bulk-upload
+
 ### October 13, 2025 - Remote Scanner & Picking List Synchronization
 - **WebSocket Real-Time Communication**:
   - Created WebSocket server for device-to-device communication
