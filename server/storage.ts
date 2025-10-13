@@ -139,37 +139,75 @@ export class DbStorage implements IStorage {
 
     for (const item of items) {
       try {
-        const existing = await this.getInventoryItemByProductId(item.productId);
-        
-        if (existing) {
-          // Check if SKU matches
-          if (existing.sku === item.sku) {
-            // SKU matches - update quantity
-            await this.updateInventoryItem(item.productId, {
-              quantity: item.quantity,
-              barcode: item.barcode,
-            });
-            updated++;
+        // If productId provided, check by productId
+        if (item.productId) {
+          const existing = await this.getInventoryItemByProductId(item.productId);
+          
+          if (existing) {
+            // Check if SKU matches
+            if (existing.sku === item.sku) {
+              // SKU matches - update quantity
+              await this.updateInventoryItem(item.productId, {
+                quantity: item.quantity,
+                barcode: item.barcode,
+                name: item.name, // Update name if provided
+              });
+              updated++;
+            } else {
+              // SKU mismatch - create SKU error record
+              await this.createSkuError({
+                productId: item.productId,
+                name: item.name || "",
+                csvSku: item.sku,
+                existingSku: existing.sku,
+                quantity: item.quantity,
+                barcode: item.barcode,
+                status: "PENDING",
+              });
+              errors++;
+            }
           } else {
-            // SKU mismatch - create SKU error record
-            await this.createSkuError({
-              productId: item.productId,
-              name: item.name,
-              csvSku: item.sku,
-              existingSku: existing.sku,
-              quantity: item.quantity,
-              barcode: item.barcode,
-              status: "PENDING",
-            });
-            errors++;
+            // Create new item
+            await this.createInventoryItem(item);
+            success++;
           }
         } else {
-          // Create new item
-          await this.createInventoryItem(item);
-          success++;
+          // No productId - try to find by SKU and name for synchronization
+          const allItems = await this.getAllInventoryItems();
+          const matchBySku = allItems.find(i => i.sku === item.sku && i.name === item.name);
+          const matchBySkuOnly = allItems.find(i => i.sku === item.sku && !i.productId);
+
+          if (matchBySku && !matchBySku.productId) {
+            // Found item with same SKU+name but no productId - sync it
+            // But we don't have productId in CSV either, so just add quantity
+            await db.update(inventoryItems)
+              .set({
+                quantity: matchBySku.quantity + (item.quantity || 1),
+                name: item.name || matchBySku.name,
+                barcode: item.barcode || matchBySku.barcode,
+                updatedAt: new Date(),
+              })
+              .where(eq(inventoryItems.id, matchBySku.id));
+            updated++;
+          } else if (matchBySkuOnly) {
+            // Found item with same SKU but no productId - update it
+            await db.update(inventoryItems)
+              .set({
+                quantity: matchBySkuOnly.quantity + (item.quantity || 1),
+                name: item.name || matchBySkuOnly.name,
+                barcode: item.barcode || matchBySkuOnly.barcode,
+                updatedAt: new Date(),
+              })
+              .where(eq(inventoryItems.id, matchBySkuOnly.id));
+            updated++;
+          } else {
+            // Create new item
+            await this.createInventoryItem(item);
+            success++;
+          }
         }
       } catch (error) {
-        console.error(`Error upserting item ${item.productId}:`, error);
+        console.error(`Error upserting item:`, error);
         errors++;
       }
     }
@@ -280,7 +318,7 @@ export class DbStorage implements IStorage {
         items: locationItems.map(item => ({
           id: item.id,
           sku: item.sku,
-          name: item.name,
+          name: item.name || "Без названия",
           quantity: item.quantity,
           barcode: item.barcode || undefined,
         })),
