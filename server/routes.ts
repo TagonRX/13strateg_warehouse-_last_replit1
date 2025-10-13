@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertUserSchema, insertInventoryItemSchema, insertEventLogSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import { verifyPassword, hashPassword, createSession, requireAuth, requireAdmin } from "./auth";
+import { setupWebSocket } from "./websocket";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
@@ -560,6 +561,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+
+  // Setup WebSocket server for remote scanning
+  setupWebSocket(httpServer);
 
   return httpServer;
 }
