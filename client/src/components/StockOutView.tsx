@@ -30,7 +30,7 @@ export default function StockOutView({ user }: { user: { role: string } }) {
   const { toast } = useToast();
   const [barcodeInput, setBarcodeInput] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
-  const [limitFilter, setLimitFilter] = useState<string>("all");
+  const [limitFilter, setLimitFilter] = useState<string>("10");
   const [lastPickedItem, setLastPickedItem] = useState<any>(null);
   const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
 
