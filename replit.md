@@ -51,6 +51,7 @@ Preferred communication style: Simple, everyday language.
 *   **Warehouse Loading Natural Sorting**: Implemented natural/numeric sorting for warehouse locations. Locations now sort logically: X1, X2...X10, X11...X100, X101...X199, X200+ (not alphabetically X1, X10, X100, X11, X2...). Sorting is first by letter prefix alphabetically, then by number numerically within same letter group.
 *   **Warehouse Settings Extended**: Added warehouse settings for letters E-Z (22 grouped settings). Each group contains 6 locations (e.g., "E1,E2,E3,E4,E5,E6") with TSKU=3 and MAXQ=7. Groups: E1-E6, F1-F6, G1-G6... Z1-Z6.
 *   **Warehouse Loading Table Styling**: Improved table readability - increased gap between letter columns (gap-8), reduced spacing between location and TSKU (gap-1), optimized TSKU column width (w-5) for 2-digit numbers.
+*   **Warehouse Settings Formatting**: All warehouse settings now use consistent formatting with spaces after commas (e.g., "E1, E2, E3, E4, E5, E6"). Settings table optimized with smaller text (text-sm), reduced padding (p-2), and tighter gaps (gap-2) to prevent horizontal stretching.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.

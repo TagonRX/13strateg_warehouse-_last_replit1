@@ -76,19 +76,19 @@ function WarehouseSettingsPanel({
     <div className="space-y-4">
       {/* Existing settings */}
       {settings.length > 0 && (
-        <div className="rounded-md border">
-          <div className="grid grid-cols-4 gap-4 p-3 font-medium bg-muted/50">
+        <div className="rounded-md border overflow-x-auto">
+          <div className="grid grid-cols-4 gap-2 p-2 text-sm font-medium bg-muted/50">
             <div>Группа локаций</div>
             <div>TSKU</div>
             <div>MAXQ</div>
             <div>Действия</div>
           </div>
           {settings.map((setting) => (
-            <div key={setting.id} className="grid grid-cols-4 gap-4 p-3 border-t" data-testid={`setting-row-${setting.locationPattern}`}>
-              <div className="font-mono font-semibold">{setting.locationPattern}</div>
+            <div key={setting.id} className="grid grid-cols-4 gap-2 p-2 text-sm border-t" data-testid={`setting-row-${setting.locationPattern}`}>
+              <div className="font-mono font-semibold truncate" title={setting.locationPattern}>{setting.locationPattern}</div>
               <div>{setting.tsku}</div>
               <div>{setting.maxq}</div>
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <Button
                   size="sm"
                   variant="ghost"
@@ -98,6 +98,7 @@ function WarehouseSettingsPanel({
                     setNewMaxq(setting.maxq.toString());
                   }}
                   data-testid={`button-edit-${setting.locationPattern}`}
+                  className="text-xs px-2"
                 >
                   Редактировать
                 </Button>
@@ -108,7 +109,7 @@ function WarehouseSettingsPanel({
                   disabled={isDeleting}
                   data-testid={`button-delete-${setting.locationPattern}`}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3 h-3" />
                 </Button>
               </div>
             </div>

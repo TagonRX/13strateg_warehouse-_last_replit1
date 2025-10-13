@@ -9,7 +9,7 @@ export async function seedWarehouseSettings() {
   const maxq = 7;
 
   const settings = letters.map(letter => ({
-    locationPattern: `${letter}1,${letter}2,${letter}3,${letter}4,${letter}5,${letter}6`,
+    locationPattern: `${letter}1, ${letter}2, ${letter}3, ${letter}4, ${letter}5, ${letter}6`,
     tsku,
     maxq,
   }));
