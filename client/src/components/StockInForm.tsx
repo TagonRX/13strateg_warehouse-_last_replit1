@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Scan } from "lucide-react";
 import BarcodeScanner from "./BarcodeScanner";
 
 interface StockInFormProps {
@@ -23,16 +24,18 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
   const [location, setLocation] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [barcode, setBarcode] = useState("");
+  const [isWaitingForScan, setIsWaitingForScan] = useState(false);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const handleScan = (scannedBarcode: string) => {
     setBarcode(scannedBarcode);
+    setIsWaitingForScan(false);
   };
 
-  const handleSkuChange = (value: string) => {
-    const upperValue = value.toUpperCase();
-    setSku(upperValue);
-    // Auto-fill location with SKU value
-    setLocation(upperValue);
+  const handleActivateBarcodeScanner = () => {
+    setIsWaitingForScan(true);
+    barcodeInputRef.current?.focus();
+    setTimeout(() => setIsWaitingForScan(false), 5000);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -41,7 +44,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       productId: productId || undefined,
       name: name || undefined,
       sku,
-      location: location || sku, // Use location if set, otherwise fall back to SKU
+      location,
       quantity,
       barcode: barcode || undefined,
     });
@@ -52,6 +55,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
     setLocation("");
     setQuantity(1);
     setBarcode("");
+    setIsWaitingForScan(false);
   };
 
   return (
@@ -65,30 +69,49 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="sku">SKU *</Label>
-              <Input
-                id="sku"
-                value={sku}
-                onChange={(e) => handleSkuChange(e.target.value)}
-                placeholder="A101 или A101-J"
-                required
-                data-testid="input-sku"
-              />
-            </div>
-            
-            <div className="space-y-2">
               <Label htmlFor="location">Локация *</Label>
               <Input
                 id="location"
                 value={location}
                 onChange={(e) => setLocation(e.target.value.toUpperCase())}
-                placeholder="A101 (авто-заполняется из SKU)"
+                placeholder="A101"
                 required
                 data-testid="input-location"
               />
-              <p className="text-xs text-muted-foreground">
-                По умолчанию = SKU, можно изменить вручную
-              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="productId">ID товара</Label>
+              <Input
+                id="productId"
+                value={productId}
+                onChange={(e) => setProductId(e.target.value)}
+                placeholder="Уникальный идентификатор"
+                data-testid="input-product-id"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="name">Название товара</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Название товара"
+                data-testid="input-name"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="sku">SKU *</Label>
+              <Input
+                id="sku"
+                value={sku}
+                onChange={(e) => setSku(e.target.value.toUpperCase())}
+                placeholder="A101-J"
+                required
+                data-testid="input-sku"
+              />
             </div>
             
             <div className="space-y-2">
@@ -103,37 +126,29 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
                 data-testid="input-quantity"
               />
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="productId">ID товара (опционально)</Label>
-              <Input
-                id="productId"
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-                placeholder="Можно добавить позже через CSV"
-                data-testid="input-product-id"
-              />
-            </div>
             
             <div className="space-y-2">
-              <Label htmlFor="name">Название (опционально)</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Можно добавить позже через CSV"
-                data-testid="input-name"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="barcode">Штрихкод (опционально)</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="barcode">Штрихкод</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleActivateBarcodeScanner}
+                  className={isWaitingForScan ? "border-primary" : ""}
+                  data-testid="button-activate-barcode"
+                >
+                  <Scan className="w-4 h-4 mr-2" />
+                  Добавить штрихкод
+                </Button>
+              </div>
               <Input
                 id="barcode"
+                ref={barcodeInputRef}
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
-                placeholder="Отсканирован или введите вручную"
-                className="font-mono"
+                placeholder={isWaitingForScan ? "Ожидание сканирования..." : "Введите или отсканируйте"}
+                className={`font-mono ${isWaitingForScan ? "border-primary ring-2 ring-primary/20" : ""}`}
                 data-testid="input-barcode"
               />
             </div>
