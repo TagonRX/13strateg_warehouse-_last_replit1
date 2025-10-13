@@ -15,8 +15,8 @@ import { Search } from "lucide-react";
 
 interface InventoryItem {
   id: string;
-  productId: string;
-  name: string;
+  productId: string | null;
+  name: string | null;
   sku: string;
   location: string;
   quantity: number;
@@ -35,8 +35,8 @@ export default function InventoryTable({ items }: InventoryTableProps) {
   const filteredItems = items
     .filter(
       (item) =>
-        item.productId.toLowerCase().includes(search.toLowerCase()) ||
-        item.name.toLowerCase().includes(search.toLowerCase()) ||
+        (item.productId || "").toLowerCase().includes(search.toLowerCase()) ||
+        (item.name || "").toLowerCase().includes(search.toLowerCase()) ||
         item.sku.toLowerCase().includes(search.toLowerCase())
     )
     .slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit));
@@ -101,8 +101,8 @@ export default function InventoryTable({ items }: InventoryTableProps) {
             <TableBody>
               {filteredItems.map((item) => (
                 <TableRow key={item.id} data-testid={`row-item-${item.id}`}>
-                  <TableCell className="font-mono text-sm">{item.productId}</TableCell>
-                  <TableCell>{item.name}</TableCell>
+                  <TableCell className="font-mono text-sm">{item.productId || "-"}</TableCell>
+                  <TableCell>{item.name || "Без названия"}</TableCell>
                   <TableCell className="font-mono">{item.sku}</TableCell>
                   <TableCell className="font-mono">{item.location}</TableCell>
                   <TableCell className="text-right font-medium">{item.quantity}</TableCell>

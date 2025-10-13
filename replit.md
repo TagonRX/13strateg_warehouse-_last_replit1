@@ -19,6 +19,24 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 13, 2025
+- **Flexible Item Entry**: Implemented optional productId and name fields
+  - productId and name are now nullable in database schema
+  - Stock-in form allows adding items with only SKU (productId and name optional)
+  - Location auto-fills from SKU value (SKU = Location design)
+  - Display shows "-" for null productId, "Без названия" for null name
+- **Enhanced CSV Synchronization**: Flexible bulk upload with header-based parsing
+  - Header-based column detection (supports English and Russian headers: sku/SKU, name/название, etc.)
+  - SKU normalized to UPPERCASE in both form and CSV parsing for consistency
+  - Two synchronization paths:
+    1. **With productId**: Syncs by productId (primary key), validates SKU match, creates SKU error if mismatch
+    2. **Without productId**: Syncs by SKU among items without productId, adds quantity and updates name/barcode
+  - Design principle: Items with productId only sync with CSV rows containing productId; items without productId sync with CSV rows without productId
+  - Prevents accidental merging of unrelated items while enabling flexible workflow (add SKU first, sync details later)
+- **Null Value Handling**: Updated inventory table to properly filter and display nullable fields
+  - Search/filter handles null productId and name gracefully
+  - Table displays appropriate fallback values for null fields
+
 ### October 12, 2025
 - **Inventory Pagination**: Added page limit filter (10/20/50/100/All) with default of 50 items
 - **Event Logs Advanced Filters**: Implemented comprehensive filtering system

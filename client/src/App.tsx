@@ -99,17 +99,36 @@ function AppContent() {
       const text = await file.text();
       const lines = text.split("\n").filter(line => line.trim());
       
+      if (lines.length === 0) {
+        throw new Error("CSV file is empty");
+      }
+
+      // Parse header to determine columns
+      const header = lines[0].toLowerCase().split(",").map(h => h.trim());
+      const productIdIndex = header.indexOf("productid") >= 0 ? header.indexOf("productid") : header.indexOf("id товара") >= 0 ? header.indexOf("id товара") : -1;
+      const nameIndex = header.indexOf("name") >= 0 ? header.indexOf("name") : header.indexOf("название") >= 0 ? header.indexOf("название") : -1;
+      const skuIndex = header.indexOf("sku") >= 0 ? header.indexOf("sku") : header.indexOf("sku (локация)") >= 0 ? header.indexOf("sku (локация)") : -1;
+      const quantityIndex = header.indexOf("quantity") >= 0 ? header.indexOf("quantity") : header.indexOf("количество") >= 0 ? header.indexOf("количество") : -1;
+      const barcodeIndex = header.indexOf("barcode") >= 0 ? header.indexOf("barcode") : header.indexOf("штрихкод") >= 0 ? header.indexOf("штрихкод") : -1;
+
       const items = lines.slice(1).map(line => {
         const parts = line.split(",").map(p => p.trim());
+        
+        const productId = productIdIndex >= 0 ? parts[productIdIndex] || undefined : undefined;
+        const name = nameIndex >= 0 ? parts[nameIndex] || undefined : undefined;
+        const sku = skuIndex >= 0 ? parts[skuIndex].toUpperCase() : ""; // Convert to uppercase to match form behavior
+        const quantity = quantityIndex >= 0 ? parseInt(parts[quantityIndex]) || 1 : 1;
+        const barcode = barcodeIndex >= 0 ? parts[barcodeIndex] || undefined : undefined;
+
         return {
-          productId: parts[0],
-          name: parts[1],
-          sku: parts[2],
-          location: parts[2],
-          quantity: parseInt(parts[3]) || 1,
-          barcode: parts[4] || undefined,
+          productId,
+          name,
+          sku,
+          location: sku, // Location = SKU
+          quantity,
+          barcode,
         };
-      }).filter(item => item.productId && item.name && item.sku);
+      }).filter(item => item.sku); // Only require SKU
 
       return api.bulkUploadInventory(items);
     },
