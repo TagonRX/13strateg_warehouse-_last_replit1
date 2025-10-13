@@ -10,6 +10,21 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 13, 2025 - Warehouse Settings Delete & Location Management UI
+- **Delete Functionality for Location Group Settings**:
+  - Added delete button (trash icon) next to Edit button in settings table
+  - DELETE mutation with proper error handling (onError toast)
+  - Button disabled during deletion (isPending state)
+  - Cache invalidation after deletion
+  - Admin-only feature
+- **Location Management Field Redesign**:
+  - Changed from large textarea to vertical list with individual inputs
+  - Each location shown with 5-character width input (w-20)
+  - Individual delete button (X) for each location
+  - Add location button for new entries
+  - Locations displayed in column layout (vertical stack)
+  - Auto-uppercase transformation maintained
+
 ### October 13, 2025 - Stock In Form Redesign
 - **Field Order Redesign**:
   - Reordered fields: Location (1st) → Product ID (2nd) → Name (3rd) → SKU (4th) → Quantity (5th) → Barcode (6th)
