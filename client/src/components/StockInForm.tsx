@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Scan } from "lucide-react";
 import BarcodeScanner from "./BarcodeScanner";
+import BulkStockInDialog from "./BulkStockInDialog";
 
 interface StockInFormProps {
   onSubmit: (data: {
@@ -63,8 +64,9 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       <BarcodeScanner onScan={handleScan} />
       
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle>Информация о товаре</CardTitle>
+          <BulkStockInDialog onSubmit={onSubmit} />
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
