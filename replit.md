@@ -38,12 +38,13 @@ Preferred communication style: Simple, everyday language.
     *   `sku_errors`: Manages SKU mismatch corrections during bulk uploads to prevent data corruption.
 *   **Design Decisions**: UUID primary keys, automatic timestamps, foreign key relationships, product deduplication by `productId`, and upsert patterns for bulk inventory updates.
 
-### Recent Bug Fixes (October 2025)
+### Recent Bug Fixes and Enhancements (October 2025)
 *   **Pick Operation Cache Invalidation**: Fixed issue where inventory table didn't update after picking items. All stock-out mutations (pick, delete item, delete location, bulk delete) now invalidate both `/api/warehouse/loading` and `/api/inventory` query keys to ensure UI updates immediately after operations.
 *   **Event Logging Product Tracking**: Enhanced event logs with complete product information (productId, itemName, sku, location) for all STOCK_OUT and STOCK_IN events, enabling full product movement history tracking.
 *   **Pick Item Return Data**: Fixed pickItemByBarcode to return updated item quantity instead of original quantity, ensuring frontend receives correct data after pick operations.
 *   **Warehouse Loading Per-Letter Limit**: Fixed limit filter in Warehouse Loading view to apply per letter when multiple letters or all letters are selected. Example: with limit 100 and letters A, B, C selected, shows 100 items from A + 100 from B + 100 from C (not 100 total). Single letter selection still applies limit to total as before.
 *   **Stock-Out Item Expansion**: Changed Stock-Out view to expand items by quantity. If an item has quantity 19, it now shows 19 separate rows (each numbered #1-#19). Clicking a row auto-fills the barcode field. Added manual confirmation button and undo button. Instructions translated to Russian. Limit filter extended with 100 and 200 options.
+*   **User Management Enhancements**: Added ability to edit user names via new PATCH `/api/users/:id/name` endpoint. Enhanced delete validation to prevent self-deletion and deletion of the last admin. All error messages in Russian for consistency.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.
