@@ -20,6 +20,22 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 ### October 13, 2025
+- **Login Navigation Fix**: After successful login, app now navigates to dashboard (/) instead of staying on /login
+  - Uses wouter's `setLocation("/")` in login mutation onSuccess
+  - Prevents showing 404 page after authentication
+- **Stock-Out Performance Optimization**: Changed default limit from loading all locations to 10
+  - Significantly improves page load time for warehouses with many locations
+  - Users can still increase limit (10/20/50/all) if needed
+  - Default limit select shows "10" on page load
+- **Warehouse Loading Pagination**: Added flexible pagination filter with default of 50 locations
+  - Filter options: 10/20/30/50/All
+  - Individual location display (no grouping) - each location shown separately
+  - Responsive grid layout for location cards
+  - Critical fix: Y1, Y10, Y101 now displayed as separate locations (removed range grouping)
+- **Stock-In Location Field Enhancement**: Added editable location input field
+  - Location field auto-fills from SKU value (SKU = Location by design)
+  - Users can manually override location for 4-digit format (A101, B101, etc.)
+  - Maintains SKU ≠ Location flexibility when needed
 - **Flexible Item Entry**: Implemented optional productId and name fields
   - productId and name are now nullable in database schema
   - Stock-in form allows adding items with only SKU (productId and name optional)
