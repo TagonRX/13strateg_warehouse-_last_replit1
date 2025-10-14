@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { FileUp, List, Trash2, CheckCircle2, Circle, Download, Plus, X } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { FileUp, List, Trash2, CheckCircle2, Circle, Download, Plus, X, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
@@ -30,26 +31,46 @@ export default function DailyPickingView() {
   const [pageLimit, setPageLimit] = useState<string>("50");
   const [lastResult, setLastResult] = useState<any>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   
-  // CSV sources array - each source has URL, credentials, and enabled flag
+  // Global credentials for all CSV sources
+  const [globalUsername, setGlobalUsername] = useState(() => {
+    return localStorage.getItem("globalUsername") || "baritero@gmail.com";
+  });
+  const [globalPassword, setGlobalPassword] = useState(() => {
+    return localStorage.getItem("globalPassword") || "Baritero1";
+  });
+
+  // Save global credentials to localStorage
+  useEffect(() => {
+    localStorage.setItem("globalUsername", globalUsername);
+    localStorage.setItem("globalPassword", globalPassword);
+  }, [globalUsername, globalPassword]);
+
+  // CSV sources array - each source has URL, name, and enabled flag
   const [csvSources, setCsvSources] = useState<Array<{
     id: string;
     url: string;
-    username: string;
-    password: string;
+    name: string;
     enabled: boolean;
   }>>(() => {
     // Load saved sources from localStorage or use defaults
     const saved = localStorage.getItem("csvSources");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Migrate old format to new format if needed
+        return parsed.map((s: any) => ({
+          id: s.id,
+          url: s.url,
+          name: s.name || "S1",
+          enabled: s.enabled ?? true
+        }));
       } catch {
         return [{
           id: '1',
           url: "https://files.3dsellers.com/uploads/0874ff67c0e8b7abc580de328633eda6/export-csv/automation-172416.csv",
-          username: "baritero@gmail.com",
-          password: "Baritero1",
+          name: "S1",
           enabled: true
         }];
       }
@@ -57,8 +78,7 @@ export default function DailyPickingView() {
     return [{
       id: '1',
       url: "https://files.3dsellers.com/uploads/0874ff67c0e8b7abc580de328633eda6/export-csv/automation-172416.csv",
-      username: "baritero@gmail.com",
-      password: "Baritero1",
+      name: "S1",
       enabled: true
     }];
   });
@@ -70,11 +90,11 @@ export default function DailyPickingView() {
 
   // Add new CSV source
   const addCsvSource = () => {
+    const nextNumber = csvSources.length + 1;
     const newSource = {
       id: Date.now().toString(),
       url: "",
-      username: "",
-      password: "",
+      name: `S${nextNumber}`,
       enabled: true
     };
     setCsvSources([...csvSources, newSource]);
@@ -299,9 +319,9 @@ export default function DailyPickingView() {
           full: true
         };
         
-        if (source.username && source.password) {
-          payload.username = source.username;
-          payload.password = source.password;
+        if (globalUsername && globalPassword) {
+          payload.username = globalUsername;
+          payload.password = globalPassword;
         }
 
         const response = await apiRequest("POST", "/api/picking/parse-csv-url", payload);
@@ -396,7 +416,7 @@ export default function DailyPickingView() {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 h-full overflow-auto">
       {/* Left Panel: CSV Upload */}
       <div className="space-y-4">
-        <Card>
+        <Card className="max-w-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileUp className="h-5 w-5" />
@@ -413,11 +433,39 @@ export default function DailyPickingView() {
                 onChange={(e) => setListName(e.target.value)}
               />
             </div>
+
+            {/* Global credentials */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Логин и пароль для всех источников</label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="Логин"
+                  value={globalUsername}
+                  onChange={(e) => setGlobalUsername(e.target.value)}
+                  data-testid="input-global-username"
+                  type="text"
+                  className="text-sm"
+                />
+                <Input
+                  placeholder="Пароль"
+                  value={globalPassword}
+                  onChange={(e) => setGlobalPassword(e.target.value)}
+                  data-testid="input-global-password"
+                  type="password"
+                  className="text-sm"
+                />
+              </div>
+            </div>
             
-            {/* CSV Sources Section */}
-            <div className="space-y-3 pb-2 border-b">
+            {/* CSV Sources Section - Collapsible */}
+            <Collapsible open={sourcesOpen} onOpenChange={setSourcesOpen} className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Источники CSV</label>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="p-0 h-auto font-medium">
+                    <span className="text-sm">Источники CSV ({csvSources.filter(s => s.enabled).length} активных)</span>
+                    <ChevronDown className={`h-4 w-4 ml-1 transition-transform ${sourcesOpen ? 'rotate-180' : ''}`} />
+                  </Button>
+                </CollapsibleTrigger>
                 <div className="flex gap-2">
                   <Button
                     size="sm"
@@ -425,8 +473,7 @@ export default function DailyPickingView() {
                     onClick={addCsvSource}
                     data-testid="button-add-source"
                   >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Добавить
+                    <Plus className="h-4 w-4" />
                   </Button>
                   <Button
                     data-testid="button-load-url"
@@ -435,68 +482,62 @@ export default function DailyPickingView() {
                     variant="secondary"
                     size="sm"
                   >
-                    <Download className="h-4 w-4 mr-2" />
-                    {isLoadingUrl ? "Загрузка..." : "Загрузить все"}
+                    <Download className="h-4 w-4 mr-1" />
+                    {isLoadingUrl ? "Грузим..." : "Загрузить все"}
                   </Button>
                 </div>
               </div>
               
-              <div className="space-y-2">
-                {csvSources.map((source, index) => (
-                  <div key={source.id} className="p-3 border rounded-md bg-muted/20 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 flex-1">
+              <CollapsibleContent className="space-y-3">
+                {/* Compact source grid - up to 5 per row */}
+                <div className="flex flex-wrap gap-3 pt-2">
+                  {csvSources.map((source, index) => (
+                    <div key={source.id} className="flex flex-col gap-1 min-w-[140px]" data-testid={`source-item-${index}`}>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          placeholder="S1"
+                          value={source.name}
+                          onChange={(e) => updateCsvSource(source.id, { name: e.target.value.slice(0, 3) })}
+                          data-testid={`input-source-name-${index}`}
+                          className="h-7 w-12 text-xs text-center p-1"
+                          maxLength={3}
+                        />
                         <Switch
                           checked={source.enabled}
                           onCheckedChange={(enabled) => updateCsvSource(source.id, { enabled })}
                           data-testid={`switch-source-${index}`}
                         />
-                        <span className="text-xs font-medium">
-                          {source.enabled ? "Загружать" : "Не грузить"}
+                        <span className="text-xs whitespace-nowrap">
+                          {source.enabled ? "Грузить" : "Нет"}
                         </span>
+                        {csvSources.length > 1 && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => removeCsvSource(source.id)}
+                            data-testid={`button-remove-source-${index}`}
+                            className="h-6 w-6 ml-1"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
                       </div>
-                      {csvSources.length > 1 && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => removeCsvSource(source.id)}
-                          data-testid={`button-remove-source-${index}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                    
-                    <Input
-                      placeholder="https://example.com/file.csv"
-                      value={source.url}
-                      onChange={(e) => updateCsvSource(source.id, { url: e.target.value })}
-                      data-testid={`input-source-url-${index}`}
-                      className="text-sm"
-                    />
-                    
-                    <div className="grid grid-cols-2 gap-2">
                       <Input
-                        placeholder="Логин (опционально)"
-                        value={source.username}
-                        onChange={(e) => updateCsvSource(source.id, { username: e.target.value })}
-                        data-testid={`input-source-username-${index}`}
-                        type="text"
-                        className="text-sm"
+                        placeholder="URL"
+                        value={source.url}
+                        onChange={(e) => updateCsvSource(source.id, { url: e.target.value })}
+                        data-testid={`input-source-url-${index}`}
+                        className="h-7 text-xs"
+                        title={source.url}
                       />
-                      <Input
-                        placeholder="Пароль (опционально)"
-                        value={source.password}
-                        onChange={(e) => updateCsvSource(source.id, { password: e.target.value })}
-                        data-testid={`input-source-password-${index}`}
-                        type="password"
-                        className="text-sm"
-                      />
+                      <span className="text-xs text-muted-foreground truncate" title={source.url}>
+                        {source.name}: {source.url || 'URL не указан'}
+                      </span>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">CSV Data (SKU, Quantity)</label>
