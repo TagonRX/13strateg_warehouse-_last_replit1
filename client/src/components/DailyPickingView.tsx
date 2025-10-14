@@ -39,7 +39,6 @@ export default function DailyPickingView() {
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvStructuredData, setCsvStructuredData] = useState<Record<string, string>[]>([]);
-  const [isLoadingFromUrl, setIsLoadingFromUrl] = useState(false); // Track if loading from URL
   const [fieldMapping, setFieldMapping] = useState<{
     sku: string;
     itemName: string;
@@ -287,7 +286,6 @@ export default function DailyPickingView() {
     }
 
     setIsLoadingUrl(true);
-    setIsLoadingFromUrl(true); // Mark that we're loading from URL
     
     try {
       // Send credentials in request body (secure)
@@ -349,30 +347,14 @@ export default function DailyPickingView() {
         localStorage.setItem("csvFieldMapping", JSON.stringify(newMapping));
       }
 
-      // Convert to CSV text for preview (properly escape values with commas)
-      const csvLines = result.data.map((row: any) => {
-        const values = result.headers.map((h: string) => {
-          const value = row[h] || "";
-          // Escape values containing commas, quotes, or newlines
-          if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-            return `"${value.replace(/"/g, '""')}"`;
-          }
-          return value;
-        });
-        return values.join(",");
-      });
-      
-      setCsvText(csvLines.join("\n"));
-      
-      // Reset flag after setting text
-      setTimeout(() => setIsLoadingFromUrl(false), 100);
+      // Don't set csvText - we use structured data directly
+      // This prevents infinite loop with textarea onChange
       
       toast({
         title: "Загружено",
         description: `Загружено ${result.data.length} строк`,
       });
     } catch (error: any) {
-      setIsLoadingFromUrl(false);
       toast({
         title: "Ошибка загрузки",
         description: error.message || "Не удалось загрузить CSV",
@@ -380,7 +362,6 @@ export default function DailyPickingView() {
       });
     } finally {
       setIsLoadingUrl(false);
-      setIsLoadingFromUrl(false); // Always reset flag in finally
     }
   };
 
@@ -488,8 +469,8 @@ export default function DailyPickingView() {
                 value={csvText}
                 onChange={(e) => {
                   setCsvText(e.target.value);
-                  // Clear structured data when user manually edits textarea (but not when loading from URL)
-                  if (csvStructuredData.length > 0 && !isLoadingFromUrl) {
+                  // Clear structured data when user manually edits textarea
+                  if (csvStructuredData.length > 0) {
                     setCsvHeaders([]);
                     setCsvStructuredData([]);
                   }
