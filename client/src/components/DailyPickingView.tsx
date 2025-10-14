@@ -328,7 +328,7 @@ export default function DailyPickingView() {
         const nameCol = result.headers.find((h: string) => 
           h.toLowerCase().includes('name') || h.toLowerCase().includes('title') || 
           h.toLowerCase().includes('название') || h.toLowerCase().includes('товар')
-        ) || result.headers[1];
+        );
         
         const qtyCol = result.headers.find((h: string) => 
           h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty') || 
@@ -338,7 +338,7 @@ export default function DailyPickingView() {
         // Process each row
         for (const row of result.data) {
           const sku = (row[skuCol] || '').trim();
-          const name = (row[nameCol] || '').trim();
+          const name = nameCol ? (row[nameCol] || '').trim() : '';
           const qty = parseInt(row[qtyCol] || '0', 10);
           
           if (!sku) continue;
