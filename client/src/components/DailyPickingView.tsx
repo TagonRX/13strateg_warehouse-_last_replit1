@@ -262,6 +262,37 @@ export default function DailyPickingView() {
         throw new Error(result.error || "Не удалось загрузить CSV");
       }
 
+      // Save headers
+      setCsvHeaders(result.headers);
+
+      // Auto-detect field mapping if not set
+      if (!fieldMapping.sku || !fieldMapping.quantity) {
+        const newMapping = { ...fieldMapping };
+        
+        // Try to find SKU field
+        const skuField = result.headers.find((h: string) => 
+          h.toLowerCase().includes('sku') || h.toLowerCase().includes('артикул')
+        );
+        if (skuField && !newMapping.sku) newMapping.sku = skuField;
+        
+        // Try to find item name field
+        const nameField = result.headers.find((h: string) => 
+          h.toLowerCase().includes('name') || h.toLowerCase().includes('title') || 
+          h.toLowerCase().includes('название') || h.toLowerCase().includes('товар')
+        );
+        if (nameField && !newMapping.itemName) newMapping.itemName = nameField;
+        
+        // Try to find quantity field
+        const qtyField = result.headers.find((h: string) => 
+          h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty') || 
+          h.toLowerCase().includes('количество') || h.toLowerCase().includes('кол')
+        );
+        if (qtyField && !newMapping.quantity) newMapping.quantity = qtyField;
+        
+        setFieldMapping(newMapping);
+        localStorage.setItem("csvFieldMapping", JSON.stringify(newMapping));
+      }
+
       // Convert parsed data to CSV text for preview
       const csvLines = result.data.map((row: any) => {
         const values = result.headers.map((h: string) => row[h] || "");
