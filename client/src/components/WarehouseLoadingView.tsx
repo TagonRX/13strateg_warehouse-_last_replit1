@@ -477,7 +477,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       {/* Admin: Location Management */}
       {userRole === "admin" && (
         <>
-          <Card>
+          <Card className="w-fit">
             <CardHeader>
               <CardTitle>Управление локациями (Администратор)</CardTitle>
             </CardHeader>
