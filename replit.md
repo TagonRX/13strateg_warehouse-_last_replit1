@@ -60,6 +60,7 @@ Preferred communication style: Simple, everyday language.
 *   **Mobile Remote Scanner Interface**: Added RemoteBarcodeScanner component accessible from Inventory page on mobile/tablet devices. Allows scanning barcodes with camera, setting quantity (default 1), and sending to desktop for editing. Connected via WebSocket for real-time transmission.
 *   **Picking Task Item Names**: Added `itemName` field to picking_tasks table. When creating picking lists, item names are automatically extracted from inventory by SKU. Picking interface now displays item names instead of SKU codes for better worker experience.
 *   **Inventory Location Fix**: Fixed location mismatch where SKU-based location extraction (Warehouse Loading) didn't match database location field (Inventory). Corrected A99R item location from A998 to A99 to ensure consistency across views.
+*   **Inventory Group Dropdown Alignment**: Fixed dropdown menu alignment issue where action buttons (edit/delete) in expanded location groups with multiple SKUs appeared slightly shifted down. Added consistent flex wrapper to chevron icon to match button container structure.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.

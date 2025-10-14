@@ -577,7 +577,9 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                         data-testid={`group-row-${groupKey}`}
                       >
                         <TableCell style={{ width: `${columnWidths.actions}px`, minWidth: `${columnWidths.actions}px` }}>
-                          {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                          <div className="flex gap-1">
+                            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                          </div>
                         </TableCell>
                         <TableCell style={{ width: `${columnWidths.location}px`, minWidth: `${columnWidths.location}px` }} className="font-mono text-xs font-bold">{firstItem.location}</TableCell>
                         <TableCell style={{ width: `${columnWidths.productId}px`, minWidth: `${columnWidths.productId}px` }} className="text-xs text-muted-foreground">
