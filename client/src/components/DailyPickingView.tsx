@@ -676,12 +676,12 @@ export default function DailyPickingView() {
                         )}
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-muted-foreground">{task.sku}</span>
-                            <span className="font-medium" data-testid={`text-task-name-${task.id}`}>
+                            <span className="font-mono text-base font-semibold">{task.sku}</span>
+                            <span className="text-xs text-muted-foreground" data-testid={`text-task-name-${task.id}`}>
                               {task.itemName || '-'}
                             </span>
                           </div>
-                          <div className="text-sm text-muted-foreground" data-testid={`text-task-progress-${task.id}`}>
+                          <div className="text-sm font-medium text-blue-600 dark:text-blue-400" data-testid={`text-task-progress-${task.id}`}>
                             {task.pickedQuantity} / {task.requiredQuantity} собрано
                           </div>
                         </div>
