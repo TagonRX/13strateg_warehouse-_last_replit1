@@ -61,6 +61,7 @@ Preferred communication style: Simple, everyday language.
 *   **Picking Task Item Names**: Added `itemName` field to picking_tasks table. When creating picking lists, item names are automatically extracted from inventory by SKU. Picking interface now displays item names instead of SKU codes for better worker experience.
 *   **Inventory Location Fix**: Fixed location mismatch where SKU-based location extraction (Warehouse Loading) didn't match database location field (Inventory). Corrected A99R item location from A998 to A99 to ensure consistency across views.
 *   **Inventory Group Dropdown Alignment**: Fixed dropdown menu alignment issue where action buttons (edit/delete) in expanded location groups with multiple SKUs appeared slightly shifted down. Added consistent flex wrapper to chevron icon to match button container structure.
+*   **Inventory Expanded Items Visual Clarity**: When a location group is expanded, nested items no longer display location in the location column. This creates a visual hierarchy making it clear that expanded rows are sub-items (SKUs) within that location, not separate location entries.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.

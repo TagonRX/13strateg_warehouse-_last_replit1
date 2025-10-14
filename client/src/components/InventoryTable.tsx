@@ -465,7 +465,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
             )}
           </div>
         </TableCell>
-        <TableCell style={{ width: `${columnWidths.location}px`, minWidth: `${columnWidths.location}px` }} className="font-mono text-xs">{item.location}</TableCell>
+        <TableCell style={{ width: `${columnWidths.location}px`, minWidth: `${columnWidths.location}px` }} className="font-mono text-xs">{isExpanded ? "" : item.location}</TableCell>
         <TableCell style={{ width: `${columnWidths.productId}px`, minWidth: `${columnWidths.productId}px` }} className="font-mono text-xs">{item.productId || "-"}</TableCell>
         <TableCell style={{ width: `${columnWidths.name}px`, minWidth: `${columnWidths.name}px` }} className="text-xs">{item.name || "-"}</TableCell>
         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="font-mono text-xs">{item.sku}</TableCell>
