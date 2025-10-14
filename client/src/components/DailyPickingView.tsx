@@ -24,8 +24,8 @@ export default function DailyPickingView() {
   const [pageLimit, setPageLimit] = useState<string>("50");
   const [lastResult, setLastResult] = useState<any>(null);
   const [csvUrl, setCsvUrl] = useState("");
-  const [csvUsername, setCsvUsername] = useState("");
-  const [csvPassword, setCsvPassword] = useState("");
+  const [csvUsername, setCsvUsername] = useState("baritero@gmail.com");
+  const [csvPassword, setCsvPassword] = useState("Baritero1");
   const [showAuth, setShowAuth] = useState(false);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
 
