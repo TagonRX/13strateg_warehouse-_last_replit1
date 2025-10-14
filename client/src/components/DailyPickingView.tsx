@@ -276,6 +276,8 @@ export default function DailyPickingView() {
   };
 
   const handleLoadFromUrl = async () => {
+    console.log("[CSV Load] Starting URL load:", csvUrl);
+    
     if (!csvUrl.trim()) {
       toast({
         title: "Ошибка",
@@ -299,19 +301,30 @@ export default function DailyPickingView() {
         payload.password = csvPassword;
       }
 
+      console.log("[CSV Load] Sending request with payload:", { ...payload, password: "***" });
+      
       const response = await apiRequest("POST", "/api/picking/parse-csv-url", payload);
       const result = await response.json();
+
+      console.log("[CSV Load] Received result:", { 
+        success: result.success, 
+        headersCount: result.headers?.length,
+        dataCount: result.data?.length 
+      });
 
       if (!result.success) {
         throw new Error(result.error || "Не удалось загрузить CSV");
       }
 
       // Save headers and structured data
+      console.log("[CSV Load] Setting headers:", result.headers);
       setCsvHeaders(result.headers);
+      console.log("[CSV Load] Setting structured data, rows:", result.data.length);
       setCsvStructuredData(result.data);
 
       // Auto-detect field mapping if not set
       if (!fieldMapping.sku || !fieldMapping.quantity) {
+        console.log("[CSV Load] Auto-detecting field mapping...");
         const newMapping = { ...fieldMapping };
         
         // Try to find SKU field
@@ -351,13 +364,16 @@ export default function DailyPickingView() {
         return values.join(",");
       });
       
+      console.log("[CSV Load] Setting CSV text, lines:", csvLines.length);
       setCsvText(csvLines.join("\n"));
       
+      console.log("[CSV Load] Showing success toast");
       toast({
         title: "Загружено",
         description: `Загружено ${result.data.length} строк`,
       });
     } catch (error: any) {
+      console.error("[CSV Load] Error occurred:", error);
       toast({
         title: "Ошибка загрузки",
         description: error.message || "Не удалось загрузить CSV",
