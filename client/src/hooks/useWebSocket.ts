@@ -15,7 +15,9 @@ export function useWebSocket() {
   const connect = () => {
     const token = getAuthToken();
     if (!token) {
-      console.log("[WS Client] No token, cannot connect");
+      console.log("[WS Client] No token, skipping connection");
+      setIsConnected(false);
+      // Don't reconnect if no token
       return;
     }
 
@@ -28,8 +30,7 @@ export function useWebSocket() {
 
     ws.onopen = () => {
       console.log("[WS Client] Connected, authenticating...");
-      setIsConnected(true);
-      // Authenticate with token
+      // Don't set connected until auth succeeds
       ws.send(JSON.stringify({ type: "auth", token }));
     };
 
@@ -37,6 +38,16 @@ export function useWebSocket() {
       try {
         const message = JSON.parse(event.data);
         console.log("[WS Client] Received message:", message);
+        
+        // Set connected only after successful auth
+        if (message.type === "auth_success") {
+          setIsConnected(true);
+        } else if (message.type === "auth_error") {
+          console.error("[WS Client] Auth failed:", message.error);
+          ws.close();
+          setIsConnected(false);
+        }
+        
         setLastMessage(message);
       } catch (error) {
         console.error("WebSocket message parse error:", error);
@@ -44,10 +55,17 @@ export function useWebSocket() {
     };
 
     ws.onclose = () => {
-      console.log("[WS Client] Disconnected, reconnecting in 3s...");
+      console.log("[WS Client] Disconnected");
       setIsConnected(false);
-      // Reconnect after 3 seconds
-      reconnectTimeoutRef.current = setTimeout(connect, 3000);
+      
+      // Only reconnect if we have a token
+      const currentToken = getAuthToken();
+      if (currentToken) {
+        console.log("[WS Client] Reconnecting in 3s...");
+        reconnectTimeoutRef.current = setTimeout(connect, 3000);
+      } else {
+        console.log("[WS Client] No token, won't reconnect");
+      }
     };
 
     ws.onerror = (error) => {

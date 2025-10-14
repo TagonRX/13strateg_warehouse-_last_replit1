@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Camera, X, Wifi, Send } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
-import { useWebSocket } from "@/hooks/useWebSocket";
+import { getAuthToken } from "@/lib/api";
 
 export default function RemoteBarcodeScanner() {
   const [isOpen, setIsOpen] = useState(false);
@@ -15,9 +15,21 @@ export default function RemoteBarcodeScanner() {
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [quantity, setQuantity] = useState("1");
   const [isSending, setIsSending] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
-  const { isConnected, sendMessage } = useWebSocket();
+  const wsRef = useRef<WebSocket | null>(null);
 
+  // Connect to WebSocket when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      connectWebSocket();
+    }
+    return () => {
+      disconnectWebSocket();
+    };
+  }, [isOpen]);
+
+  // Start camera when activated
   useEffect(() => {
     if (isCameraActive && isOpen) {
       startCamera();
@@ -26,6 +38,60 @@ export default function RemoteBarcodeScanner() {
       cleanupCamera();
     };
   }, [isCameraActive, isOpen]);
+
+  const connectWebSocket = () => {
+    const token = getAuthToken();
+    if (!token) {
+      console.log("[Remote Scanner] No auth token");
+      return;
+    }
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+    console.log("[Remote Scanner] Connecting to WebSocket...");
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("[Remote Scanner] WebSocket connected, authenticating...");
+      ws.send(JSON.stringify({ type: "auth", token }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        console.log("[Remote Scanner] Received:", message);
+        
+        if (message.type === "auth_success") {
+          console.log("[Remote Scanner] Authenticated successfully");
+          setIsConnected(true);
+        } else if (message.type === "auth_error") {
+          console.error("[Remote Scanner] Auth failed:", message.error);
+          setIsConnected(false);
+        }
+      } catch (error) {
+        console.error("[Remote Scanner] Message parse error:", error);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log("[Remote Scanner] WebSocket disconnected");
+      setIsConnected(false);
+    };
+
+    ws.onerror = (error) => {
+      console.error("[Remote Scanner] WebSocket error:", error);
+    };
+  };
+
+  const disconnectWebSocket = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setIsConnected(false);
+  };
 
   const cleanupCamera = async () => {
     if (html5QrCodeRef.current) {
@@ -42,6 +108,14 @@ export default function RemoteBarcodeScanner() {
 
   const startCamera = async () => {
     try {
+      // Wait for DOM element to be available
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const element = document.getElementById("remote-scanner-reader");
+      if (!element) {
+        throw new Error("Scanner element not found in DOM");
+      }
+
       const html5QrCode = new Html5Qrcode("remote-scanner-reader");
       html5QrCodeRef.current = html5QrCode;
 
@@ -82,6 +156,15 @@ export default function RemoteBarcodeScanner() {
     setIsCameraActive(false);
     setCameraError(null);
     setLastScanned(null);
+  };
+
+  const sendMessage = (message: any) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      console.log("[Remote Scanner] Sending message:", message);
+      wsRef.current.send(JSON.stringify(message));
+    } else {
+      console.log("[Remote Scanner] Cannot send, not connected");
+    }
   };
 
   const handleSend = () => {
