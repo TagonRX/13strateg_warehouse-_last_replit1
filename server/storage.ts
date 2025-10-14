@@ -8,6 +8,8 @@ import {
   skuErrors,
   warehouseSettings,
   activeLocations,
+  csvSources,
+  globalSettings,
   type User, 
   type InsertUser,
   type InventoryItem,
@@ -23,7 +25,11 @@ import {
   type WarehouseSetting,
   type InsertWarehouseSetting,
   type ActiveLocation,
-  type InsertActiveLocation
+  type InsertActiveLocation,
+  type CsvSource,
+  type InsertCsvSource,
+  type GlobalSetting,
+  type InsertGlobalSetting
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ilike } from "drizzle-orm";
 
@@ -111,6 +117,16 @@ export interface IStorage {
     task?: PickingTask;
   }>;
   deletePickingList(listId: string, userId: string): Promise<boolean>;
+
+  // CSV Sources methods
+  getAllCsvSources(): Promise<CsvSource[]>;
+  createCsvSource(source: InsertCsvSource): Promise<CsvSource>;
+  updateCsvSource(id: string, updates: Partial<InsertCsvSource>): Promise<CsvSource>;
+  deleteCsvSource(id: string): Promise<void>;
+
+  // Global Settings methods
+  getGlobalSetting(key: string): Promise<GlobalSetting | undefined>;
+  upsertGlobalSetting(key: string, value: string): Promise<GlobalSetting>;
 }
 
 export class DbStorage implements IStorage {
@@ -1082,6 +1098,50 @@ export class DbStorage implements IStorage {
 
   async clearActiveLocations(): Promise<void> {
     await db.delete(activeLocations);
+  }
+
+  // CSV Sources methods
+  async getAllCsvSources(): Promise<CsvSource[]> {
+    return await db.select().from(csvSources).orderBy(csvSources.sortOrder, csvSources.createdAt);
+  }
+
+  async createCsvSource(source: InsertCsvSource): Promise<CsvSource> {
+    const result = await db.insert(csvSources).values(source).returning();
+    return result[0];
+  }
+
+  async updateCsvSource(id: string, updates: Partial<InsertCsvSource>): Promise<CsvSource> {
+    const result = await db
+      .update(csvSources)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(csvSources.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteCsvSource(id: string): Promise<void> {
+    await db.delete(csvSources).where(eq(csvSources.id, id));
+  }
+
+  // Global Settings methods
+  async getGlobalSetting(key: string): Promise<GlobalSetting | undefined> {
+    const result = await db.select().from(globalSettings).where(eq(globalSettings.key, key)).limit(1);
+    return result[0];
+  }
+
+  async upsertGlobalSetting(key: string, value: string): Promise<GlobalSetting> {
+    const existing = await this.getGlobalSetting(key);
+    if (existing) {
+      const result = await db
+        .update(globalSettings)
+        .set({ value, updatedAt: new Date() })
+        .where(eq(globalSettings.key, key))
+        .returning();
+      return result[0];
+    } else {
+      const result = await db.insert(globalSettings).values({ key, value }).returning();
+      return result[0];
+    }
   }
 }
 

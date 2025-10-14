@@ -671,6 +671,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // CSV Sources routes
+  app.get("/api/csv-sources", requireAuth, async (req, res) => {
+    try {
+      const sources = await storage.getAllCsvSources();
+      return res.json(sources);
+    } catch (error: any) {
+      console.error("Get CSV sources error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  app.post("/api/csv-sources", requireAuth, async (req, res) => {
+    try {
+      const { url, name, enabled, sortOrder } = req.body;
+
+      if (!url || !name) {
+        return res.status(400).json({ error: "URL и название обязательны" });
+      }
+
+      const source = await storage.createCsvSource({
+        url,
+        name,
+        enabled: enabled ?? true,
+        sortOrder: sortOrder ?? 0
+      });
+
+      return res.json(source);
+    } catch (error: any) {
+      console.error("Create CSV source error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  app.patch("/api/csv-sources/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+
+      const source = await storage.updateCsvSource(id, updates);
+      return res.json(source);
+    } catch (error: any) {
+      console.error("Update CSV source error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  app.delete("/api/csv-sources/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteCsvSource(id);
+      return res.status(204).send();
+    } catch (error: any) {
+      console.error("Delete CSV source error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Global Settings routes
+  app.get("/api/settings/:key", requireAuth, async (req, res) => {
+    try {
+      const { key } = req.params;
+      const setting = await storage.getGlobalSetting(key);
+      
+      if (!setting) {
+        return res.status(404).json({ error: "Настройка не найдена" });
+      }
+
+      return res.json(setting);
+    } catch (error: any) {
+      console.error("Get global setting error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  app.put("/api/settings/:key", requireAuth, async (req, res) => {
+    try {
+      const { key } = req.params;
+      const { value } = req.body;
+
+      if (value === undefined) {
+        return res.status(400).json({ error: "Значение обязательно" });
+      }
+
+      const setting = await storage.upsertGlobalSetting(key, value);
+      return res.json(setting);
+    } catch (error: any) {
+      console.error("Upsert global setting error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Serve test CSV file
   app.get("/api/test-csv", async (req, res) => {
     try {
