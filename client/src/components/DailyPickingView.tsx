@@ -227,18 +227,18 @@ export default function DailyPickingView() {
     setIsLoadingUrl(true);
     
     try {
-      // Build URL with auth parameters if provided
-      const params = new URLSearchParams({
+      // Send credentials in request body (secure)
+      const payload: any = {
         url: csvUrl,
-        full: "true"
-      });
+        full: true
+      };
       
       if (csvUsername && csvPassword) {
-        params.append("username", csvUsername);
-        params.append("password", csvPassword);
+        payload.username = csvUsername;
+        payload.password = csvPassword;
       }
 
-      const response = await apiRequest("GET", `/api/picking/parse-csv-url?${params.toString()}`);
+      const response = await apiRequest("POST", "/api/picking/parse-csv-url", payload);
       const result = await response.json();
 
       if (!result.success) {
@@ -252,6 +252,10 @@ export default function DailyPickingView() {
       });
       
       setCsvText(csvLines.join("\n"));
+      
+      // Clear credentials after successful load
+      setCsvUsername("");
+      setCsvPassword("");
       
       toast({
         title: "Загружено",

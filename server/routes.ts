@@ -664,9 +664,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/picking/parse-csv-url", requireAuth, async (req, res) => {
+  app.post("/api/picking/parse-csv-url", requireAuth, async (req, res) => {
     try {
-      const { url, full } = req.query;
+      const { url, full, username, password } = req.body;
 
       if (!url || typeof url !== 'string') {
         return res.status(400).json({ error: "URL обязателен" });
@@ -732,10 +732,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // (fetch will fail anyway if hostname doesn't resolve)
       }
 
-      // Fetch CSV from URL with redirect protection
-      const response = await fetch(url, {
+      // Fetch CSV from URL with redirect protection and optional Basic Auth
+      const fetchOptions: RequestInit = {
         redirect: 'error' // Prevent redirects to bypass SSRF protection
-      });
+      };
+
+      // Add Basic Auth header if username and password provided
+      if (username && password && typeof username === 'string' && typeof password === 'string') {
+        const authString = Buffer.from(`${username}:${password}`).toString('base64');
+        fetchOptions.headers = {
+          'Authorization': `Basic ${authString}`
+        };
+      }
+
+      const response = await fetch(url, fetchOptions);
       
       if (!response.ok) {
         return res.status(400).json({ error: `Не удалось загрузить файл: ${response.statusText}` });
@@ -816,7 +826,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headers = parseCSVLine(lines[0]);
       
       // If full=true, return all data; otherwise return preview only
-      const shouldReturnFull = full === 'true';
+      const shouldReturnFull = full === true || full === 'true';
       const dataRows: Record<string, string>[] = [];
       const previewRows: Record<string, string>[] = [];
 
