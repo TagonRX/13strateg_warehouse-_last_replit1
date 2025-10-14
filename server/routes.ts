@@ -8,6 +8,7 @@ import { setupWebSocket } from "./websocket";
 import fs from "fs/promises";
 import path from "path";
 import { z } from "zod";
+import { promises as dns } from "dns";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user (check token validity)
@@ -645,6 +646,206 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Delete picking list error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Serve test CSV file
+  app.get("/api/test-csv", async (req, res) => {
+    try {
+      const csvPath = path.join(process.cwd(), "data", "test-picking-list.csv");
+      const csvContent = await fs.readFile(csvPath, "utf-8");
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=test-picking-list.csv");
+      return res.send(csvContent);
+    } catch (error: any) {
+      console.error("Serve test CSV error:", error);
+      return res.status(500).json({ error: "Ошибка при загрузке тестового файла" });
+    }
+  });
+
+  app.get("/api/picking/parse-csv-url", requireAuth, async (req, res) => {
+    try {
+      const { url, full } = req.query;
+
+      if (!url || typeof url !== 'string') {
+        return res.status(400).json({ error: "URL обязателен" });
+      }
+
+      // Security: Validate URL to prevent SSRF attacks
+      const parsedUrl = new URL(url);
+      
+      // Allow only HTTP/HTTPS protocols
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        return res.status(400).json({ error: "Разрешены только HTTP/HTTPS протоколы" });
+      }
+
+      const hostname = parsedUrl.hostname.toLowerCase();
+
+      // Helper function to check if IP is private/internal
+      const isPrivateIP = (ip: string): boolean => {
+        // Check IPv4
+        const ipv4Pattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+        const ipv4Match = ip.match(ipv4Pattern);
+        if (ipv4Match) {
+          const [, a, b] = ipv4Match.map(Number);
+          return (
+            a === 10 || // 10.0.0.0/8
+            (a === 172 && b >= 16 && b <= 31) || // 172.16.0.0/12
+            (a === 192 && b === 168) || // 192.168.0.0/16
+            a === 127 || // 127.0.0.0/8 (loopback)
+            a === 0 || // 0.0.0.0/8
+            (a === 169 && b === 254) // 169.254.0.0/16 (link-local)
+          );
+        }
+        
+        // Check IPv6
+        const lowerIP = ip.toLowerCase();
+        return (
+          lowerIP === '::1' || // loopback
+          lowerIP.startsWith('fe80:') || // link-local
+          lowerIP.startsWith('fc') || // unique local
+          lowerIP.startsWith('fd') // unique local
+        );
+      };
+
+      // Block localhost variants
+      if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '0.0.0.0') {
+        return res.status(400).json({ error: "Внутренние адреса запрещены" });
+      }
+
+      // Check if hostname is a direct IP and validate it
+      if (isPrivateIP(hostname)) {
+        return res.status(400).json({ error: "Внутренние адреса запрещены" });
+      }
+
+      // Resolve hostname to IPs and check each one
+      try {
+        const addresses = await dns.resolve(hostname);
+        for (const address of addresses) {
+          if (isPrivateIP(address)) {
+            return res.status(400).json({ error: "Внутренние адреса запрещены" });
+          }
+        }
+      } catch (dnsError) {
+        // If DNS resolution fails, allow the request to proceed
+        // (fetch will fail anyway if hostname doesn't resolve)
+      }
+
+      // Fetch CSV from URL with redirect protection
+      const response = await fetch(url, {
+        redirect: 'error' // Prevent redirects to bypass SSRF protection
+      });
+      
+      if (!response.ok) {
+        return res.status(400).json({ error: `Не удалось загрузить файл: ${response.statusText}` });
+      }
+
+      const csvText = await response.text();
+
+      // Clean up CSV text: remove \r characters
+      const cleanedCsvText = csvText.replace(/\r/g, '');
+      const lines = cleanedCsvText.trim().split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV файл пустой или содержит только заголовок" });
+      }
+
+      // Auto-detect delimiter (comma, semicolon, or tab)
+      const detectDelimiter = (line: string): string => {
+        const delimiters = [',', ';', '\t'];
+        let maxCount = 0;
+        let bestDelimiter = ',';
+        
+        for (const delimiter of delimiters) {
+          let count = 0;
+          let inQuotes = false;
+          
+          for (let i = 0; i < line.length; i++) {
+            if (line[i] === '"') {
+              if (inQuotes && line[i + 1] === '"') {
+                i++;
+              } else {
+                inQuotes = !inQuotes;
+              }
+            } else if (line[i] === delimiter && !inQuotes) {
+              count++;
+            }
+          }
+          
+          if (count > maxCount) {
+            maxCount = count;
+            bestDelimiter = delimiter;
+          }
+        }
+        
+        return bestDelimiter;
+      };
+
+      const delimiter = detectDelimiter(lines[0]);
+
+      // Parse CSV with text qualifier support and detected delimiter
+      const parseCSVLine = (line: string): string[] => {
+        const result: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          const nextChar = line[i + 1];
+          
+          if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === delimiter && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        
+        result.push(current.trim());
+        return result;
+      };
+
+      const headers = parseCSVLine(lines[0]);
+      
+      // If full=true, return all data; otherwise return preview only
+      const shouldReturnFull = full === 'true';
+      const dataRows: Record<string, string>[] = [];
+      const previewRows: Record<string, string>[] = [];
+
+      const rowLimit = shouldReturnFull ? lines.length : Math.min(6, lines.length);
+      
+      for (let i = 1; i < rowLimit; i++) {
+        const values = parseCSVLine(lines[i]);
+        const row: Record<string, string> = {};
+        
+        headers.forEach((header, index) => {
+          row[header] = values[index] || '';
+        });
+        
+        if (shouldReturnFull) {
+          dataRows.push(row);
+        } else {
+          previewRows.push(row);
+        }
+      }
+
+      return res.json({
+        headers,
+        preview: shouldReturnFull ? dataRows.slice(0, 5) : previewRows,
+        data: shouldReturnFull ? dataRows : undefined,
+        totalRows: lines.length - 1 // excluding header
+      });
+    } catch (error: any) {
+      console.error("Parse CSV URL error:", error);
+      return res.status(500).json({ error: "Ошибка при обработке CSV файла" });
     }
   });
 

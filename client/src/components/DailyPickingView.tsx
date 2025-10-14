@@ -13,6 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import type { PickingList, PickingTask } from "@shared/schema";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import CSVImportDialog from "@/components/CSVImportDialog";
 
 export default function DailyPickingView() {
   const { toast } = useToast();
@@ -209,6 +210,19 @@ export default function DailyPickingView() {
     });
   };
 
+  const handleImport = (tasks: { sku: string; itemName?: string; requiredQuantity: number }[]) => {
+    if (!listName.trim()) {
+      toast({
+        title: "Ошибка",
+        description: "Введите название списка",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createListMutation.mutate({ name: listName, tasks });
+  };
+
   // Filter tasks
   const filteredTasks = currentList?.tasks
     .filter(task => {
@@ -252,15 +266,18 @@ export default function DailyPickingView() {
                 onChange={(e) => setCsvText(e.target.value)}
               />
             </div>
-            <Button
-              data-testid="button-create-list"
-              onClick={handleUploadCSV}
-              disabled={createListMutation.isPending}
-              className="w-full"
-            >
-              <FileUp className="h-4 w-4 mr-2" />
-              {createListMutation.isPending ? "Creating..." : "Create Picking List"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                data-testid="button-create-list"
+                onClick={handleUploadCSV}
+                disabled={createListMutation.isPending}
+                className="flex-1"
+              >
+                <FileUp className="h-4 w-4 mr-2" />
+                {createListMutation.isPending ? "Creating..." : "Create Picking List"}
+              </Button>
+              <CSVImportDialog onImport={handleImport} />
+            </div>
           </CardContent>
         </Card>
 
