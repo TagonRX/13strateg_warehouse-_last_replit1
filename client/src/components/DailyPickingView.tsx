@@ -28,6 +28,23 @@ export default function DailyPickingView() {
   const [csvPassword, setCsvPassword] = useState("Baritero1");
   const [showAuth, setShowAuth] = useState(false);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [fieldMapping, setFieldMapping] = useState<{
+    sku: string;
+    itemName: string;
+    quantity: string;
+  }>(() => {
+    // Load saved mapping from localStorage
+    const saved = localStorage.getItem("csvFieldMapping");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return { sku: "", itemName: "", quantity: "" };
+      }
+    }
+    return { sku: "", itemName: "", quantity: "" };
+  });
 
   const { data: lists = [] } = useQuery<PickingList[]>({
     queryKey: ["/api/picking/lists"],
@@ -252,10 +269,6 @@ export default function DailyPickingView() {
       });
       
       setCsvText(csvLines.join("\n"));
-      
-      // Clear credentials after successful load
-      setCsvUsername("");
-      setCsvPassword("");
       
       toast({
         title: "Загружено",
