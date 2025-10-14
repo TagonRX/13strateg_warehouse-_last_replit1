@@ -315,22 +315,28 @@ export default function DailyPickingView() {
         throw new Error("Некорректный формат данных CSV");
       }
 
-      // Convert structured data to simple CSV format (SKU, Quantity)
-      // Extract SKU and quantity columns automatically
+      // Convert structured data to 3-column CSV format (SKU, Name, Quantity)
+      // Extract columns automatically
       const skuCol = result.headers.find((h: string) => 
         h.toLowerCase().includes('sku') || h.toLowerCase().includes('артикул')
       ) || result.headers[0];
+      
+      const nameCol = result.headers.find((h: string) => 
+        h.toLowerCase().includes('name') || h.toLowerCase().includes('title') || 
+        h.toLowerCase().includes('название') || h.toLowerCase().includes('товар')
+      ) || result.headers[1];
       
       const qtyCol = result.headers.find((h: string) => 
         h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty') || 
         h.toLowerCase().includes('количество') || h.toLowerCase().includes('кол')
       ) || result.headers[result.headers.length - 1];
       
-      // Build simple CSV text
+      // Build 3-column CSV text
       const csvLines = result.data.map((row: Record<string, string>) => {
         const sku = row[skuCol] || '';
+        const name = row[nameCol] || '';
         const qty = row[qtyCol] || '';
-        return `${sku}, ${qty}`;
+        return `${sku}, ${name}, ${qty}`;
       }).join('\n');
       
       setCsvText(csvLines);
