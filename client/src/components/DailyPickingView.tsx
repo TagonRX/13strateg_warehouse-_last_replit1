@@ -33,14 +33,6 @@ export default function DailyPickingView() {
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   
-  // Global credentials for all CSV sources
-  const [globalUsername, setGlobalUsername] = useState(() => {
-    return localStorage.getItem("globalUsername") || "baritero@gmail.com";
-  });
-  const [globalPassword, setGlobalPassword] = useState(() => {
-    return localStorage.getItem("globalPassword") || "Baritero1";
-  });
-
   // Load selected list from localStorage on mount
   useEffect(() => {
     const savedListId = localStorage.getItem("selectedPickingListId");
@@ -58,76 +50,111 @@ export default function DailyPickingView() {
     }
   }, [selectedListId]);
 
-  // Save global credentials to localStorage
-  useEffect(() => {
-    localStorage.setItem("globalUsername", globalUsername);
-    localStorage.setItem("globalPassword", globalPassword);
-  }, [globalUsername, globalPassword]);
+  // Fetch global credentials from database
+  const { data: globalUsernameData } = useQuery<{ key: string; value: string }>({
+    queryKey: ["/api/settings", "csv_global_username"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/settings/csv_global_username");
+        if (res.status === 404) {
+          // Initialize with default value if not exists
+          const initRes = await fetch("/api/settings/csv_global_username", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: "baritero@gmail.com" })
+          });
+          return await initRes.json();
+        }
+        return await res.json();
+      } catch {
+        return { key: "csv_global_username", value: "baritero@gmail.com" };
+      }
+    },
+  });
 
-  // CSV sources array - each source has URL, name, and enabled flag
-  const [csvSources, setCsvSources] = useState<Array<{
+  const { data: globalPasswordData } = useQuery<{ key: string; value: string }>({
+    queryKey: ["/api/settings", "csv_global_password"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/settings/csv_global_password");
+        if (res.status === 404) {
+          // Initialize with default value if not exists
+          const initRes = await fetch("/api/settings/csv_global_password", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: "Baritero1" })
+          });
+          return await initRes.json();
+        }
+        return await res.json();
+      } catch {
+        return { key: "csv_global_password", value: "Baritero1" };
+      }
+    },
+  });
+
+  const globalUsername = globalUsernameData?.value || "baritero@gmail.com";
+  const globalPassword = globalPasswordData?.value || "Baritero1";
+
+  // Update global credentials mutation
+  const updateGlobalCredentialsMutation = useMutation({
+    mutationFn: async ({ key, value }: { key: string; value: string }) => {
+      const response = await apiRequest("PUT", `/api/settings/${key}`, { value });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+    },
+  });
+
+  // Fetch CSV sources from database
+  const { data: csvSources = [] } = useQuery<Array<{
     id: string;
     url: string;
     name: string;
     enabled: boolean;
-  }>>(() => {
-    // Load saved sources from localStorage or use defaults
-    const saved = localStorage.getItem("csvSources");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Migrate old format to new format if needed
-        return parsed.map((s: any) => ({
-          id: s.id,
-          url: s.url,
-          name: s.name || "S1",
-          enabled: s.enabled ?? true
-        }));
-      } catch {
-        return [{
-          id: '1',
-          url: "https://files.3dsellers.com/uploads/0874ff67c0e8b7abc580de328633eda6/export-csv/automation-172416.csv",
-          name: "S1",
-          enabled: true
-        }];
-      }
-    }
-    return [{
-      id: '1',
-      url: "https://files.3dsellers.com/uploads/0874ff67c0e8b7abc580de328633eda6/export-csv/automation-172416.csv",
-      name: "S1",
-      enabled: true
-    }];
+    sortOrder: number;
+  }>>({
+    queryKey: ["/api/csv-sources"],
   });
 
-  // Save sources to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem("csvSources", JSON.stringify(csvSources));
-  }, [csvSources]);
+  // Add CSV source mutation
+  const addCsvSourceMutation = useMutation({
+    mutationFn: async () => {
+      const nextNumber = csvSources.length + 1;
+      const response = await apiRequest("POST", "/api/csv-sources", {
+        url: "",
+        name: `S${nextNumber}`,
+        enabled: true,
+        sortOrder: csvSources.length
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/csv-sources"] });
+    },
+  });
 
-  // Add new CSV source
-  const addCsvSource = () => {
-    const nextNumber = csvSources.length + 1;
-    const newSource = {
-      id: Date.now().toString(),
-      url: "",
-      name: `S${nextNumber}`,
-      enabled: true
-    };
-    setCsvSources([...csvSources, newSource]);
-  };
+  // Update CSV source mutation
+  const updateCsvSourceMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
+      const response = await apiRequest("PATCH", `/api/csv-sources/${id}`, updates);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/csv-sources"] });
+    },
+  });
 
-  // Update CSV source
-  const updateCsvSource = (id: string, updates: Partial<typeof csvSources[0]>) => {
-    setCsvSources(sources => 
-      sources.map(s => s.id === id ? { ...s, ...updates } : s)
-    );
-  };
-
-  // Remove CSV source
-  const removeCsvSource = (id: string) => {
-    setCsvSources(sources => sources.filter(s => s.id !== id));
-  };
+  // Remove CSV source mutation
+  const removeCsvSourceMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/csv-sources/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/csv-sources"] });
+    },
+  });
 
   const { data: lists = [] } = useQuery<PickingList[]>({
     queryKey: ["/api/picking/lists"],
@@ -476,7 +503,7 @@ export default function DailyPickingView() {
                 <Input
                   placeholder="Логин"
                   value={globalUsername}
-                  onChange={(e) => setGlobalUsername(e.target.value)}
+                  onChange={(e) => updateGlobalCredentialsMutation.mutate({ key: "csv_global_username", value: e.target.value })}
                   data-testid="input-global-username"
                   type="text"
                   className="text-sm"
@@ -484,7 +511,7 @@ export default function DailyPickingView() {
                 <Input
                   placeholder="Пароль"
                   value={globalPassword}
-                  onChange={(e) => setGlobalPassword(e.target.value)}
+                  onChange={(e) => updateGlobalCredentialsMutation.mutate({ key: "csv_global_password", value: e.target.value })}
                   data-testid="input-global-password"
                   type="password"
                   className="text-sm"
@@ -505,7 +532,7 @@ export default function DailyPickingView() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={addCsvSource}
+                    onClick={() => addCsvSourceMutation.mutate()}
                     data-testid="button-add-source"
                   >
                     <Plus className="h-4 w-4" />
@@ -532,7 +559,7 @@ export default function DailyPickingView() {
                         <Input
                           placeholder="S1"
                           value={source.name}
-                          onChange={(e) => updateCsvSource(source.id, { name: e.target.value.slice(0, 3) })}
+                          onChange={(e) => updateCsvSourceMutation.mutate({ id: source.id, updates: { name: e.target.value.slice(0, 3) } })}
                           data-testid={`input-source-name-${index}`}
                           className="h-6 w-10 text-xs text-center p-0"
                           maxLength={3}
@@ -540,7 +567,7 @@ export default function DailyPickingView() {
                         <div className="flex items-center gap-1">
                           <Switch
                             checked={source.enabled}
-                            onCheckedChange={(enabled) => updateCsvSource(source.id, { enabled })}
+                            onCheckedChange={(enabled) => updateCsvSourceMutation.mutate({ id: source.id, updates: { enabled } })}
                             data-testid={`switch-source-${index}`}
                             className="scale-75"
                           />
@@ -548,7 +575,7 @@ export default function DailyPickingView() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              onClick={() => removeCsvSource(source.id)}
+                              onClick={() => removeCsvSourceMutation.mutate(source.id)}
                               data-testid={`button-remove-source-${index}`}
                               className="h-5 w-5"
                             >
@@ -560,7 +587,7 @@ export default function DailyPickingView() {
                       <Input
                         placeholder="URL"
                         value={source.url}
-                        onChange={(e) => updateCsvSource(source.id, { url: e.target.value })}
+                        onChange={(e) => updateCsvSourceMutation.mutate({ id: source.id, updates: { url: e.target.value } })}
                         data-testid={`input-source-url-${index}`}
                         className="h-6 text-xs w-full"
                         title={source.url}
