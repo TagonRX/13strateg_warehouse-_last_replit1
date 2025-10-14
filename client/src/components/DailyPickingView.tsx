@@ -6,14 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileUp, List, Trash2, CheckCircle2, Circle } from "lucide-react";
+import { FileUp, List, Trash2, CheckCircle2, Circle, Download, ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import type { PickingList, PickingTask } from "@shared/schema";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import CSVImportDialog from "@/components/CSVImportDialog";
 
 export default function DailyPickingView() {
   const { toast } = useToast();
@@ -24,6 +23,11 @@ export default function DailyPickingView() {
   const [letterFilter, setLetterFilter] = useState<string>("all");
   const [pageLimit, setPageLimit] = useState<string>("50");
   const [lastResult, setLastResult] = useState<any>(null);
+  const [csvUrl, setCsvUrl] = useState("");
+  const [csvUsername, setCsvUsername] = useState("");
+  const [csvPassword, setCsvPassword] = useState("");
+  const [showAuth, setShowAuth] = useState(false);
+  const [isLoadingUrl, setIsLoadingUrl] = useState(false);
 
   const { data: lists = [] } = useQuery<PickingList[]>({
     queryKey: ["/api/picking/lists"],
@@ -210,17 +214,58 @@ export default function DailyPickingView() {
     });
   };
 
-  const handleImport = (tasks: { sku: string; itemName?: string; requiredQuantity: number }[]) => {
-    if (!listName.trim()) {
+  const handleLoadFromUrl = async () => {
+    if (!csvUrl.trim()) {
       toast({
         title: "Ошибка",
-        description: "Введите название списка",
+        description: "Введите URL CSV файла",
         variant: "destructive",
       });
       return;
     }
 
-    createListMutation.mutate({ name: listName, tasks });
+    setIsLoadingUrl(true);
+    
+    try {
+      // Build URL with auth parameters if provided
+      const params = new URLSearchParams({
+        url: csvUrl,
+        full: "true"
+      });
+      
+      if (csvUsername && csvPassword) {
+        params.append("username", csvUsername);
+        params.append("password", csvPassword);
+      }
+
+      const response = await apiRequest("GET", `/api/picking/parse-csv-url?${params.toString()}`);
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || "Не удалось загрузить CSV");
+      }
+
+      // Convert parsed data to CSV text for preview
+      const csvLines = result.data.map((row: any) => {
+        const values = result.headers.map((h: string) => row[h] || "");
+        return values.join(",");
+      });
+      
+      setCsvText(csvLines.join("\n"));
+      
+      toast({
+        title: "Загружено",
+        description: `Загружено ${result.data.length} строк`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ошибка загрузки",
+        description: error.message || "Не удалось загрузить CSV",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingUrl(false);
+    }
   };
 
   // Filter tasks
@@ -256,28 +301,79 @@ export default function DailyPickingView() {
                 onChange={(e) => setListName(e.target.value)}
               />
             </div>
+            
+            {/* URL Load Section */}
+            <div className="space-y-2 pb-2 border-b">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Загрузить из интернета</label>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowAuth(!showAuth)}
+                  data-testid="button-toggle-auth"
+                >
+                  {showAuth ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  <span className="ml-1 text-xs">{showAuth ? "Скрыть авторизацию" : "Нужен логин?"}</span>
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  data-testid="input-csv-url"
+                  placeholder="https://example.com/file.csv"
+                  value={csvUrl}
+                  onChange={(e) => setCsvUrl(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  data-testid="button-load-url"
+                  onClick={handleLoadFromUrl}
+                  disabled={isLoadingUrl}
+                  variant="secondary"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {isLoadingUrl ? "Загрузка..." : "Загрузить"}
+                </Button>
+              </div>
+              
+              {showAuth && (
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <Input
+                    data-testid="input-csv-username"
+                    placeholder="Логин (опционально)"
+                    value={csvUsername}
+                    onChange={(e) => setCsvUsername(e.target.value)}
+                    type="text"
+                  />
+                  <Input
+                    data-testid="input-csv-password"
+                    placeholder="Пароль (опционально)"
+                    value={csvPassword}
+                    onChange={(e) => setCsvPassword(e.target.value)}
+                    type="password"
+                  />
+                </div>
+              )}
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium">CSV Data (SKU, Quantity)</label>
               <textarea
                 data-testid="textarea-csv-data"
-                className="w-full h-40 p-3 rounded-md border bg-background text-sm font-mono"
+                className="w-full h-32 p-3 rounded-md border bg-background text-sm font-mono"
                 placeholder="A101-F, 2&#10;E501-N, 3&#10;ZW-F232, 1"
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
               />
             </div>
-            <div className="flex gap-2">
-              <Button
-                data-testid="button-create-list"
-                onClick={handleUploadCSV}
-                disabled={createListMutation.isPending}
-                className="flex-1"
-              >
-                <FileUp className="h-4 w-4 mr-2" />
-                {createListMutation.isPending ? "Creating..." : "Create Picking List"}
-              </Button>
-              <CSVImportDialog onImport={handleImport} />
-            </div>
+            <Button
+              data-testid="button-create-list"
+              onClick={handleUploadCSV}
+              disabled={createListMutation.isPending}
+              className="w-full"
+            >
+              <FileUp className="h-4 w-4 mr-2" />
+              {createListMutation.isPending ? "Creating..." : "Create Picking List"}
+            </Button>
           </CardContent>
         </Card>
 
