@@ -631,6 +631,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/picking/manual-collect", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { taskId } = req.body;
+
+      if (!taskId) {
+        return res.status(400).json({ error: "Требуется taskId" });
+      }
+
+      const result = await storage.manualCollectForPickingTask(taskId, userId);
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.message });
+      }
+
+      return res.json(result);
+    } catch (error: any) {
+      console.error("Manual collect error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   app.delete("/api/picking/lists/:id", requireAuth, async (req, res) => {
     try {
       const userId = (req as any).userId;

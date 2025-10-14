@@ -94,6 +94,23 @@ export interface IStorage {
   getAllActiveLocations(): Promise<ActiveLocation[]>;
   setActiveLocations(locations: string[]): Promise<void>;
   clearActiveLocations(): Promise<void>;
+
+  // Picking List methods
+  createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }>;
+  getAllPickingLists(): Promise<PickingList[]>;
+  getPickingListWithTasks(listId: string): Promise<{ list: PickingList; tasks: PickingTask[] } | null>;
+  scanBarcodeForPickingTask(barcode: string, taskId: string, userId: string): Promise<{
+    success: boolean;
+    message: string;
+    item?: InventoryItem;
+    task?: PickingTask;
+  }>;
+  manualCollectForPickingTask(taskId: string, userId: string): Promise<{
+    success: boolean;
+    message: string;
+    task?: PickingTask;
+  }>;
+  deletePickingList(listId: string, userId: string): Promise<boolean>;
 }
 
 export class DbStorage implements IStorage {
@@ -775,6 +792,104 @@ export class DbStorage implements IStorage {
     };
   }
 
+  async manualCollectForPickingTask(taskId: string, userId: string): Promise<{
+    success: boolean;
+    message: string;
+    task?: PickingTask;
+  }> {
+    // Get the task
+    const [task] = await db.select().from(pickingTasks).where(eq(pickingTasks.id, taskId));
+    if (!task) {
+      return { success: false, message: "Task not found" };
+    }
+
+    // Check if task is already complete
+    if (task.pickedQuantity >= task.requiredQuantity) {
+      return { success: false, message: "Task already completed" };
+    }
+
+    // Find an item with matching SKU to decrease quantity
+    const [item] = await db.select().from(inventoryItems)
+      .where(eq(inventoryItems.sku, task.sku))
+      .limit(1);
+
+    if (item) {
+      // Decrease item quantity by 1 or delete if quantity reaches 0
+      const newQuantity = item.quantity - 1;
+      if (newQuantity <= 0) {
+        await db.delete(inventoryItems)
+          .where(eq(inventoryItems.id, item.id));
+      } else {
+        await db.update(inventoryItems)
+          .set({ quantity: newQuantity, updatedAt: new Date() })
+          .where(eq(inventoryItems.id, item.id));
+      }
+
+      // Update task progress with item ID
+      const pickedIds = task.pickedItemIds || [];
+      pickedIds.push(item.id);
+      const newPickedQuantity = task.pickedQuantity + 1;
+      const isCompleted = newPickedQuantity >= task.requiredQuantity;
+
+      const [updatedTask] = await db.update(pickingTasks)
+        .set({
+          pickedQuantity: newPickedQuantity,
+          pickedItemIds: pickedIds,
+          status: isCompleted ? "COMPLETED" : "PENDING",
+          completedAt: isCompleted ? new Date() : null,
+        })
+        .where(eq(pickingTasks.id, taskId))
+        .returning();
+
+      // Log the event with MANUAL action type
+      await this.createEventLog({
+        userId,
+        action: "PICK_ITEM_MANUAL",
+        details: `Manually collected ${item.name || task.itemName} (${item.sku}) for picking list task`,
+        productId: item.productId || null,
+        itemName: item.name || task.itemName || null,
+        sku: item.sku,
+        location: item.location,
+      });
+
+      return { 
+        success: true, 
+        message: `Товар собран вручную! Прогресс: ${newPickedQuantity}/${task.requiredQuantity}`,
+        task: updatedTask
+      };
+    } else {
+      // No item found in inventory with matching SKU
+      // Still increment the task progress (manual collection without inventory tracking)
+      const newPickedQuantity = task.pickedQuantity + 1;
+      const isCompleted = newPickedQuantity >= task.requiredQuantity;
+
+      const [updatedTask] = await db.update(pickingTasks)
+        .set({
+          pickedQuantity: newPickedQuantity,
+          status: isCompleted ? "COMPLETED" : "PENDING",
+          completedAt: isCompleted ? new Date() : null,
+        })
+        .where(eq(pickingTasks.id, taskId))
+        .returning();
+
+      // Log the event with MANUAL action type (no item in inventory)
+      await this.createEventLog({
+        userId,
+        action: "PICK_ITEM_MANUAL_NO_INVENTORY",
+        details: `Manually collected ${task.itemName || task.sku} (not in inventory) for picking list task`,
+        sku: task.sku,
+        itemName: task.itemName || null,
+        location: null,
+      });
+
+      return { 
+        success: true, 
+        message: `Товар собран вручную (нет в инвентаре)! Прогресс: ${newPickedQuantity}/${task.requiredQuantity}`,
+        task: updatedTask
+      };
+    }
+  }
+
   async deletePickingList(listId: string, userId: string): Promise<boolean> {
     const [list] = await db.select().from(pickingLists).where(eq(pickingLists.id, listId));
     if (!list) return false;
@@ -834,7 +949,7 @@ export class DbStorage implements IStorage {
         stockOut: userLogs.filter(log => log.action === 'STOCK_OUT').length,
         csvUpload: userLogs.filter(log => log.action === 'CSV_UPLOAD').length,
         pickingListCreated: userLogs.filter(log => log.action === 'PICKING_LIST_CREATED').length,
-        itemPicked: userLogs.filter(log => log.action === 'PICK_ITEM' || log.action === 'ITEM_PICKED').length,
+        itemPicked: userLogs.filter(log => log.action === 'PICK_ITEM' || log.action === 'ITEM_PICKED' || log.action === 'PICK_ITEM_MANUAL' || log.action === 'PICK_ITEM_MANUAL_NO_INVENTORY').length,
         locationDeleted: userLogs.filter(log => log.action === 'LOCATION_DELETED').length,
       };
     });

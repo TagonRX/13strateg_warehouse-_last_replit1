@@ -41,6 +41,23 @@ export default function DailyPickingView() {
     return localStorage.getItem("globalPassword") || "Baritero1";
   });
 
+  // Load selected list from localStorage on mount
+  useEffect(() => {
+    const savedListId = localStorage.getItem("selectedPickingListId");
+    if (savedListId) {
+      setSelectedListId(savedListId);
+    }
+  }, []);
+
+  // Save selected list to localStorage when it changes
+  useEffect(() => {
+    if (selectedListId) {
+      localStorage.setItem("selectedPickingListId", selectedListId);
+    } else {
+      localStorage.removeItem("selectedPickingListId");
+    }
+  }, [selectedListId]);
+
   // Save global credentials to localStorage
   useEffect(() => {
     localStorage.setItem("globalUsername", globalUsername);
@@ -181,6 +198,25 @@ export default function DailyPickingView() {
     },
     onError: (error: Error) => {
       toast({ title: "Scan Failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const manualCollectMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      const response = await apiRequest("POST", "/api/picking/manual-collect", { taskId });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setLastResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/picking/lists", selectedListId] });
+      toast({
+        title: data.success ? "Товар собран вручную" : "Ошибка",
+        description: data.message,
+        variant: data.success ? "default" : "destructive",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Ошибка сбора", description: error.message, variant: "destructive" });
     },
   });
 
@@ -692,9 +728,23 @@ export default function DailyPickingView() {
                           </div>
                         </div>
                       </div>
-                      <Badge variant={task.status === "COMPLETED" ? "default" : "secondary"}>
-                        {task.status}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {task.status !== "COMPLETED" && (
+                          <Button
+                            data-testid={`button-manual-collect-${task.id}`}
+                            size="sm"
+                            variant="outline"
+                            onClick={() => manualCollectMutation.mutate(task.id)}
+                            disabled={manualCollectMutation.isPending}
+                          >
+                            <CheckCircle2 className="h-4 w-4 mr-1" />
+                            Собрать
+                          </Button>
+                        )}
+                        <Badge variant={task.status === "COMPLETED" ? "default" : "secondary"}>
+                          {task.status}
+                        </Badge>
+                      </div>
                     </div>
                   ))}
                 </div>

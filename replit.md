@@ -32,11 +32,12 @@ Preferred communication style: Simple, everyday language.
 
 ### Key Features & Implementations
 *   **Inventory Management**: Bulk import, real-time updates post-picking, location consistency checks.
-*   **Picking Lists**: Daily list management, item names displayed for better UX, enhanced CSV/Excel import with auto-detection (delimiter, fields), URL-based import with SSRF hardening, persistent mapping, and auto-deduplication. Support for multiple CSV sources with independent management and "Load All" functionality.
+*   **Picking Lists**: Daily list management, item names displayed for better UX, enhanced CSV/Excel import with auto-detection (delimiter, fields), URL-based import with SSRF hardening, persistent mapping, and auto-deduplication. Support for multiple CSV sources with global credentials (shared username/password) and collapsible UI interface. Each source has compact 3-character name display. Automatic "Load All" functionality merges data from enabled sources. Selected list persists in localStorage across page refreshes.
+*   **Manual Collection**: "Собрать" (Collect) button for each picking task enables manual item collection without barcode scanning. System decrements inventory if item exists, or marks as collected without inventory tracking. All manual collections logged with dedicated action types (`PICK_ITEM_MANUAL`, `PICK_ITEM_MANUAL_NO_INVENTORY`) for full audit trail.
 *   **Warehouse Loading View**: Dynamic filtering (per-letter limits), displays all active locations (even empty), natural/numeric sorting for locations. Configurable warehouse settings (A-Z groups, TSKU, MAXQ) with inline editing.
 *   **User Management**: Edit user names, robust delete validation (prevent self-deletion, last admin deletion).
-*   **Event Logging**: Enhanced with complete product information for all `STOCK_OUT` and `STOCK_IN` events.
-*   **UI Enhancements**: Improved table readability, compact layouts for cards and settings, consistent styling for buttons and dropdowns.
+*   **Event Logging**: Enhanced with complete product information for all `STOCK_OUT`, `STOCK_IN`, and picking events. Distinguishes between scanned (`PICK_ITEM`) and manual (`PICK_ITEM_MANUAL`) collections with full worker attribution.
+*   **UI Enhancements**: Improved table readability, compact layouts for cards and settings, consistent styling for buttons and dropdowns. CSV sources in collapsible section with responsive grid (2-5 columns based on screen size).
 
 ## External Dependencies
 
