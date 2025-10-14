@@ -413,10 +413,9 @@ export default function DailyPickingView() {
   const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 h-full overflow-auto">
-      {/* Left Panel: CSV Upload */}
-      <div className="space-y-4">
-        <Card className="max-w-xl">
+    <div className="flex flex-col gap-6 p-6 h-full overflow-auto">
+      {/* Create Picking List - Full Width */}
+      <Card className="w-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileUp className="h-5 w-5" />
@@ -490,48 +489,48 @@ export default function DailyPickingView() {
               
               <CollapsibleContent className="space-y-3">
                 {/* Compact source grid - up to 5 per row */}
-                <div className="flex flex-wrap gap-3 pt-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 pt-2">
                   {csvSources.map((source, index) => (
-                    <div key={source.id} className="flex flex-col gap-1 min-w-[140px]" data-testid={`source-item-${index}`}>
-                      <div className="flex items-center gap-1">
+                    <div key={source.id} className="flex flex-col gap-1 p-2 border rounded-md bg-muted/20" data-testid={`source-item-${index}`}>
+                      <div className="flex items-center justify-between gap-1">
                         <Input
                           placeholder="S1"
                           value={source.name}
                           onChange={(e) => updateCsvSource(source.id, { name: e.target.value.slice(0, 3) })}
                           data-testid={`input-source-name-${index}`}
-                          className="h-7 w-12 text-xs text-center p-1"
+                          className="h-6 w-10 text-xs text-center p-0"
                           maxLength={3}
                         />
-                        <Switch
-                          checked={source.enabled}
-                          onCheckedChange={(enabled) => updateCsvSource(source.id, { enabled })}
-                          data-testid={`switch-source-${index}`}
-                        />
-                        <span className="text-xs whitespace-nowrap">
-                          {source.enabled ? "Грузить" : "Нет"}
-                        </span>
-                        {csvSources.length > 1 && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => removeCsvSource(source.id)}
-                            data-testid={`button-remove-source-${index}`}
-                            className="h-6 w-6 ml-1"
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          <Switch
+                            checked={source.enabled}
+                            onCheckedChange={(enabled) => updateCsvSource(source.id, { enabled })}
+                            data-testid={`switch-source-${index}`}
+                            className="scale-75"
+                          />
+                          {csvSources.length > 1 && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => removeCsvSource(source.id)}
+                              data-testid={`button-remove-source-${index}`}
+                              className="h-5 w-5"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       <Input
                         placeholder="URL"
                         value={source.url}
                         onChange={(e) => updateCsvSource(source.id, { url: e.target.value })}
                         data-testid={`input-source-url-${index}`}
-                        className="h-7 text-xs"
+                        className="h-6 text-xs w-full"
                         title={source.url}
                       />
-                      <span className="text-xs text-muted-foreground truncate" title={source.url}>
-                        {source.name}: {source.url || 'URL не указан'}
+                      <span className="text-[10px] text-muted-foreground truncate leading-tight" title={source.url}>
+                        {source.url ? `${source.name}: ${source.url.substring(0, 20)}...` : 'URL не указан'}
                       </span>
                     </div>
                   ))}
@@ -564,6 +563,8 @@ export default function DailyPickingView() {
           </CardContent>
         </Card>
 
+      {/* Bottom: Two columns for Lists and Tasks */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* List Selection */}
         <Card>
           <CardHeader>
@@ -607,10 +608,9 @@ export default function DailyPickingView() {
             )}
           </CardContent>
         </Card>
-      </div>
 
-      {/* Right Panel: Picking Tasks */}
-      <div className="space-y-4">
+        {/* Picking Tasks */}
+        <div className="space-y-4">
         {selectedListId && currentList ? (
           <>
             <BarcodeScanner onScan={handleScan} />
@@ -708,6 +708,7 @@ export default function DailyPickingView() {
             </CardContent>
           </Card>
         )}
+        </div>
       </div>
     </div>
   );
