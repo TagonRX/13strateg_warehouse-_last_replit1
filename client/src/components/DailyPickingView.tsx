@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileUp, List, Trash2, CheckCircle2, Circle, Download, ChevronDown, ChevronUp, Save } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { FileUp, List, Trash2, CheckCircle2, Circle, Download, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
@@ -28,33 +29,68 @@ export default function DailyPickingView() {
   const [letterFilter, setLetterFilter] = useState<string>("all");
   const [pageLimit, setPageLimit] = useState<string>("50");
   const [lastResult, setLastResult] = useState<any>(null);
-  const [csvUrl, setCsvUrl] = useState(() => {
-    // Load saved URL from localStorage or use default
-    const saved = localStorage.getItem("csvUrl");
-    return saved || "https://files.3dsellers.com/uploads/0874ff67c0e8b7abc580de328633eda6/export-csv/automation-172416.csv";
-  });
-  const [csvUsername, setCsvUsername] = useState("baritero@gmail.com");
-  const [csvPassword, setCsvPassword] = useState("Baritero1");
-  const [showAuth, setShowAuth] = useState(false);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
-  const [csvStructuredData, setCsvStructuredData] = useState<Record<string, string>[]>([]);
-  const [fieldMapping, setFieldMapping] = useState<{
-    sku: string;
-    itemName: string;
-    quantity: string;
-  }>(() => {
-    // Load saved mapping from localStorage
-    const saved = localStorage.getItem("csvFieldMapping");
+  
+  // CSV sources array - each source has URL, credentials, and enabled flag
+  const [csvSources, setCsvSources] = useState<Array<{
+    id: string;
+    url: string;
+    username: string;
+    password: string;
+    enabled: boolean;
+  }>>(() => {
+    // Load saved sources from localStorage or use defaults
+    const saved = localStorage.getItem("csvSources");
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch {
-        return { sku: "", itemName: "", quantity: "" };
+        return [{
+          id: '1',
+          url: "https://files.3dsellers.com/uploads/0874ff67c0e8b7abc580de328633eda6/export-csv/automation-172416.csv",
+          username: "baritero@gmail.com",
+          password: "Baritero1",
+          enabled: true
+        }];
       }
     }
-    return { sku: "", itemName: "", quantity: "" };
+    return [{
+      id: '1',
+      url: "https://files.3dsellers.com/uploads/0874ff67c0e8b7abc580de328633eda6/export-csv/automation-172416.csv",
+      username: "baritero@gmail.com",
+      password: "Baritero1",
+      enabled: true
+    }];
   });
+
+  // Save sources to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem("csvSources", JSON.stringify(csvSources));
+  }, [csvSources]);
+
+  // Add new CSV source
+  const addCsvSource = () => {
+    const newSource = {
+      id: Date.now().toString(),
+      url: "",
+      username: "",
+      password: "",
+      enabled: true
+    };
+    setCsvSources([...csvSources, newSource]);
+  };
+
+  // Update CSV source
+  const updateCsvSource = (id: string, updates: Partial<typeof csvSources[0]>) => {
+    setCsvSources(sources => 
+      sources.map(s => s.id === id ? { ...s, ...updates } : s)
+    );
+  };
+
+  // Remove CSV source
+  const removeCsvSource = (id: string) => {
+    setCsvSources(sources => sources.filter(s => s.id !== id));
+  };
 
   const { data: lists = [] } = useQuery<PickingList[]>({
     queryKey: ["/api/picking/lists"],
@@ -102,9 +138,6 @@ export default function DailyPickingView() {
       setSelectedListId(data.list.id);
       setCsvText("");
       setListName(getTodayDate()); // Reset to today's date
-      // Clear structured data to allow manual entry
-      setCsvHeaders([]);
-      setCsvStructuredData([]);
       toast({ title: "List Created", description: `Created picking list with ${data.tasks.length} tasks` });
     },
     onError: (error: Error) => {
@@ -151,77 +184,53 @@ export default function DailyPickingView() {
     const lines = csvText.split("\n").filter(line => line.trim());
     const tasksMap = new Map<string, { sku: string; itemName?: string; requiredQuantity: number }>();
 
-    // Check if we have structured data with field mapping (from URL load)
-    if (csvStructuredData.length > 0 && fieldMapping.sku && fieldMapping.quantity) {
-      // Use structured data directly (no parsing needed)
-      for (const row of csvStructuredData) {
-        const sku = (row[fieldMapping.sku] || "").toUpperCase().trim();
-        const itemName = fieldMapping.itemName ? row[fieldMapping.itemName]?.trim() : undefined;
-        const quantity = parseInt(row[fieldMapping.quantity]) || 1;
+    // Auto-detect delimiter: tab, comma, semicolon, or whitespace
+    let delimiter = ",";
+    const firstLine = lines[0] || "";
+    if (firstLine.includes("\t")) {
+      delimiter = "\t";
+    } else if (firstLine.includes(";")) {
+      delimiter = ";";
+    } else if (firstLine.includes(",")) {
+      delimiter = ",";
+    } else if (/\s+/.test(firstLine)) {
+      delimiter = "whitespace";
+    }
 
-        if (!sku) continue;
+    for (const line of lines) {
+      const parts = delimiter === "whitespace" 
+        ? line.trim().split(/\s+/).map(p => p.trim())
+        : line.split(delimiter).map(p => p.trim());
+        
+      if (parts.length >= 2) {
+        const sku = parts[0].toUpperCase();
+        let itemName: string | undefined;
+        let quantity: number;
 
-        // Merge duplicate SKUs
+        // Format: SKU, название (опционально), количество
+        if (parts.length === 2) {
+          // SKU, количество
+          quantity = parseInt(parts[1]) || 1;
+        } else {
+          // SKU, название, количество
+          itemName = parts[1] || undefined;
+          quantity = parseInt(parts[2]) || 1;
+        }
+
+        // Объединяем одинаковые SKU
         if (tasksMap.has(sku)) {
           const existing = tasksMap.get(sku)!;
           existing.requiredQuantity += quantity;
+          // Если новое название указано, а старого нет - обновляем
           if (itemName && !existing.itemName) {
             existing.itemName = itemName;
           }
         } else {
-          tasksMap.set(sku, { sku, itemName, requiredQuantity: quantity });
-        }
-      }
-    } else {
-      // Legacy parsing (manual CSV input)
-      // Auto-detect delimiter: tab, comma, semicolon, or whitespace
-      let delimiter = ",";
-      const firstLine = lines[0] || "";
-      if (firstLine.includes("\t")) {
-        delimiter = "\t";
-      } else if (firstLine.includes(";")) {
-        delimiter = ";";
-      } else if (firstLine.includes(",")) {
-        delimiter = ",";
-      } else if (/\s+/.test(firstLine)) {
-        delimiter = "whitespace";
-      }
-
-      for (const line of lines) {
-        const parts = delimiter === "whitespace" 
-          ? line.trim().split(/\s+/).map(p => p.trim())
-          : line.split(delimiter).map(p => p.trim());
-          
-        if (parts.length >= 2) {
-          const sku = parts[0].toUpperCase();
-          let itemName: string | undefined;
-          let quantity: number;
-
-          // Format: SKU, название (опционально), количество
-          if (parts.length === 2) {
-            // SKU, количество
-            quantity = parseInt(parts[1]) || 1;
-          } else {
-            // SKU, название, количество
-            itemName = parts[1] || undefined;
-            quantity = parseInt(parts[2]) || 1;
-          }
-
-          // Объединяем одинаковые SKU
-          if (tasksMap.has(sku)) {
-            const existing = tasksMap.get(sku)!;
-            existing.requiredQuantity += quantity;
-            // Если новое название указано, а старого нет - обновляем
-            if (itemName && !existing.itemName) {
-              existing.itemName = itemName;
-            }
-          } else {
-            tasksMap.set(sku, {
-              sku,
-              itemName,
-              requiredQuantity: quantity,
-            });
-          }
+          tasksMap.set(sku, {
+            sku,
+            itemName,
+            requiredQuantity: quantity,
+          });
         }
       }
     }
@@ -267,19 +276,14 @@ export default function DailyPickingView() {
     });
   };
 
-  const handleSaveUrl = () => {
-    localStorage.setItem("csvUrl", csvUrl);
-    toast({
-      title: "URL сохранен",
-      description: "URL будет использоваться при следующих загрузках",
-    });
-  };
-
+  // Load all enabled CSV sources and merge data
   const handleLoadFromUrl = async () => {
-    if (!csvUrl.trim()) {
+    const enabledSources = csvSources.filter(s => s.enabled && s.url.trim());
+    
+    if (enabledSources.length === 0) {
       toast({
         title: "Ошибка",
-        description: "Введите URL CSV файла",
+        description: "Нет активных источников для загрузки",
         variant: "destructive",
       });
       return;
@@ -288,62 +292,78 @@ export default function DailyPickingView() {
     setIsLoadingUrl(true);
     
     try {
-      // Send credentials in request body (secure)
-      const payload: any = {
-        url: csvUrl,
-        full: true
-      };
-      
-      if (csvUsername && csvPassword) {
-        payload.username = csvUsername;
-        payload.password = csvPassword;
-      }
+      // Load all enabled sources in parallel
+      const loadPromises = enabledSources.map(async (source) => {
+        const payload: any = {
+          url: source.url,
+          full: true
+        };
+        
+        if (source.username && source.password) {
+          payload.username = source.username;
+          payload.password = source.password;
+        }
 
-      const response = await apiRequest("POST", "/api/picking/parse-csv-url", payload);
-      const result = await response.json();
+        const response = await apiRequest("POST", "/api/picking/parse-csv-url", payload);
+        const result = await response.json();
 
-      if (!result.success) {
-        throw new Error(result.error || "Не удалось загрузить CSV");
-      }
+        if (!result.success) {
+          throw new Error(`${source.url}: ${result.error || "Ошибка загрузки"}`);
+        }
 
-      // Validate response data
-      if (!result.headers || !Array.isArray(result.headers)) {
-        throw new Error("Некорректный формат заголовков CSV");
-      }
-      
-      if (!result.data || !Array.isArray(result.data)) {
-        throw new Error("Некорректный формат данных CSV");
-      }
+        return { source, result };
+      });
 
-      // Convert structured data to 3-column CSV format (SKU, Name, Quantity)
-      // Extract columns automatically
-      const skuCol = result.headers.find((h: string) => 
-        h.toLowerCase().includes('sku') || h.toLowerCase().includes('артикул')
-      ) || result.headers[0];
+      const results = await Promise.all(loadPromises);
       
-      const nameCol = result.headers.find((h: string) => 
-        h.toLowerCase().includes('name') || h.toLowerCase().includes('title') || 
-        h.toLowerCase().includes('название') || h.toLowerCase().includes('товар')
-      ) || result.headers[1];
+      // Merge data from all sources - sum quantities for same SKU
+      const mergedData: Record<string, { sku: string; name: string; quantity: number }> = {};
       
-      const qtyCol = result.headers.find((h: string) => 
-        h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty') || 
-        h.toLowerCase().includes('количество') || h.toLowerCase().includes('кол')
-      ) || result.headers[result.headers.length - 1];
+      for (const { result } of results) {
+        // Extract columns automatically
+        const skuCol = result.headers.find((h: string) => 
+          h.toLowerCase().includes('sku') || h.toLowerCase().includes('артикул')
+        ) || result.headers[0];
+        
+        const nameCol = result.headers.find((h: string) => 
+          h.toLowerCase().includes('name') || h.toLowerCase().includes('title') || 
+          h.toLowerCase().includes('название') || h.toLowerCase().includes('товар')
+        ) || result.headers[1];
+        
+        const qtyCol = result.headers.find((h: string) => 
+          h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty') || 
+          h.toLowerCase().includes('количество') || h.toLowerCase().includes('кол')
+        ) || result.headers[result.headers.length - 1];
+        
+        // Process each row
+        for (const row of result.data) {
+          const sku = (row[skuCol] || '').trim();
+          const name = (row[nameCol] || '').trim();
+          const qty = parseInt(row[qtyCol] || '0', 10);
+          
+          if (!sku) continue;
+          
+          if (mergedData[sku]) {
+            // Sum quantities for same SKU
+            mergedData[sku].quantity += qty;
+          } else {
+            // Add new SKU
+            mergedData[sku] = { sku, name, quantity: qty };
+          }
+        }
+      }
       
-      // Build 3-column CSV text
-      const csvLines = result.data.map((row: Record<string, string>) => {
-        const sku = row[skuCol] || '';
-        const name = row[nameCol] || '';
-        const qty = row[qtyCol] || '';
-        return `${sku}, ${name}, ${qty}`;
-      }).join('\n');
+      // Convert to CSV text
+      const csvLines = Object.values(mergedData).map(item => 
+        `${item.sku}, ${item.name}, ${item.quantity}`
+      ).join('\n');
       
       setCsvText(csvLines);
       
+      const totalItems = Object.keys(mergedData).length;
       toast({
         title: "Загружено",
-        description: `Загружено ${result.data.length} строк`,
+        description: `Загружено из ${enabledSources.length} источников, ${totalItems} уникальных позиций`,
       });
     } catch (error: any) {
       toast({
@@ -390,65 +410,88 @@ export default function DailyPickingView() {
               />
             </div>
             
-            {/* URL Load Section */}
-            <div className="space-y-2 pb-2 border-b">
+            {/* CSV Sources Section */}
+            <div className="space-y-3 pb-2 border-b">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Загрузить из интернета</label>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowAuth(!showAuth)}
-                  data-testid="button-toggle-auth"
-                >
-                  {showAuth ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  <span className="ml-1 text-xs">{showAuth ? "Скрыть авторизацию" : "Нужен логин?"}</span>
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  data-testid="input-csv-url"
-                  placeholder="https://example.com/file.csv"
-                  value={csvUrl}
-                  onChange={(e) => setCsvUrl(e.target.value)}
-                  className="flex-1"
-                />
-                <Button
-                  data-testid="button-save-url"
-                  onClick={handleSaveUrl}
-                  variant="outline"
-                  size="icon"
-                >
-                  <Save className="h-4 w-4" />
-                </Button>
-                <Button
-                  data-testid="button-load-url"
-                  onClick={handleLoadFromUrl}
-                  disabled={isLoadingUrl}
-                  variant="secondary"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  {isLoadingUrl ? "Загрузка..." : "Загрузить"}
-                </Button>
+                <label className="text-sm font-medium">Источники CSV</label>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={addCsvSource}
+                    data-testid="button-add-source"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Добавить
+                  </Button>
+                  <Button
+                    data-testid="button-load-url"
+                    onClick={handleLoadFromUrl}
+                    disabled={isLoadingUrl}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    {isLoadingUrl ? "Загрузка..." : "Загрузить все"}
+                  </Button>
+                </div>
               </div>
               
-              {showAuth && (
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                  <Input
-                    data-testid="input-csv-username"
-                    placeholder="Логин (опционально)"
-                    value={csvUsername}
-                    onChange={(e) => setCsvUsername(e.target.value)}
-                    type="text"
-                  />
-                  <Input
-                    data-testid="input-csv-password"
-                    placeholder="Пароль (опционально)"
-                    value={csvPassword}
-                    onChange={(e) => setCsvPassword(e.target.value)}
-                    type="password"
-                  />
-                </div>
-              )}
+              <div className="space-y-2">
+                {csvSources.map((source, index) => (
+                  <div key={source.id} className="p-3 border rounded-md bg-muted/20 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-1">
+                        <Switch
+                          checked={source.enabled}
+                          onCheckedChange={(enabled) => updateCsvSource(source.id, { enabled })}
+                          data-testid={`switch-source-${index}`}
+                        />
+                        <span className="text-xs font-medium">
+                          {source.enabled ? "Загружать" : "Не грузить"}
+                        </span>
+                      </div>
+                      {csvSources.length > 1 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => removeCsvSource(source.id)}
+                          data-testid={`button-remove-source-${index}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    
+                    <Input
+                      placeholder="https://example.com/file.csv"
+                      value={source.url}
+                      onChange={(e) => updateCsvSource(source.id, { url: e.target.value })}
+                      data-testid={`input-source-url-${index}`}
+                      className="text-sm"
+                    />
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Логин (опционально)"
+                        value={source.username}
+                        onChange={(e) => updateCsvSource(source.id, { username: e.target.value })}
+                        data-testid={`input-source-username-${index}`}
+                        type="text"
+                        className="text-sm"
+                      />
+                      <Input
+                        placeholder="Пароль (опционально)"
+                        value={source.password}
+                        onChange={(e) => updateCsvSource(source.id, { password: e.target.value })}
+                        data-testid={`input-source-password-${index}`}
+                        type="password"
+                        className="text-sm"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -460,92 +503,10 @@ export default function DailyPickingView() {
                 value={csvText}
                 onChange={(e) => {
                   setCsvText(e.target.value);
-                  // Clear structured data when user manually edits textarea
-                  if (csvStructuredData.length > 0) {
-                    setCsvHeaders([]);
-                    setCsvStructuredData([]);
-                  }
                 }}
               />
             </div>
 
-            {csvHeaders.length > 0 && (
-              <div className="space-y-3 p-3 border rounded-md bg-muted/30">
-                <label className="text-sm font-medium">Маппинг полей CSV</label>
-                
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">SKU / Артикул</label>
-                    <Select
-                      value={csvHeaders.includes(fieldMapping.sku) ? fieldMapping.sku : undefined}
-                      onValueChange={(value) => {
-                        const newMapping = { ...fieldMapping, sku: value };
-                        setFieldMapping(newMapping);
-                        localStorage.setItem("csvFieldMapping", JSON.stringify(newMapping));
-                      }}
-                    >
-                      <SelectTrigger data-testid="select-field-sku">
-                        <SelectValue placeholder="Выберите поле для SKU" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {csvHeaders.map((header) => (
-                          <SelectItem key={header} value={header}>
-                            {header}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Название товара (опционально)</label>
-                    <Select
-                      value={csvHeaders.includes(fieldMapping.itemName) ? fieldMapping.itemName : undefined}
-                      onValueChange={(value) => {
-                        const newMapping = { ...fieldMapping, itemName: value };
-                        setFieldMapping(newMapping);
-                        localStorage.setItem("csvFieldMapping", JSON.stringify(newMapping));
-                      }}
-                    >
-                      <SelectTrigger data-testid="select-field-name">
-                        <SelectValue placeholder="Выберите поле для названия" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Не выбрано</SelectItem>
-                        {csvHeaders.map((header) => (
-                          <SelectItem key={header} value={header}>
-                            {header}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Количество</label>
-                    <Select
-                      value={csvHeaders.includes(fieldMapping.quantity) ? fieldMapping.quantity : undefined}
-                      onValueChange={(value) => {
-                        const newMapping = { ...fieldMapping, quantity: value };
-                        setFieldMapping(newMapping);
-                        localStorage.setItem("csvFieldMapping", JSON.stringify(newMapping));
-                      }}
-                    >
-                      <SelectTrigger data-testid="select-field-quantity">
-                        <SelectValue placeholder="Выберите поле для количества" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {csvHeaders.map((header) => (
-                          <SelectItem key={header} value={header}>
-                            {header}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            )}
             <Button
               data-testid="button-create-list"
               onClick={handleUploadCSV}
