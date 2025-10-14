@@ -58,6 +58,8 @@ Preferred communication style: Simple, everyday language.
 *   **Inventory Edit Buttons Fix**: Fixed missing edit/delete buttons for items inside expandable location groups. All items now show action buttons regardless of being in a collapsed or expanded group.
 *   **Remote Barcode Scanning Enhancement**: Extended WebSocket server to support quantity (qty) parameter in remote_scan messages. BarcodeEditor now receives and processes barcodes with quantities sent from mobile devices.
 *   **Mobile Remote Scanner Interface**: Added RemoteBarcodeScanner component accessible from Inventory page on mobile/tablet devices. Allows scanning barcodes with camera, setting quantity (default 1), and sending to desktop for editing. Connected via WebSocket for real-time transmission.
+*   **Picking Task Item Names**: Added `itemName` field to picking_tasks table. When creating picking lists, item names are automatically extracted from inventory by SKU. Picking interface now displays item names instead of SKU codes for better worker experience.
+*   **Inventory Location Fix**: Fixed location mismatch where SKU-based location extraction (Warehouse Loading) didn't match database location field (Inventory). Corrected A99R item location from A998 to A99 to ensure consistency across views.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.

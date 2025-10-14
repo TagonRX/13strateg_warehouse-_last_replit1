@@ -72,6 +72,7 @@ export const pickingTasks = pgTable("picking_tasks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   listId: varchar("list_id").references(() => pickingLists.id),
   sku: text("sku").notNull(), // SKU to pick (not specific item ID)
+  itemName: text("item_name"), // Name of the item from inventory
   requiredQuantity: integer("required_quantity").notNull().default(1), // How many needed
   pickedQuantity: integer("picked_quantity").notNull().default(0), // How many picked
   status: text("status").notNull().default("PENDING"), // PENDING, COMPLETED

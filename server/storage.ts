@@ -629,11 +629,22 @@ export class DbStorage implements IStorage {
       status: "PENDING",
     }).returning();
 
-    // Create tasks for the picking list
+    // Get all inventory items to lookup names
+    const allInventoryItems = await db.select().from(inventoryItems);
+    const skuToNameMap = new Map<string, string>();
+    
+    for (const item of allInventoryItems) {
+      if (!skuToNameMap.has(item.sku) && item.name) {
+        skuToNameMap.set(item.sku, item.name);
+      }
+    }
+
+    // Create tasks for the picking list with item names
     const tasks = await db.insert(pickingTasks).values(
       data.tasks.map(task => ({
         listId: list.id,
         sku: task.sku,
+        itemName: skuToNameMap.get(task.sku) || null,
         requiredQuantity: task.requiredQuantity,
         pickedQuantity: 0,
         status: "PENDING",

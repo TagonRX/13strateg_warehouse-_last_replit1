@@ -352,8 +352,8 @@ export default function DailyPickingView() {
                           <Circle className="h-5 w-5 text-muted-foreground" />
                         )}
                         <div>
-                          <div className="font-mono font-medium" data-testid={`text-task-sku-${task.id}`}>
-                            {task.sku}
+                          <div className="font-medium" data-testid={`text-task-name-${task.id}`}>
+                            {task.itemName || task.sku}
                           </div>
                           <div className="text-sm text-muted-foreground" data-testid={`text-task-progress-${task.id}`}>
                             {task.pickedQuantity} / {task.requiredQuantity} picked
