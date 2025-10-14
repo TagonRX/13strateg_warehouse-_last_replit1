@@ -114,6 +114,25 @@ export const activeLocations = pgTable("active_locations", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// CSV источники (общие для всех пользователей)
+export const csvSources = pgTable("csv_sources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  url: text("url").notNull(),
+  name: text("name").notNull(), // Короткое имя (например "S1", "S2")
+  enabled: boolean("enabled").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0), // Порядок отображения
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Глобальные настройки (ключ-значение для общих параметров)
+export const globalSettings = pgTable("global_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(), // Например: "csv_global_username", "csv_global_password"
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -160,6 +179,17 @@ export const insertActiveLocationSchema = createInsertSchema(activeLocations).om
   updatedAt: true,
 });
 
+export const insertCsvSourceSchema = createInsertSchema(csvSources).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertGlobalSettingSchema = createInsertSchema(globalSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -184,3 +214,9 @@ export type WarehouseSetting = typeof warehouseSettings.$inferSelect;
 
 export type InsertActiveLocation = z.infer<typeof insertActiveLocationSchema>;
 export type ActiveLocation = typeof activeLocations.$inferSelect;
+
+export type InsertCsvSource = z.infer<typeof insertCsvSourceSchema>;
+export type CsvSource = typeof csvSources.$inferSelect;
+
+export type InsertGlobalSetting = z.infer<typeof insertGlobalSettingSchema>;
+export type GlobalSetting = typeof globalSettings.$inferSelect;
