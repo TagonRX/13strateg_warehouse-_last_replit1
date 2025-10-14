@@ -346,6 +346,10 @@ export default function DailyPickingView() {
           if (mergedData[sku]) {
             // Sum quantities for same SKU
             mergedData[sku].quantity += qty;
+            // Update name if current is empty and new has value
+            if (!mergedData[sku].name && name) {
+              mergedData[sku].name = name;
+            }
           } else {
             // Add new SKU
             mergedData[sku] = { sku, name, quantity: qty };
