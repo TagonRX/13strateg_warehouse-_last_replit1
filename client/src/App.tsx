@@ -17,6 +17,7 @@ import DailyPickingView from "@/components/DailyPickingView";
 import EventLogsView from "@/components/EventLogsView";
 import WorkerAnalytics from "@/components/WorkerAnalytics";
 import SkuErrorsView from "@/components/SkuErrorsView";
+import RemoteBarcodeScanner from "@/components/RemoteBarcodeScanner";
 import NotFound from "@/pages/not-found";
 import * as api from "@/lib/api";
 import type { InventoryItem } from "@shared/schema";
@@ -387,7 +388,13 @@ function AppContent() {
         </Route>
         <Route path="/inventory">
           <div className="space-y-4">
-            <h1 className="text-3xl font-bold">Инвентаризация</h1>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h1 className="text-3xl font-bold">Инвентаризация</h1>
+              {/* Show Remote Scanner button only on mobile/tablet devices */}
+              <div className="lg:hidden">
+                <RemoteBarcodeScanner />
+              </div>
+            </div>
             <InventoryTable items={inventory} userRole={user.role} />
           </div>
         </Route>

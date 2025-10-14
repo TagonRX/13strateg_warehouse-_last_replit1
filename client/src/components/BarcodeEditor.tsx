@@ -3,8 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Camera, Keyboard, Plus, Trash2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Camera, Keyboard, Plus, Trash2, Wifi } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface BarcodeMapping {
   code: string;
@@ -25,9 +27,51 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
   const [cameraError, setCameraError] = useState<string | null>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { isConnected, lastMessage } = useWebSocket();
+  const lastProcessedMessageRef = useRef<any>(null);
 
   const mappedQuantity = value.reduce((sum, m) => sum + m.qty, 0);
   const unmappedQuantity = totalQuantity - mappedQuantity;
+
+  // Handle remote scans from phone (only when dialog is open)
+  useEffect(() => {
+    if (isOpen && lastMessage?.type === "barcode_scanned") {
+      if (lastProcessedMessageRef.current !== lastMessage) {
+        lastProcessedMessageRef.current = lastMessage;
+        const { barcode, qty } = lastMessage;
+        const quantity = qty || 1;
+        
+        // Add barcode with quantity from remote scan
+        const existing = value.find(m => m.code === barcode);
+        
+        if (mappedQuantity >= totalQuantity) {
+          alert(`Нельзя добавить баркод: все ${totalQuantity} товар(ов) уже имеют баркоды`);
+          return;
+        }
+        
+        if (existing) {
+          // Increment quantity
+          const newQty = existing.qty + quantity;
+          if (newQty + (mappedQuantity - existing.qty) > totalQuantity) {
+            alert(`Нельзя увеличить количество: превышен лимит ${totalQuantity} товар(ов)`);
+            return;
+          }
+          onChange(value.map(m => 
+            m.code === barcode 
+              ? { ...m, qty: newQty }
+              : m
+          ));
+        } else {
+          // Add new barcode
+          if (mappedQuantity + quantity > totalQuantity) {
+            alert(`Нельзя добавить ${quantity} баркод(ов): превышен лимит ${totalQuantity} товар(ов)`);
+            return;
+          }
+          onChange([...value, { code: barcode, qty: quantity }]);
+        }
+      }
+    }
+  }, [isOpen, lastMessage, value, mappedQuantity, totalQuantity, onChange]);
 
   useEffect(() => {
     if (isOpen && mode === "usb" && inputRef.current) {
@@ -163,6 +207,18 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
         <DialogHeader>
           <DialogTitle>Редактировать баркоды</DialogTitle>
         </DialogHeader>
+
+        {/* WebSocket connection indicator */}
+        {isConnected && (
+          <Alert className="py-2">
+            <Wifi className="h-4 w-4" />
+            <AlertDescription>
+              <span className="text-green-600 dark:text-green-400">
+                🟢 Принимает баркоды с телефона
+              </span>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="space-y-4">
           {/* Quantity status */}

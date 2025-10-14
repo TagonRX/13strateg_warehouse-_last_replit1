@@ -85,9 +85,10 @@ export function setupWebSocket(server: Server) {
 
         // Remote scan message from phone
         if (message.type === "remote_scan" && ws.userId) {
-          const { barcode } = message;
+          const { barcode, qty } = message;
+          const quantity = qty || 1; // Default to 1 if not provided
           
-          console.log(`[WS] Remote scan from user ${ws.userId}: ${barcode}`);
+          console.log(`[WS] Remote scan from user ${ws.userId}: ${barcode} (qty: ${quantity})`);
           
           // Send to all other devices of the same user
           const userClients = clients.get(ws.userId);
@@ -97,7 +98,8 @@ export function setupWebSocket(server: Server) {
               if (client !== ws && client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({
                   type: "barcode_scanned",
-                  barcode
+                  barcode,
+                  qty: quantity
                 }));
                 sentCount++;
               }

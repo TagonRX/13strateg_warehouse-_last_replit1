@@ -448,23 +448,22 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     return (
       <TableRow key={item.id} data-testid={`row-item-${item.id}`}>
         <TableCell style={{ width: `${columnWidths.actions}px`, minWidth: `${columnWidths.actions}px` }}>
-          {!isExpanded && (
-            <div className="flex gap-1">
-              <Button size="sm" variant="ghost" onClick={() => startEdit(item)}>
-                <Pencil className="w-3 h-3" />
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" onClick={() => startEdit(item)} data-testid={`button-edit-${item.id}`}>
+              <Pencil className="w-3 h-3" />
+            </Button>
+            {userRole === "admin" && (
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                onClick={() => deleteItem(item.id)}
+                disabled={deleteMutation.isPending}
+                data-testid={`button-delete-${item.id}`}
+              >
+                <Trash2 className="w-3 h-3" />
               </Button>
-              {userRole === "admin" && (
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  onClick={() => deleteItem(item.id)}
-                  disabled={deleteMutation.isPending}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </TableCell>
         <TableCell style={{ width: `${columnWidths.location}px`, minWidth: `${columnWidths.location}px` }} className="font-mono text-xs">{item.location}</TableCell>
         <TableCell style={{ width: `${columnWidths.productId}px`, minWidth: `${columnWidths.productId}px` }} className="font-mono text-xs">{item.productId || "-"}</TableCell>
