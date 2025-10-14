@@ -413,6 +413,84 @@ export default function DailyPickingView() {
                 onChange={(e) => setCsvText(e.target.value)}
               />
             </div>
+
+            {csvHeaders.length > 0 && (
+              <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                <label className="text-sm font-medium">Маппинг полей CSV</label>
+                
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">SKU / Артикул</label>
+                    <Select
+                      value={fieldMapping.sku}
+                      onValueChange={(value) => {
+                        const newMapping = { ...fieldMapping, sku: value };
+                        setFieldMapping(newMapping);
+                        localStorage.setItem("csvFieldMapping", JSON.stringify(newMapping));
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-field-sku">
+                        <SelectValue placeholder="Выберите поле для SKU" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {csvHeaders.map((header) => (
+                          <SelectItem key={header} value={header}>
+                            {header}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Название товара (опционально)</label>
+                    <Select
+                      value={fieldMapping.itemName}
+                      onValueChange={(value) => {
+                        const newMapping = { ...fieldMapping, itemName: value };
+                        setFieldMapping(newMapping);
+                        localStorage.setItem("csvFieldMapping", JSON.stringify(newMapping));
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-field-name">
+                        <SelectValue placeholder="Выберите поле для названия" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Не выбрано</SelectItem>
+                        {csvHeaders.map((header) => (
+                          <SelectItem key={header} value={header}>
+                            {header}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Количество</label>
+                    <Select
+                      value={fieldMapping.quantity}
+                      onValueChange={(value) => {
+                        const newMapping = { ...fieldMapping, quantity: value };
+                        setFieldMapping(newMapping);
+                        localStorage.setItem("csvFieldMapping", JSON.stringify(newMapping));
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-field-quantity">
+                        <SelectValue placeholder="Выберите поле для количества" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {csvHeaders.map((header) => (
+                          <SelectItem key={header} value={header}>
+                            {header}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            )}
             <Button
               data-testid="button-create-list"
               onClick={handleUploadCSV}
