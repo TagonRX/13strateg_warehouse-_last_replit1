@@ -621,7 +621,7 @@ export class DbStorage implements IStorage {
   }
 
   // Daily Picking methods
-  async createPickingList(data: { name: string; userId: string; tasks: { sku: string; requiredQuantity: number }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }> {
+  async createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }> {
     // Create the picking list
     const [list] = await db.insert(pickingLists).values({
       name: data.name,
@@ -629,7 +629,7 @@ export class DbStorage implements IStorage {
       status: "PENDING",
     }).returning();
 
-    // Get all inventory items to lookup names
+    // Get all inventory items to lookup names if needed
     const allInventoryItems = await db.select().from(inventoryItems);
     const skuToNameMap = new Map<string, string>();
     
@@ -641,14 +641,34 @@ export class DbStorage implements IStorage {
 
     // Create tasks for the picking list with item names
     const tasks = await db.insert(pickingTasks).values(
-      data.tasks.map(task => ({
-        listId: list.id,
-        sku: task.sku,
-        itemName: skuToNameMap.get(task.sku) || null,
-        requiredQuantity: task.requiredQuantity,
-        pickedQuantity: 0,
-        status: "PENDING",
-      }))
+      data.tasks.map(task => {
+        let itemName: string | null;
+        let itemNameSource: string | null;
+
+        if (task.itemName) {
+          // Name provided from CSV file
+          itemName = task.itemName;
+          itemNameSource = 'file';
+        } else if (skuToNameMap.has(task.sku)) {
+          // Name found in inventory
+          itemName = skuToNameMap.get(task.sku) || null;
+          itemNameSource = 'inventory';
+        } else {
+          // No name available
+          itemName = null;
+          itemNameSource = null;
+        }
+
+        return {
+          listId: list.id,
+          sku: task.sku,
+          itemName,
+          itemNameSource,
+          requiredQuantity: task.requiredQuantity,
+          pickedQuantity: 0,
+          status: "PENDING",
+        };
+      })
     ).returning();
 
     // Log the event

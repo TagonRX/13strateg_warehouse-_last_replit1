@@ -61,7 +61,7 @@ export default function DailyPickingView() {
   });
 
   const createListMutation = useMutation({
-    mutationFn: async (data: { name: string; tasks: { sku: string; requiredQuantity: number }[] }) => {
+    mutationFn: async (data: { name: string; tasks: { sku: string; itemName?: string; requiredQuantity: number }[] }) => {
       const response = await apiRequest("POST", "/api/picking/lists", data);
       return response.json();
     },
@@ -114,7 +114,7 @@ export default function DailyPickingView() {
     }
 
     const lines = csvText.split("\n").filter(line => line.trim());
-    const tasks: { sku: string; requiredQuantity: number }[] = [];
+    const tasksMap = new Map<string, { sku: string; itemName?: string; requiredQuantity: number }>();
 
     // Auto-detect delimiter: tab, comma, semicolon, or whitespace
     let delimiter = ",";
@@ -136,12 +136,39 @@ export default function DailyPickingView() {
         : line.split(delimiter).map(p => p.trim());
         
       if (parts.length >= 2) {
-        tasks.push({
-          sku: parts[0],
-          requiredQuantity: parseInt(parts[1]) || 1,
-        });
+        const sku = parts[0].toUpperCase();
+        let itemName: string | undefined;
+        let quantity: number;
+
+        // Format: SKU, название (опционально), количество
+        if (parts.length === 2) {
+          // SKU, количество
+          quantity = parseInt(parts[1]) || 1;
+        } else {
+          // SKU, название, количество
+          itemName = parts[1] || undefined;
+          quantity = parseInt(parts[2]) || 1;
+        }
+
+        // Объединяем одинаковые SKU
+        if (tasksMap.has(sku)) {
+          const existing = tasksMap.get(sku)!;
+          existing.requiredQuantity += quantity;
+          // Если новое название указано, а старого нет - обновляем
+          if (itemName && !existing.itemName) {
+            existing.itemName = itemName;
+          }
+        } else {
+          tasksMap.set(sku, {
+            sku,
+            itemName,
+            requiredQuantity: quantity,
+          });
+        }
       }
     }
+
+    const tasks = Array.from(tasksMap.values());
 
     if (tasks.length === 0) {
       toast({ title: "Error", description: "No valid tasks found in CSV", variant: "destructive" });
@@ -343,20 +370,25 @@ export default function DailyPickingView() {
                     <div
                       key={task.id}
                       data-testid={`task-${task.id}`}
-                      className="flex items-center justify-between p-3 rounded-md border hover-elevate"
+                      className={`flex items-center justify-between p-3 rounded-md border hover-elevate ${
+                        task.itemNameSource === 'inventory' ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900' : ''
+                      }`}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-1">
                         {task.status === "COMPLETED" ? (
                           <CheckCircle2 className="h-5 w-5 text-green-600" />
                         ) : (
                           <Circle className="h-5 w-5 text-muted-foreground" />
                         )}
-                        <div>
-                          <div className="font-medium" data-testid={`text-task-name-${task.id}`}>
-                            {task.itemName || task.sku}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-muted-foreground">{task.sku}</span>
+                            <span className="font-medium" data-testid={`text-task-name-${task.id}`}>
+                              {task.itemName || '-'}
+                            </span>
                           </div>
                           <div className="text-sm text-muted-foreground" data-testid={`text-task-progress-${task.id}`}>
-                            {task.pickedQuantity} / {task.requiredQuantity} picked
+                            {task.pickedQuantity} / {task.requiredQuantity} собрано
                           </div>
                         </div>
                       </div>

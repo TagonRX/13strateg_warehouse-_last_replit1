@@ -73,6 +73,7 @@ export const pickingTasks = pgTable("picking_tasks", {
   listId: varchar("list_id").references(() => pickingLists.id),
   sku: text("sku").notNull(), // SKU to pick (not specific item ID)
   itemName: text("item_name"), // Name of the item from inventory
+  itemNameSource: text("item_name_source"), // 'file' (from CSV) or 'inventory' (looked up)
   requiredQuantity: integer("required_quantity").notNull().default(1), // How many needed
   pickedQuantity: integer("picked_quantity").notNull().default(0), // How many picked
   status: text("status").notNull().default("PENDING"), // PENDING, COMPLETED

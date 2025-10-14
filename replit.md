@@ -62,6 +62,7 @@ Preferred communication style: Simple, everyday language.
 *   **Inventory Location Fix**: Fixed location mismatch where SKU-based location extraction (Warehouse Loading) didn't match database location field (Inventory). Corrected A99R item location from A998 to A99 to ensure consistency across views.
 *   **Inventory Group Dropdown Alignment**: Fixed dropdown menu alignment issue where action buttons (edit/delete) in expanded location groups with multiple SKUs appeared slightly shifted down. Added consistent flex wrapper to chevron icon to match button container structure.
 *   **Inventory Expanded Items Visual Clarity**: When a location group is expanded, nested items no longer display location in the location column. This creates a visual hierarchy making it clear that expanded rows are sub-items (SKUs) within that location, not separate location entries.
+*   **Enhanced Picking List CSV Format**: Updated picking list CSV/Excel format to support 3 columns: SKU, название товара (опционально), количество. Parser now auto-merges duplicate SKUs by summing quantities. If item name not provided in file, system automatically looks up name from inventory. Tasks with names from inventory are highlighted with blue background for visual distinction. Display shows: SKU (монокод), название, количество собрано/требуется.
 
 ### Build and Development
 *   **Development**: `npm run dev` starts Express server with Vite HMR.
