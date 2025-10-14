@@ -315,40 +315,25 @@ export default function DailyPickingView() {
         throw new Error("Некорректный формат данных CSV");
       }
 
-      // Save headers and structured data
-      setCsvHeaders(result.headers);
-      setCsvStructuredData(result.data);
-
-      // Auto-detect field mapping if not set
-      if (!fieldMapping.sku || !fieldMapping.quantity) {
-        const newMapping = { ...fieldMapping };
-        
-        // Try to find SKU field
-        const skuField = result.headers.find((h: string) => 
-          h.toLowerCase().includes('sku') || h.toLowerCase().includes('артикул')
-        );
-        if (skuField && !newMapping.sku) newMapping.sku = skuField;
-        
-        // Try to find item name field
-        const nameField = result.headers.find((h: string) => 
-          h.toLowerCase().includes('name') || h.toLowerCase().includes('title') || 
-          h.toLowerCase().includes('название') || h.toLowerCase().includes('товар')
-        );
-        if (nameField && !newMapping.itemName) newMapping.itemName = nameField;
-        
-        // Try to find quantity field
-        const qtyField = result.headers.find((h: string) => 
-          h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty') || 
-          h.toLowerCase().includes('количество') || h.toLowerCase().includes('кол')
-        );
-        if (qtyField && !newMapping.quantity) newMapping.quantity = qtyField;
-        
-        setFieldMapping(newMapping);
-        localStorage.setItem("csvFieldMapping", JSON.stringify(newMapping));
-      }
-
-      // Don't set csvText - we use structured data directly
-      // This prevents infinite loop with textarea onChange
+      // Convert structured data to simple CSV format (SKU, Quantity)
+      // Extract SKU and quantity columns automatically
+      const skuCol = result.headers.find((h: string) => 
+        h.toLowerCase().includes('sku') || h.toLowerCase().includes('артикул')
+      ) || result.headers[0];
+      
+      const qtyCol = result.headers.find((h: string) => 
+        h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty') || 
+        h.toLowerCase().includes('количество') || h.toLowerCase().includes('кол')
+      ) || result.headers[result.headers.length - 1];
+      
+      // Build simple CSV text
+      const csvLines = result.data.map((row: Record<string, string>) => {
+        const sku = row[skuCol] || '';
+        const qty = row[qtyCol] || '';
+        return `${sku}, ${qty}`;
+      }).join('\n');
+      
+      setCsvText(csvLines);
       
       toast({
         title: "Загружено",
@@ -486,7 +471,7 @@ export default function DailyPickingView() {
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">SKU / Артикул</label>
                     <Select
-                      value={fieldMapping.sku}
+                      value={csvHeaders.includes(fieldMapping.sku) ? fieldMapping.sku : undefined}
                       onValueChange={(value) => {
                         const newMapping = { ...fieldMapping, sku: value };
                         setFieldMapping(newMapping);
@@ -509,7 +494,7 @@ export default function DailyPickingView() {
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">Название товара (опционально)</label>
                     <Select
-                      value={fieldMapping.itemName}
+                      value={csvHeaders.includes(fieldMapping.itemName) ? fieldMapping.itemName : undefined}
                       onValueChange={(value) => {
                         const newMapping = { ...fieldMapping, itemName: value };
                         setFieldMapping(newMapping);
@@ -533,7 +518,7 @@ export default function DailyPickingView() {
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">Количество</label>
                     <Select
-                      value={fieldMapping.quantity}
+                      value={csvHeaders.includes(fieldMapping.quantity) ? fieldMapping.quantity : undefined}
                       onValueChange={(value) => {
                         const newMapping = { ...fieldMapping, quantity: value };
                         setFieldMapping(newMapping);
