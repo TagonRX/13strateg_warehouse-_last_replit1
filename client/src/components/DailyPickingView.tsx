@@ -6,24 +6,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileUp, List, Trash2, CheckCircle2, Circle, Download, ChevronDown, ChevronUp } from "lucide-react";
+import { FileUp, List, Trash2, CheckCircle2, Circle, Download, ChevronDown, ChevronUp, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import type { PickingList, PickingTask } from "@shared/schema";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { format } from "date-fns";
 
 export default function DailyPickingView() {
   const { toast } = useToast();
   const { lastMessage, sendMessage } = useWebSocket();
+  
+  // Helper function to get today's date
+  const getTodayDate = () => format(new Date(), "dd.MM.yyyy");
+  
   const [csvText, setCsvText] = useState("");
-  const [listName, setListName] = useState("");
+  const [listName, setListName] = useState(getTodayDate());
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [letterFilter, setLetterFilter] = useState<string>("all");
   const [pageLimit, setPageLimit] = useState<string>("50");
   const [lastResult, setLastResult] = useState<any>(null);
-  const [csvUrl, setCsvUrl] = useState("");
+  const [csvUrl, setCsvUrl] = useState(() => {
+    // Load saved URL from localStorage or use default
+    const saved = localStorage.getItem("csvUrl");
+    return saved || "https://files.3dsellers.com/uploads/0874ff67c0e8b7abc580de328633eda6/export-csv/automation-172416.csv";
+  });
   const [csvUsername, setCsvUsername] = useState("baritero@gmail.com");
   const [csvPassword, setCsvPassword] = useState("Baritero1");
   const [showAuth, setShowAuth] = useState(false);
@@ -92,7 +101,7 @@ export default function DailyPickingView() {
       queryClient.invalidateQueries({ queryKey: ["/api/picking/lists"] });
       setSelectedListId(data.list.id);
       setCsvText("");
-      setListName("");
+      setListName(getTodayDate()); // Reset to today's date
       // Clear structured data to allow manual entry
       setCsvHeaders([]);
       setCsvStructuredData([]);
@@ -258,6 +267,14 @@ export default function DailyPickingView() {
     });
   };
 
+  const handleSaveUrl = () => {
+    localStorage.setItem("csvUrl", csvUrl);
+    toast({
+      title: "URL сохранен",
+      description: "URL будет использоваться при следующих загрузках",
+    });
+  };
+
   const handleLoadFromUrl = async () => {
     if (!csvUrl.trim()) {
       toast({
@@ -407,6 +424,14 @@ export default function DailyPickingView() {
                   onChange={(e) => setCsvUrl(e.target.value)}
                   className="flex-1"
                 />
+                <Button
+                  data-testid="button-save-url"
+                  onClick={handleSaveUrl}
+                  variant="outline"
+                  size="icon"
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
                 <Button
                   data-testid="button-load-url"
                   onClick={handleLoadFromUrl}
