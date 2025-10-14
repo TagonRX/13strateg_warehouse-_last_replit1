@@ -848,6 +848,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       return res.json({
+        success: true,
         headers,
         preview: shouldReturnFull ? dataRows.slice(0, 5) : previewRows,
         data: shouldReturnFull ? dataRows : undefined,
