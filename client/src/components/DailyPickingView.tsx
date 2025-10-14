@@ -29,6 +29,7 @@ export default function DailyPickingView() {
   const [showAuth, setShowAuth] = useState(false);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvStructuredData, setCsvStructuredData] = useState<Record<string, string>[]>([]);
   const [fieldMapping, setFieldMapping] = useState<{
     sku: string;
     itemName: string;
@@ -92,6 +93,9 @@ export default function DailyPickingView() {
       setSelectedListId(data.list.id);
       setCsvText("");
       setListName("");
+      // Clear structured data to allow manual entry
+      setCsvHeaders([]);
+      setCsvStructuredData([]);
       toast({ title: "List Created", description: `Created picking list with ${data.tasks.length} tasks` });
     },
     onError: (error: Error) => {
@@ -138,54 +142,77 @@ export default function DailyPickingView() {
     const lines = csvText.split("\n").filter(line => line.trim());
     const tasksMap = new Map<string, { sku: string; itemName?: string; requiredQuantity: number }>();
 
-    // Auto-detect delimiter: tab, comma, semicolon, or whitespace
-    let delimiter = ",";
-    const firstLine = lines[0] || "";
-    if (firstLine.includes("\t")) {
-      delimiter = "\t";
-    } else if (firstLine.includes(";")) {
-      delimiter = ";";
-    } else if (firstLine.includes(",")) {
-      delimiter = ",";
-    } else if (/\s+/.test(firstLine)) {
-      // If no delimiter found, try splitting by whitespace
-      delimiter = "whitespace";
-    }
+    // Check if we have structured data with field mapping (from URL load)
+    if (csvStructuredData.length > 0 && fieldMapping.sku && fieldMapping.quantity) {
+      // Use structured data directly (no parsing needed)
+      for (const row of csvStructuredData) {
+        const sku = (row[fieldMapping.sku] || "").toUpperCase().trim();
+        const itemName = fieldMapping.itemName ? row[fieldMapping.itemName]?.trim() : undefined;
+        const quantity = parseInt(row[fieldMapping.quantity]) || 1;
 
-    for (const line of lines) {
-      const parts = delimiter === "whitespace" 
-        ? line.trim().split(/\s+/).map(p => p.trim())
-        : line.split(delimiter).map(p => p.trim());
-        
-      if (parts.length >= 2) {
-        const sku = parts[0].toUpperCase();
-        let itemName: string | undefined;
-        let quantity: number;
+        if (!sku) continue;
 
-        // Format: SKU, название (опционально), количество
-        if (parts.length === 2) {
-          // SKU, количество
-          quantity = parseInt(parts[1]) || 1;
-        } else {
-          // SKU, название, количество
-          itemName = parts[1] || undefined;
-          quantity = parseInt(parts[2]) || 1;
-        }
-
-        // Объединяем одинаковые SKU
+        // Merge duplicate SKUs
         if (tasksMap.has(sku)) {
           const existing = tasksMap.get(sku)!;
           existing.requiredQuantity += quantity;
-          // Если новое название указано, а старого нет - обновляем
           if (itemName && !existing.itemName) {
             existing.itemName = itemName;
           }
         } else {
-          tasksMap.set(sku, {
-            sku,
-            itemName,
-            requiredQuantity: quantity,
-          });
+          tasksMap.set(sku, { sku, itemName, requiredQuantity: quantity });
+        }
+      }
+    } else {
+      // Legacy parsing (manual CSV input)
+      // Auto-detect delimiter: tab, comma, semicolon, or whitespace
+      let delimiter = ",";
+      const firstLine = lines[0] || "";
+      if (firstLine.includes("\t")) {
+        delimiter = "\t";
+      } else if (firstLine.includes(";")) {
+        delimiter = ";";
+      } else if (firstLine.includes(",")) {
+        delimiter = ",";
+      } else if (/\s+/.test(firstLine)) {
+        delimiter = "whitespace";
+      }
+
+      for (const line of lines) {
+        const parts = delimiter === "whitespace" 
+          ? line.trim().split(/\s+/).map(p => p.trim())
+          : line.split(delimiter).map(p => p.trim());
+          
+        if (parts.length >= 2) {
+          const sku = parts[0].toUpperCase();
+          let itemName: string | undefined;
+          let quantity: number;
+
+          // Format: SKU, название (опционально), количество
+          if (parts.length === 2) {
+            // SKU, количество
+            quantity = parseInt(parts[1]) || 1;
+          } else {
+            // SKU, название, количество
+            itemName = parts[1] || undefined;
+            quantity = parseInt(parts[2]) || 1;
+          }
+
+          // Объединяем одинаковые SKU
+          if (tasksMap.has(sku)) {
+            const existing = tasksMap.get(sku)!;
+            existing.requiredQuantity += quantity;
+            // Если новое название указано, а старого нет - обновляем
+            if (itemName && !existing.itemName) {
+              existing.itemName = itemName;
+            }
+          } else {
+            tasksMap.set(sku, {
+              sku,
+              itemName,
+              requiredQuantity: quantity,
+            });
+          }
         }
       }
     }
@@ -262,8 +289,9 @@ export default function DailyPickingView() {
         throw new Error(result.error || "Не удалось загрузить CSV");
       }
 
-      // Save headers
+      // Save headers and structured data
       setCsvHeaders(result.headers);
+      setCsvStructuredData(result.data);
 
       // Auto-detect field mapping if not set
       if (!fieldMapping.sku || !fieldMapping.quantity) {
@@ -293,9 +321,16 @@ export default function DailyPickingView() {
         localStorage.setItem("csvFieldMapping", JSON.stringify(newMapping));
       }
 
-      // Convert parsed data to CSV text for preview
+      // Convert to CSV text for preview (properly escape values with commas)
       const csvLines = result.data.map((row: any) => {
-        const values = result.headers.map((h: string) => row[h] || "");
+        const values = result.headers.map((h: string) => {
+          const value = row[h] || "";
+          // Escape values containing commas, quotes, or newlines
+          if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
+        });
         return values.join(",");
       });
       
@@ -410,7 +445,14 @@ export default function DailyPickingView() {
                 className="w-full h-32 p-3 rounded-md border bg-background text-sm font-mono"
                 placeholder="A101-F, 2&#10;E501-N, 3&#10;ZW-F232, 1"
                 value={csvText}
-                onChange={(e) => setCsvText(e.target.value)}
+                onChange={(e) => {
+                  setCsvText(e.target.value);
+                  // Clear structured data when user manually edits textarea
+                  if (csvStructuredData.length > 0) {
+                    setCsvHeaders([]);
+                    setCsvStructuredData([]);
+                  }
+                }}
               />
             </div>
 
