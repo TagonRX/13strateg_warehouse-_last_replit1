@@ -180,7 +180,12 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     }));
   };
 
-  const filteredItems = items
+  // Sort items by location A-Z first
+  const sortedItems = [...items].sort((a, b) => {
+    return a.location.localeCompare(b.location, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  const filteredItems = sortedItems
     .filter(
       (item) =>
         (item.productId || "").toLowerCase().includes(search.toLowerCase()) ||
