@@ -371,6 +371,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("[FILE SYNC] Current inventory items:", allItems.length);
 
+      // Track changes for archive
+      const archiveChanges: string[] = [];
+      archiveChanges.push("productId;itemName;action;field;oldValue;newValue;oldSku;oldLocation;oldQuantity;oldPrice;oldLength;oldWidth;oldHeight;oldVolume;oldWeight");
+
       // Track changes
       let updated = 0;
       let created = 0;
@@ -410,6 +414,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (currentItemsMap.has(productId)) {
           // Update existing item
           const existingItem = currentItemsMap.get(productId)!;
+          
+          // Compare fields and track changes for archive
+          const fieldsToCompare = [
+            { name: 'quantity', old: existingItem.quantity, new: itemData.quantity },
+            { name: 'price', old: existingItem.price, new: itemData.price },
+            { name: 'location', old: existingItem.location, new: itemData.location },
+            { name: 'sku', old: existingItem.sku, new: itemData.sku },
+            { name: 'barcode', old: existingItem.barcode, new: itemData.barcode },
+            { name: 'length', old: existingItem.length, new: itemData.length },
+            { name: 'width', old: existingItem.width, new: itemData.width },
+            { name: 'height', old: existingItem.height, new: itemData.height },
+            { name: 'volume', old: existingItem.volume, new: itemData.volume },
+            { name: 'weight', old: existingItem.weight, new: itemData.weight },
+          ];
+
+          for (const field of fieldsToCompare) {
+            if (field.old !== field.new) {
+              // Record change for archive
+              const archiveLine = [
+                productId,
+                existingItem.name,
+                'UPDATE',
+                field.name,
+                field.old ?? '',
+                field.new ?? '',
+                existingItem.sku,
+                existingItem.location,
+                existingItem.quantity,
+                existingItem.price ?? '',
+                existingItem.length ?? '',
+                existingItem.width ?? '',
+                existingItem.height ?? '',
+                existingItem.volume ?? '',
+                existingItem.weight ?? ''
+              ].join(';');
+              archiveChanges.push(archiveLine);
+            }
+          }
+
           console.log(`[FILE SYNC] Updating ${productId}:`, {
             id: existingItem.id,
             oldQuantity: existingItem.quantity,
@@ -424,47 +467,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           // Create new item
           console.log(`[FILE SYNC] Creating ${productId}:`, itemData);
+          
+          // Record creation for archive
+          const archiveLine = [
+            productId,
+            itemData.name,
+            'CREATE',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            ''
+          ].join(';');
+          archiveChanges.push(archiveLine);
+
           await storage.createInventoryItem(itemData);
           created++;
         }
       }
 
-      // Delete items not in CSV - DISABLED for safety
-      // Only process items that are explicitly in the CSV (create/update only)
-      // Uncomment below to enable deletion:
-      /*
+      // Track items that would be deleted (not in CSV but in DB)
+      // Deletion is DISABLED for safety, but we still record them in archive
       for (const [productId, item] of Array.from(currentItemsMap.entries())) {
-        await storage.deleteInventoryItem(item.id, userId);
-        deleted++;
+        // Record deletion for archive (even though we don't actually delete)
+        const archiveLine = [
+          productId,
+          item.name,
+          'DELETED',
+          '',
+          '',
+          '',
+          item.sku,
+          item.location,
+          item.quantity,
+          item.price ?? '',
+          item.length ?? '',
+          item.width ?? '',
+          item.height ?? '',
+          item.volume ?? '',
+          item.weight ?? ''
+        ].join(';');
+        archiveChanges.push(archiveLine);
         deletedItems.push(`${item.name} (${item.productId})`);
-
-        // Log deletion
-        await storage.createEventLog({
-          userId,
-          action: "ITEM_DELETED",
-          details: `Deleted from file sync: ${item.name} (${item.productId}), quantity: ${item.quantity}`,
-          productId: item.productId || null,
-          itemName: item.name || null,
-          sku: item.sku,
-          location: item.location,
-        });
       }
-      */
+
+      // Create archive file if there are changes
+      if (archiveChanges.length > 1) { // More than just header
+        try {
+          const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0].replace('T', '_');
+          const archivePath = path.join(process.cwd(), "data", "arhiv");
+          const archiveFile = path.join(archivePath, `${timestamp}.csv`);
+
+          // Create archive directory if it doesn't exist
+          await fs.mkdir(archivePath, { recursive: true });
+
+          // Write archive file
+          await fs.writeFile(archiveFile, archiveChanges.join('\n'), 'utf-8');
+          console.log(`[FILE SYNC] Archive saved: ${archiveFile}`);
+        } catch (error) {
+          console.error("[FILE SYNC] Failed to create archive:", error);
+        }
+      }
 
       // Log the sync event
       await storage.createEventLog({
         userId,
         action: "FILE_SYNC",
-        details: `File sync: ${created} created, ${updated} updated, ${deleted} deleted`,
+        details: `File sync: ${created} created, ${updated} updated, ${deletedItems.length} would be deleted (archived)`,
       });
 
-      console.log("[FILE SYNC] Results:", { created, updated, deleted });
+      console.log("[FILE SYNC] Results:", { created, updated, deleted: deletedItems.length });
 
       return res.json({ 
         success: true, 
         created, 
         updated, 
-        deleted,
+        deleted: 0, // Deletion disabled
+        wouldBeDeleted: deletedItems.length,
         deletedItems 
       });
     } catch (error: any) {
