@@ -386,6 +386,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           continue; // Skip invalid items
         }
 
+        const length = csvItem.length ? parseInt(csvItem.length) : undefined;
+        const width = csvItem.width ? parseInt(csvItem.width) : undefined;
+        const height = csvItem.height ? parseInt(csvItem.height) : undefined;
+        const volume = length && width && height ? length * width * height : undefined;
+
         const itemData = {
           productId,
           name: csvItem.name || "",
@@ -394,23 +399,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quantity,
           barcode: csvItem.barcode || "",
           price: csvItem.price ? parseInt(csvItem.price) : undefined,
+          length,
+          width,
+          height,
+          volume,
+          weight: csvItem.weight ? parseInt(csvItem.weight) : undefined,
           createdBy: userId,
         };
 
         if (currentItemsMap.has(productId)) {
           // Update existing item
           const existingItem = currentItemsMap.get(productId)!;
-          await storage.updateInventoryItem(existingItem.id, itemData);
+          console.log(`[FILE SYNC] Updating ${productId}:`, {
+            id: existingItem.id,
+            oldQuantity: existingItem.quantity,
+            newQuantity: itemData.quantity,
+            oldPrice: existingItem.price,
+            newPrice: itemData.price,
+            dimensions: { length: itemData.length, width: itemData.width, height: itemData.height }
+          });
+          await storage.updateInventoryItemById(existingItem.id, itemData);
           updated++;
           currentItemsMap.delete(productId); // Mark as processed
         } else {
           // Create new item
+          console.log(`[FILE SYNC] Creating ${productId}:`, itemData);
           await storage.createInventoryItem(itemData);
           created++;
         }
       }
 
-      // Delete items not in CSV
+      // Delete items not in CSV - DISABLED for safety
+      // Only process items that are explicitly in the CSV (create/update only)
+      // Uncomment below to enable deletion:
+      /*
       for (const [productId, item] of Array.from(currentItemsMap.entries())) {
         await storage.deleteInventoryItem(item.id, userId);
         deleted++;
@@ -427,6 +449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           location: item.location,
         });
       }
+      */
 
       // Log the sync event
       await storage.createEventLog({

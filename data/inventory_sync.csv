@@ -1,3 +1,5 @@
-productId;name;sku;location;quantity;barcode
-SYNC-TEST-1;Sync Test Item 1;A101-TEST;A101;15;BC001
-SYNC-TEST-2;Sync Test Item 2;B202-TEST;B202;8;BC002
+productId;name;sku;location;quantity;barcode;price;length;width;height;weight
+SYNC-001;Test Sync Product A Updated;A100-SYNC;A100;12;SYNC001;180;55;35;22;6
+SYNC-002;Test Sync Product B Updated;B200-SYNC;B200;30;SYNC002;250;65;45;28;10
+SYNC-003;Test Sync Product C Updated;C300-SYNC;C300;20;SYNC003;120;48;38;18;4
+SYNC-004;New Sync Product D;D400-SYNC;D400;8;SYNC004;300;70;50;30;12
