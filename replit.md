@@ -41,9 +41,15 @@ Preferred communication style: Simple, everyday language.
 *   **Worker Analytics**: Displays metrics for all users (admins + workers) including login count, stock-in/out counts, and cost totals. Analytics page shows sortable columns for "Стоимость добавл." (stock-in cost) and "Стоимость выдано" (stock-out cost), providing financial insights into warehouse operations.
 *   **UI Enhancements**: Improved table readability, compact layouts for cards and settings, consistent styling for buttons and dropdowns. CSV sources in collapsible section with responsive grid (2-5 columns based on screen size). Price field added to inventory table and stock-in form for cost tracking.
 
+## Deployment
+
+*   **Ubuntu Server Package**: Complete installation scripts in `deployment/` folder (1-5 for setup, 6-7 for GitHub sync with auto-backup)
+*   **GitHub Integration**: Optional version control sync with automatic backup before updates and rollback support (see `deployment/GITHUB.md`)
+*   **Backup System**: Automated backup creation before GitHub sync, keeps last 10 versions in `/opt/warehouse-backups/`
+
 ## External Dependencies
 
-*   **Database**: Neon Serverless PostgreSQL.
+*   **Database**: Neon Serverless PostgreSQL (development), PostgreSQL 16 (production)
 *   **UI Components**: Radix UI, shadcn/ui, Lucide React, cmdk, vaul.
 *   **Form Handling**: React Hook Form, @hookform/resolvers, Zod.
 *   **Data Fetching**: TanStack Query.
