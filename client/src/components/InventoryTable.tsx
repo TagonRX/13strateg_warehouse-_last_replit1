@@ -33,6 +33,7 @@ interface InventoryItem {
   quantity: number;
   barcode?: string;
   barcodeMappings?: string; // JSON string
+  price?: number;
   length?: number;
   width?: number;
   height?: number;
@@ -54,6 +55,7 @@ interface EditingRow {
   quantity: number;
   barcode: string;
   barcodeMappings: BarcodeMapping[];
+  price: string;
   length: string;
   width: string;
   height: string;
@@ -137,6 +139,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     sku: 120,
     quantity: 100,
     barcode: 150,
+    price: 100,
     dimensions: 180,
     volume: 100,
     weight: 100,
@@ -286,6 +289,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       quantity: item.quantity,
       barcode: item.barcode || "",
       barcodeMappings,
+      price: item.price?.toString() || "",
       length: item.length?.toString() || "",
       width: item.width?.toString() || "",
       height: item.height?.toString() || "",
@@ -319,6 +323,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         quantity: editingRow.quantity,
         barcode: editingRow.barcode || undefined,
         barcodeMappings: barcodeMappingsJson,
+        price: editingRow.price ? parseInt(editingRow.price) : undefined,
         length,
         width,
         height,
@@ -399,6 +404,15 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
               totalQuantity={editingRow.quantity}
             />
           </TableCell>
+          <TableCell style={{ width: `${columnWidths.price}px`, minWidth: `${columnWidths.price}px` }}>
+            <Input
+              type="number"
+              value={editingRow.price}
+              onChange={(e) => setEditingRow({...editingRow, price: e.target.value})}
+              placeholder="Цена"
+              className="h-8 w-full text-xs"
+            />
+          </TableCell>
           <TableCell style={{ width: `${columnWidths.dimensions}px`, minWidth: `${columnWidths.dimensions}px` }}>
             <div className="flex gap-1">
               <Input
@@ -471,6 +485,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="font-mono text-xs">{item.sku}</TableCell>
         <TableCell style={{ width: `${columnWidths.quantity}px`, minWidth: `${columnWidths.quantity}px` }} className="text-right text-xs font-medium">{item.quantity}</TableCell>
         <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="font-mono text-xs">{item.barcode || "-"}</TableCell>
+        <TableCell style={{ width: `${columnWidths.price}px`, minWidth: `${columnWidths.price}px` }} className="text-xs">{item.price || "-"}</TableCell>
         <TableCell style={{ width: `${columnWidths.dimensions}px`, minWidth: `${columnWidths.dimensions}px` }} className="text-xs">
           {item.length || item.width || item.height ? (
             <span className="text-muted-foreground">
@@ -545,6 +560,9 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                 <ResizableHeader columnKey="barcode" width={columnWidths.barcode} onResize={handleResize} className="text-xs">
                   Штрихкод
                 </ResizableHeader>
+                <ResizableHeader columnKey="price" width={columnWidths.price} onResize={handleResize} className="text-xs">
+                  Цена
+                </ResizableHeader>
                 <ResizableHeader columnKey="dimensions" width={columnWidths.dimensions} onResize={handleResize} className="text-xs">
                   Размеры (см)
                 </ResizableHeader>
@@ -593,6 +611,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                         <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="text-xs text-muted-foreground">
                           {totalBarcodes} штрихкодов
                         </TableCell>
+                        <TableCell style={{ width: `${columnWidths.price}px`, minWidth: `${columnWidths.price}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.dimensions}px`, minWidth: `${columnWidths.dimensions}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.volume}px`, minWidth: `${columnWidths.volume}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.weight}px`, minWidth: `${columnWidths.weight}px` }} className="text-xs text-muted-foreground">-</TableCell>
