@@ -27,8 +27,8 @@ Preferred communication style: Simple, everyday language.
 
 ### Database Schema
 *   **ORM**: Drizzle ORM with PostgreSQL dialect.
-*   **Tables**: `users`, `inventory_items`, `event_logs` (comprehensive audit with full product tracking), `worker_analytics`, `picking_lists`, `picking_tasks` (including `itemName`), `sku_errors`.
-*   **Design Decisions**: UUID primary keys, automatic timestamps, foreign key relationships, product deduplication by `productId`, upsert patterns for bulk inventory updates. Event logs store complete product information for traceability.
+*   **Tables**: `users`, `inventory_items`, `event_logs` (comprehensive audit with full product tracking), `worker_analytics`, `picking_lists`, `picking_tasks` (including `itemName`), `sku_errors`, `csv_sources` (globally shared CSV sources), `global_settings` (shared configuration like CSV credentials).
+*   **Design Decisions**: UUID primary keys, automatic timestamps, foreign key relationships, product deduplication by `productId`, upsert patterns for bulk inventory updates. Event logs store complete product information for traceability. CSV sources are globally shared across all users for consistent picking list management.
 
 ### Key Features & Implementations
 *   **Inventory Management**: Bulk import, real-time updates post-picking, location consistency checks.
