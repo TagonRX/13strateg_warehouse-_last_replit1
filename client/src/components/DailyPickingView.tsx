@@ -502,16 +502,24 @@ export default function DailyPickingView() {
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   placeholder="Логин"
-                  value={globalUsername}
-                  onChange={(e) => updateGlobalCredentialsMutation.mutate({ key: "csv_global_username", value: e.target.value })}
+                  defaultValue={globalUsername}
+                  onBlur={(e) => {
+                    if (e.target.value !== globalUsername) {
+                      updateGlobalCredentialsMutation.mutate({ key: "csv_global_username", value: e.target.value });
+                    }
+                  }}
                   data-testid="input-global-username"
                   type="text"
                   className="text-sm"
                 />
                 <Input
                   placeholder="Пароль"
-                  value={globalPassword}
-                  onChange={(e) => updateGlobalCredentialsMutation.mutate({ key: "csv_global_password", value: e.target.value })}
+                  defaultValue={globalPassword}
+                  onBlur={(e) => {
+                    if (e.target.value !== globalPassword) {
+                      updateGlobalCredentialsMutation.mutate({ key: "csv_global_password", value: e.target.value });
+                    }
+                  }}
                   data-testid="input-global-password"
                   type="password"
                   className="text-sm"
@@ -558,8 +566,13 @@ export default function DailyPickingView() {
                       <div className="flex items-center justify-between gap-1">
                         <Input
                           placeholder="S1"
-                          value={source.name}
-                          onChange={(e) => updateCsvSourceMutation.mutate({ id: source.id, updates: { name: e.target.value.slice(0, 3) } })}
+                          defaultValue={source.name}
+                          onBlur={(e) => {
+                            const newName = e.target.value.slice(0, 3);
+                            if (newName !== source.name) {
+                              updateCsvSourceMutation.mutate({ id: source.id, updates: { name: newName } });
+                            }
+                          }}
                           data-testid={`input-source-name-${index}`}
                           className="h-6 w-10 text-xs text-center p-0"
                           maxLength={3}
@@ -586,8 +599,12 @@ export default function DailyPickingView() {
                       </div>
                       <Input
                         placeholder="URL"
-                        value={source.url}
-                        onChange={(e) => updateCsvSourceMutation.mutate({ id: source.id, updates: { url: e.target.value } })}
+                        defaultValue={source.url}
+                        onBlur={(e) => {
+                          if (e.target.value !== source.url) {
+                            updateCsvSourceMutation.mutate({ id: source.id, updates: { url: e.target.value } });
+                          }
+                        }}
                         data-testid={`input-source-url-${index}`}
                         className="h-6 text-xs w-full"
                         title={source.url}
