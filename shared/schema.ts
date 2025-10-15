@@ -28,6 +28,7 @@ export const inventoryItems = pgTable("inventory_items", {
   height: integer("height"), // Высота в см (до 3 знаков, макс 999)
   volume: integer("volume"), // Объем (перемножение length * width * height)
   weight: integer("weight"), // Вес в кг (до 3 знаков, макс 999)
+  price: integer("price"), // Цена товара (целое число)
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -358,6 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           location: csvItem.location || csvItem.sku || productId,
           quantity,
           barcode: csvItem.barcode || "",
+          price: csvItem.price ? parseInt(csvItem.price) : undefined,
           createdBy: userId,
         };
 
