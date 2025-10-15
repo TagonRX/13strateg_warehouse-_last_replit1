@@ -45,6 +45,8 @@ export const eventLogs = pgTable("event_logs", {
   itemName: text("item_name"), // Название товара
   sku: text("sku"), // SKU/Локация на момент действия
   location: text("location"), // Локация на момент действия
+  quantity: integer("quantity"), // Количество товара на момент действия
+  price: integer("price"), // Цена товара на момент действия
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

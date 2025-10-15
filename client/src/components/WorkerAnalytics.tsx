@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type SortColumn = 'userName' | 'login' | 'stockIn' | 'stockOut' | 'csvUpload' | 'pickingListCreated' | 'itemPicked' | 'locationDeleted';
+type SortColumn = 'userName' | 'login' | 'stockIn' | 'stockInCost' | 'stockOut' | 'stockOutCost' | 'csvUpload' | 'pickingListCreated' | 'itemPicked' | 'locationDeleted';
 type SortDirection = 'asc' | 'desc' | null;
 
 export default function WorkerAnalytics() {
@@ -19,7 +19,9 @@ export default function WorkerAnalytics() {
     userName: string;
     login: number;
     stockIn: number;
+    stockInCost: number;
     stockOut: number;
+    stockOutCost: number;
     csvUpload: number;
     pickingListCreated: number;
     itemPicked: number;
@@ -145,11 +147,33 @@ export default function WorkerAnalytics() {
                     <Button 
                       variant="ghost" 
                       size="sm" 
+                      onClick={() => handleSort('stockInCost')}
+                      className="hover-elevate active-elevate-2"
+                      data-testid="sort-stockInCost"
+                    >
+                      Стоимость добавл. {getSortIcon('stockInCost')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
                       onClick={() => handleSort('stockOut')}
                       className="hover-elevate active-elevate-2"
                       data-testid="sort-stockOut"
                     >
                       Выдано {getSortIcon('stockOut')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => handleSort('stockOutCost')}
+                      className="hover-elevate active-elevate-2"
+                      data-testid="sort-stockOutCost"
+                    >
+                      Стоимость выдано {getSortIcon('stockOutCost')}
                     </Button>
                   </TableHead>
                   <TableHead className="text-center">
@@ -210,8 +234,14 @@ export default function WorkerAnalytics() {
                     <TableCell className="text-center" data-testid={`text-stock-in-${worker.userId}`}>
                       {worker.stockIn}
                     </TableCell>
+                    <TableCell className="text-center" data-testid={`text-stock-in-cost-${worker.userId}`}>
+                      {worker.stockInCost}
+                    </TableCell>
                     <TableCell className="text-center" data-testid={`text-stock-out-${worker.userId}`}>
                       {worker.stockOut}
+                    </TableCell>
+                    <TableCell className="text-center" data-testid={`text-stock-out-cost-${worker.userId}`}>
+                      {worker.stockOutCost}
                     </TableCell>
                     <TableCell className="text-center" data-testid={`text-csv-upload-${worker.userId}`}>
                       {worker.csvUpload}

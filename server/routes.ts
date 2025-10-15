@@ -118,6 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         // Log the event using authenticated user ID
+        // Use price from request if provided, otherwise use existing item's price
         await storage.createEventLog({
           userId,
           action: "STOCK_IN_UPDATE",
@@ -126,6 +127,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           itemName: validation.data.name || null,
           sku: validation.data.sku,
           location: validation.data.location,
+          quantity: quantityToAdd,
+          price: validation.data.price !== undefined ? validation.data.price : existing.price,
         });
 
         return res.json(updated);
@@ -145,6 +148,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           itemName: validation.data.name || null,
           sku: validation.data.sku,
           location: validation.data.location,
+          quantity: validation.data.quantity || null,
+          price: validation.data.price || null,
         });
 
         return res.status(201).json(item);
@@ -171,16 +176,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update item
       const updated = await storage.updateInventoryItemById(id, updates);
 
-      // Log the event
-      await storage.createEventLog({
-        userId,
-        action: "INVENTORY_UPDATE",
-        details: `Updated item ${existing.sku} (${id})`,
-        productId: existing.productId || null,
-        itemName: existing.name || null,
-        sku: existing.sku,
-        location: existing.location,
-      });
+      // Check if quantity decreased (STOCK_OUT)
+      if (updates.quantity !== undefined && updates.quantity < existing.quantity) {
+        const quantityReduced = existing.quantity - updates.quantity;
+        await storage.createEventLog({
+          userId,
+          action: "STOCK_OUT",
+          details: `Reduced ${existing.name || existing.sku} (${id}): -${quantityReduced}`,
+          productId: existing.productId || null,
+          itemName: existing.name || null,
+          sku: existing.sku,
+          location: existing.location,
+          quantity: quantityReduced,
+          price: existing.price || null,
+        });
+      } else if (updates.quantity !== undefined && updates.quantity > existing.quantity) {
+        // Check if quantity increased (STOCK_IN_UPDATE)
+        const quantityAdded = updates.quantity - existing.quantity;
+        await storage.createEventLog({
+          userId,
+          action: "STOCK_IN_UPDATE",
+          details: `Increased ${existing.name || existing.sku} (${id}): +${quantityAdded}`,
+          productId: existing.productId || null,
+          itemName: existing.name || null,
+          sku: existing.sku,
+          location: existing.location,
+          quantity: quantityAdded,
+          price: existing.price || null,
+        });
+      } else {
+        // Regular update (not quantity change)
+        await storage.createEventLog({
+          userId,
+          action: "INVENTORY_UPDATE",
+          details: `Updated item ${existing.sku} (${id})`,
+          productId: existing.productId || null,
+          itemName: existing.name || null,
+          sku: existing.sku,
+          location: existing.location,
+        });
+      }
 
       // Check if quantity is 0 and delete if so
       if (updated.quantity === 0) {

@@ -76,7 +76,9 @@ export interface IStorage {
     userName: string;
     login: number;
     stockIn: number;
+    stockInCost: number;
     stockOut: number;
+    stockOutCost: number;
     csvUpload: number;
     pickingListCreated: number;
     itemPicked: number;
@@ -587,6 +589,8 @@ export class DbStorage implements IStorage {
       itemName: item.name || null,
       sku: item.sku,
       location: item.location,
+      quantity: 1,
+      price: item.price || null,
     });
 
     // Return item with updated quantity
@@ -798,6 +802,8 @@ export class DbStorage implements IStorage {
       itemName: item.name || null,
       sku: item.sku,
       location: item.location,
+      quantity: 1,
+      price: item.price || null,
     });
 
     return { 
@@ -866,6 +872,8 @@ export class DbStorage implements IStorage {
         itemName: item.name || task.itemName || null,
         sku: item.sku,
         location: item.location,
+        quantity: 1,
+        price: item.price || null,
       });
 
       return { 
@@ -896,6 +904,8 @@ export class DbStorage implements IStorage {
         sku: task.sku,
         itemName: task.itemName || null,
         location: null,
+        quantity: 1,
+        price: null,
       });
 
       return { 
@@ -931,7 +941,9 @@ export class DbStorage implements IStorage {
     userName: string;
     login: number;
     stockIn: number;
+    stockInCost: number;
     stockOut: number;
+    stockOutCost: number;
     csvUpload: number;
     pickingListCreated: number;
     itemPicked: number;
@@ -947,8 +959,8 @@ export class DbStorage implements IStorage {
       dateFilter = sql`${eventLogs.createdAt} >= CURRENT_DATE - INTERVAL '30 days'`;
     }
 
-    // Get all users
-    const allUsers = await db.select().from(users).where(eq(users.role, 'worker'));
+    // Get all users (both workers and admins)
+    const allUsers = await db.select().from(users);
     
     // Get event logs for the period
     const logs = await db.select().from(eventLogs).where(dateFilter);
@@ -957,12 +969,30 @@ export class DbStorage implements IStorage {
     const analytics = allUsers.map(user => {
       const userLogs = logs.filter(log => log.userId === user.id);
       
+      // Calculate total cost for STOCK_IN and STOCK_OUT
+      const stockInLogs = userLogs.filter(log => log.action === 'STOCK_IN' || log.action === 'STOCK_IN_UPDATE');
+      const stockOutLogs = userLogs.filter(log => log.action === 'STOCK_OUT');
+      
+      const stockInCost = stockInLogs.reduce((sum, log) => {
+        const quantity = log.quantity || 0;
+        const price = log.price || 0;
+        return sum + (quantity * price);
+      }, 0);
+      
+      const stockOutCost = stockOutLogs.reduce((sum, log) => {
+        const quantity = log.quantity || 0;
+        const price = log.price || 0;
+        return sum + (quantity * price);
+      }, 0);
+      
       return {
         userId: user.id,
         userName: user.name,
         login: userLogs.filter(log => log.action === 'LOGIN').length,
-        stockIn: userLogs.filter(log => log.action === 'STOCK_IN').length,
+        stockIn: userLogs.filter(log => log.action === 'STOCK_IN' || log.action === 'STOCK_IN_UPDATE').length,
+        stockInCost,
         stockOut: userLogs.filter(log => log.action === 'STOCK_OUT').length,
+        stockOutCost,
         csvUpload: userLogs.filter(log => log.action === 'CSV_UPLOAD').length,
         pickingListCreated: userLogs.filter(log => log.action === 'PICKING_LIST_CREATED').length,
         itemPicked: userLogs.filter(log => log.action === 'PICK_ITEM' || log.action === 'ITEM_PICKED' || log.action === 'PICK_ITEM_MANUAL' || log.action === 'PICK_ITEM_MANUAL_NO_INVENTORY').length,

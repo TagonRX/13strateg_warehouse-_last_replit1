@@ -15,6 +15,7 @@ interface StockInFormProps {
     location: string;
     quantity: number;
     barcode?: string;
+    price?: number;
   }) => void;
 }
 
@@ -25,6 +26,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
   const [location, setLocation] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [barcode, setBarcode] = useState("");
+  const [price, setPrice] = useState("");
   const [isWaitingForScan, setIsWaitingForScan] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   
@@ -82,6 +84,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         location,
         quantity: scannedBarcodes.length,
         barcode: scannedBarcodes[0] || undefined,
+        price: price ? parseInt(price) : undefined,
       });
       
       // Очистка формы
@@ -89,6 +92,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       setName("");
       setSku("");
       setLocation("");
+      setPrice("");
       setScannedBarcodes([]);
       setIsWaitingForScan(false);
     } else {
@@ -100,6 +104,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         location,
         quantity,
         barcode: barcode || undefined,
+        price: price ? parseInt(price) : undefined,
       });
       
       // Очистка формы
@@ -109,6 +114,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       setLocation("");
       setQuantity(1);
       setBarcode("");
+      setPrice("");
       setIsWaitingForScan(false);
     }
   };
@@ -162,6 +168,19 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Название товара"
                 data-testid="input-name"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="price">Цена</Label>
+              <Input
+                id="price"
+                type="number"
+                min="0"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="0"
+                data-testid="input-price"
               />
             </div>
             
