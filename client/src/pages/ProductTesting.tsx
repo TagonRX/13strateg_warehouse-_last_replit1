@@ -7,19 +7,38 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Scan, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, Scan, CheckCircle2, AlertCircle, Usb, Smartphone, Wifi } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import type { PendingTest, TestedItem } from "@shared/schema";
+import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
+import { useWebSocket } from "@/hooks/useWebSocket";
+
+type ScannerMode = "usb" | "phone";
 
 export default function ProductTesting() {
   const [barcode, setBarcode] = useState("");
   const [selectedCondition, setSelectedCondition] = useState<string>("");
   const [mode, setMode] = useState<"first-scan" | "second-scan">("first-scan");
   const [currentTest, setCurrentTest] = useState<PendingTest | null>(null);
+  const [scannerMode, setScannerMode] = useState<ScannerMode>("usb");
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // WebSocket for phone mode
+  const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
+
+  // USB scanner routing - активна только в USB режиме
+  const { inputRef: usbBarcodeRef } = useGlobalBarcodeInput(scannerMode === "usb");
+
+  // Обработка сообщений от телефона через WebSocket
+  useEffect(() => {
+    if (lastMessage?.type === "barcode_scanned" && scannerMode === "phone") {
+      const code = lastMessage.barcode;
+      setBarcode(code);
+    }
+  }, [lastMessage, scannerMode]);
 
   // Fetch pending tests
   const { data: pendingTests = [] } = useQuery<PendingTest[]>({
@@ -46,7 +65,7 @@ export default function ProductTesting() {
       setCurrentTest(data);
       setMode("second-scan");
       setBarcode("");
-      barcodeInputRef.current?.focus();
+      setTimeout(() => currentInputRef.current?.focus(), 100);
     },
     onError: (error: Error) => {
       toast({
@@ -55,7 +74,7 @@ export default function ProductTesting() {
         description: error.message,
       });
       setBarcode("");
-      barcodeInputRef.current?.focus();
+      setTimeout(() => currentInputRef.current?.focus(), 100);
     },
   });
 
@@ -77,7 +96,7 @@ export default function ProductTesting() {
       setMode("first-scan");
       setSelectedCondition("");
       setBarcode("");
-      barcodeInputRef.current?.focus();
+      setTimeout(() => currentInputRef.current?.focus(), 100);
     },
     onError: (error: Error) => {
       toast({
@@ -86,7 +105,7 @@ export default function ProductTesting() {
         description: error.message,
       });
       setBarcode("");
-      barcodeInputRef.current?.focus();
+      setTimeout(() => currentInputRef.current?.focus(), 100);
     },
   });
 
@@ -107,7 +126,7 @@ export default function ProductTesting() {
       if (pending) {
         setCurrentTest(pending);
         setBarcode("");
-        barcodeInputRef.current?.focus();
+        setTimeout(() => currentInputRef.current?.focus(), 100);
       } else {
         toast({
           variant: "destructive",
@@ -115,7 +134,7 @@ export default function ProductTesting() {
           description: "Товар не найден в списке тестирования",
         });
         setBarcode("");
-        barcodeInputRef.current?.focus();
+        setTimeout(() => currentInputRef.current?.focus(), 100);
       }
     }
   };
@@ -143,13 +162,20 @@ export default function ProductTesting() {
     setMode("first-scan");
     setSelectedCondition("");
     setBarcode("");
-    barcodeInputRef.current?.focus();
+    setTimeout(() => currentInputRef.current?.focus(), 100);
   };
 
-  // Auto-focus on mount
+  // Auto-focus on mount и синхронизация ref'ов
   useEffect(() => {
-    barcodeInputRef.current?.focus();
-  }, []);
+    if (scannerMode === "usb" && usbBarcodeRef.current) {
+      usbBarcodeRef.current.focus();
+    } else if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
+    }
+  }, [scannerMode]);
+
+  // Объединенный ref для input - в USB режиме используем usbBarcodeRef
+  const currentInputRef = scannerMode === "usb" ? usbBarcodeRef : barcodeInputRef;
 
   const isPending = startTestMutation.isPending || completeTestMutation.isPending;
 
@@ -166,6 +192,43 @@ export default function ProductTesting() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Scanner Mode Selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Сканер:</span>
+            <div className="flex gap-1">
+              <Button
+                type="button"
+                variant={scannerMode === "usb" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setScannerMode("usb")}
+                data-testid="button-scanner-usb"
+                className="gap-1.5"
+              >
+                <Usb className="w-4 h-4" />
+                USB
+              </Button>
+              <Button
+                type="button"
+                variant={scannerMode === "phone" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setScannerMode("phone")}
+                data-testid="button-scanner-phone"
+                className="gap-1.5"
+              >
+                <Smartphone className="w-4 h-4" />
+                Телефон
+              </Button>
+            </div>
+            {scannerMode === "phone" && (
+              <div className="flex items-center gap-1.5 ml-2">
+                <Wifi className={`w-4 h-4 ${isPhoneConnected ? "text-green-600" : "text-amber-600"}`} />
+                <span className={`text-xs ${isPhoneConnected ? "text-green-600" : "text-amber-600"}`}>
+                  {isPhoneConnected ? "Подключен" : "Подключение..."}
+                </span>
+              </div>
+            )}
+          </div>
+
           {mode === "first-scan" ? (
             <>
               <div className="p-4 bg-muted rounded-md">
@@ -178,19 +241,19 @@ export default function ProductTesting() {
                 <div className="space-y-2">
                   <Label htmlFor="barcode">Штрихкод</Label>
                   <Input
-                    ref={barcodeInputRef}
+                    ref={currentInputRef}
                     id="barcode"
-                    data-testid="input-barcode-first"
+                    data-testid="input-barcode"
                     value={barcode}
                     onChange={(e) => setBarcode(e.target.value)}
-                    placeholder="Отсканируйте штрихкод"
+                    placeholder={scannerMode === "usb" ? "Отсканируйте штрихкод" : "Введите или отсканируйте"}
                     disabled={isPending}
                   />
                 </div>
 
                 <Button 
                   type="submit" 
-                  data-testid="button-start-test"
+                  data-testid="button-scan"
                   disabled={!barcode.trim() || isPending}
                   className="w-full"
                 >
@@ -270,12 +333,12 @@ export default function ProductTesting() {
                     <div className="space-y-2">
                       <Label htmlFor="barcode-second">Штрихкод</Label>
                       <Input
-                        ref={barcodeInputRef}
+                        ref={currentInputRef}
                         id="barcode-second"
                         data-testid="input-barcode-second"
                         value={barcode}
                         onChange={(e) => setBarcode(e.target.value)}
-                        placeholder="Отсканируйте штрихкод"
+                        placeholder={scannerMode === "usb" ? "Отсканируйте штрихкод" : "Введите или отсканируйте"}
                         disabled={isPending}
                       />
                     </div>
