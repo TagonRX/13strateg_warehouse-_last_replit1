@@ -62,17 +62,21 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
         });
       }
 
-      // КРИТИЧНО: Блокируем команды которые могут открывать окна/вкладки
-      // Даже если это от сканера - предотвращаем их выполнение
-      if (e.ctrlKey || e.altKey || e.metaKey) {
-        // Блокируем опасные комбинации (Ctrl+T, Ctrl+N, Ctrl+W и т.д.)
-        const dangerousKeys = ['t', 'n', 'w', 'o', 'p', 'Tab'];
-        if (dangerousKeys.includes(e.key.toLowerCase()) || dangerousKeys.includes(e.key)) {
-          console.warn('[Barcode Scanner] Blocked dangerous key combination:', e.key);
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        return;
+      // КРИТИЧНО: Блокируем ВСЕ комбинации с модификаторами
+      // Сканеры иногда отправляют случайные Ctrl/Alt/Meta комбинации
+      // которые открывают окна браузера, вкладки, диалоги и т.д.
+      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey && (e.ctrlKey || e.altKey || e.metaKey)) {
+        console.warn('[Barcode Scanner] Blocked modifier key combination:', {
+          key: e.key,
+          ctrl: e.ctrlKey,
+          alt: e.altKey,
+          meta: e.metaKey,
+          shift: e.shiftKey
+        });
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return false;
       }
 
       // Enter - завершаем сканирование
@@ -320,13 +324,38 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
       }
     };
 
-    // Дополнительный обработчик для блокировки браузерных действий
+    // Дополнительный обработчик для АГРЕССИВНОЙ блокировки браузерных действий
     const preventBrowserActions = (e: KeyboardEvent) => {
-      // Блокируем Ctrl/Cmd комбинации которые могут открывать окна
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
-        const key = e.key.toLowerCase();
-        // Список опасных клавиш: новая вкладка, окно, печать, поиск и т.д.
-        if (['t', 'n', 'w', 'o', 'p', 'f', 'k', 'l'].includes(key)) {
+      // Блокируем ВСЕ Ctrl/Cmd/Alt комбинации - сканеры могут генерировать
+      // случайные комбинации которые открывают окна, диалоги, меню и т.д.
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        // Исключение: Разрешаем базовые команды редактирования только когда НЕ сканируем
+        if (!scannerActive.current) {
+          const allowedKeys = ['a', 'c', 'v', 'x', 'z', 'y']; // select all, copy, paste, cut, undo, redo
+          if (allowedKeys.includes(e.key.toLowerCase())) {
+            return; // Разрешаем эти команды
+          }
+        }
+        
+        // Все остальные комбинации - БЛОКИРУЕМ
+        console.warn('[Barcode Scanner] Prevented browser action:', {
+          key: e.key,
+          ctrl: e.ctrlKey,
+          alt: e.altKey,
+          meta: e.metaKey,
+          scannerActive: scannerActive.current
+        });
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return false;
+      }
+      
+      // Блокируем функциональные клавиши F1-F12 (могут открывать dev tools, help и т.д.)
+      if (e.key.startsWith('F') && e.key.length <= 3) {
+        const fKeyNum = parseInt(e.key.substring(1));
+        if (fKeyNum >= 1 && fKeyNum <= 12) {
+          console.warn('[Barcode Scanner] Blocked function key:', e.key);
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
