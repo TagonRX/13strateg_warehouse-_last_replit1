@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 /**
  * Hook для СТРОГОЙ маршрутизации ввода баркодов с ZERO-LEAK гарантией.
@@ -18,7 +18,7 @@ import { useEffect, useRef } from 'react';
  * @param enabled - включить/выключить строгую маршрутизацию (по умолчанию true)
  */
 export function useGlobalBarcodeInput(enabled: boolean = true) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [inputElement, setInputElement] = useState<HTMLInputElement | null>(null);
   const buffer = useRef<string>('');
   const detectionTimer = useRef<number | null>(null);
   const inactivityTimer = useRef<number | null>(null);
@@ -27,18 +27,26 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
   const originalSelectionStart = useRef<number | null>(null);
   const originalSelectionEnd = useRef<number | null>(null);
 
+  // Callback ref для надёжной активации хука
+  const inputRef = useCallback((element: HTMLInputElement | null) => {
+    if (element) {
+      console.log('[Barcode Scanner] Input ref connected:', element);
+      setInputElement(element);
+    }
+  }, []);
+
   useEffect(() => {
     if (!enabled) {
       return;
     }
 
-    // Ждём пока inputRef станет доступен
-    if (!inputRef.current) {
-      console.warn('[Barcode Scanner] Input ref not ready yet, retrying...');
+    // Ждём пока inputElement станет доступен
+    if (!inputElement) {
+      console.warn('[Barcode Scanner] Input element not ready yet, waiting...');
       return;
     }
 
-    const barcodeInput = inputRef.current;
+    const barcodeInput = inputElement;
     console.log('[Barcode Scanner] Hook activated, barcodeInput:', barcodeInput);
 
     // Начальный фокус при монтировании
@@ -389,7 +397,7 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
         window.clearTimeout(inactivityTimer.current);
       }
     };
-  }, [enabled, inputRef.current]); // Добавляем зависимость от inputRef.current
+  }, [enabled, inputElement]); // Перезапускается когда inputElement становится доступным
 
   return { inputRef };
 }
