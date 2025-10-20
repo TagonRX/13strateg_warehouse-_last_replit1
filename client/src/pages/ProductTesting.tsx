@@ -23,14 +23,13 @@ export default function ProductTesting() {
   const [mode, setMode] = useState<"first-scan" | "second-scan">("first-scan");
   const [currentTest, setCurrentTest] = useState<PendingTest | null>(null);
   const [scannerMode, setScannerMode] = useState<ScannerMode>("usb");
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   // WebSocket for phone mode
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
 
-  // USB scanner routing - активна только в USB режиме
-  const { inputRef: usbBarcodeRef } = useGlobalBarcodeInput(scannerMode === "usb");
+  // USB scanner routing - активна только в USB режиме (как в StockInForm)
+  const { inputRef: barcodeInputRef } = useGlobalBarcodeInput(scannerMode === "usb");
 
   // Обработка сообщений от телефона через WebSocket
   useEffect(() => {
@@ -65,7 +64,7 @@ export default function ProductTesting() {
       setCurrentTest(data);
       setMode("second-scan");
       setBarcode("");
-      setTimeout(() => currentInputRef.current?.focus(), 100);
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     },
     onError: (error: Error) => {
       toast({
@@ -74,7 +73,7 @@ export default function ProductTesting() {
         description: error.message,
       });
       setBarcode("");
-      setTimeout(() => currentInputRef.current?.focus(), 100);
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     },
   });
 
@@ -96,7 +95,7 @@ export default function ProductTesting() {
       setMode("first-scan");
       setSelectedCondition("");
       setBarcode("");
-      setTimeout(() => currentInputRef.current?.focus(), 100);
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     },
     onError: (error: Error) => {
       toast({
@@ -105,7 +104,7 @@ export default function ProductTesting() {
         description: error.message,
       });
       setBarcode("");
-      setTimeout(() => currentInputRef.current?.focus(), 100);
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     },
   });
 
@@ -126,7 +125,7 @@ export default function ProductTesting() {
       if (pending) {
         setCurrentTest(pending);
         setBarcode("");
-        setTimeout(() => currentInputRef.current?.focus(), 100);
+        setTimeout(() => barcodeInputRef.current?.focus(), 100);
       } else {
         toast({
           variant: "destructive",
@@ -134,7 +133,7 @@ export default function ProductTesting() {
           description: "Товар не найден в списке тестирования",
         });
         setBarcode("");
-        setTimeout(() => currentInputRef.current?.focus(), 100);
+        setTimeout(() => barcodeInputRef.current?.focus(), 100);
       }
     }
   };
@@ -162,29 +161,13 @@ export default function ProductTesting() {
     setMode("first-scan");
     setSelectedCondition("");
     setBarcode("");
-    setTimeout(() => currentInputRef.current?.focus(), 100);
+    setTimeout(() => barcodeInputRef.current?.focus(), 100);
   };
 
-  // Callback ref который объединяет оба ref'а в зависимости от режима
-  const setInputRef = (element: HTMLInputElement | null) => {
-    if (scannerMode === "usb") {
-      if (usbBarcodeRef) {
-        (usbBarcodeRef as any).current = element;
-      }
-    } else {
-      if (barcodeInputRef) {
-        (barcodeInputRef as any).current = element;
-      }
-    }
-  };
-
-  // Получаем текущий ref для фокуса и других операций
-  const currentInputRef = scannerMode === "usb" ? usbBarcodeRef : barcodeInputRef;
-
-  // Auto-focus on mount и синхронизация ref'ов
+  // Auto-focus on mount (простой подход как в StockInForm)
   useEffect(() => {
-    if (currentInputRef.current) {
-      currentInputRef.current.focus();
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
     }
   }, [scannerMode]);
 
@@ -252,7 +235,7 @@ export default function ProductTesting() {
                 <div className="space-y-2">
                   <Label htmlFor="barcode">Штрихкод</Label>
                   <Input
-                    ref={setInputRef}
+                    ref={barcodeInputRef}
                     id="barcode"
                     data-testid="input-barcode"
                     value={barcode}
@@ -344,7 +327,7 @@ export default function ProductTesting() {
                     <div className="space-y-2">
                       <Label htmlFor="barcode-second">Штрихкод</Label>
                       <Input
-                        ref={setInputRef}
+                        ref={barcodeInputRef}
                         id="barcode-second"
                         data-testid="input-barcode-second"
                         value={barcode}
