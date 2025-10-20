@@ -14,7 +14,7 @@ Preferred communication style: Simple, everyday language.
 *   **State Management**: TanStack Query for server state, local React state for UI.
 *   **Routing**: Wouter.
 *   **Styling**: Tailwind CSS with custom design tokens.
-*   **Key UI Patterns**: Role-based sidebar navigation, responsive design, card-based interface, real-time toast notifications, progress indicators, resizable table columns with persistence, multi-select filter for warehouse locations. Barcode scanning support in inventory editing via USB scanner or mobile camera. Remote barcode scanning with quantity support via WebSocket.
+*   **Key UI Patterns**: Role-based sidebar navigation, responsive design, card-based interface, real-time toast notifications, progress indicators, resizable table columns with persistence, multi-select filter for warehouse locations. Barcode scanning support in inventory editing via USB scanner (with fast input handling for immediate Enter processing) or mobile camera. Remote barcode scanning with quantity support via WebSocket.
 
 ### Backend
 *   **Runtime**: Node.js with Express.js, TypeScript with ES Modules.

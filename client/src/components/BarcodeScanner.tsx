@@ -113,10 +113,31 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
 
   const handleUSBScan = (e: React.FormEvent) => {
     e.preventDefault();
-    if (barcode.trim()) {
-      onScan(barcode.trim());
+    // Get value directly from input to ensure we catch fast scanner input
+    const inputValue = inputRef.current?.value || barcode;
+    if (inputValue.trim()) {
+      onScan(inputValue.trim());
       setBarcode("");
+      if (inputRef.current) {
+        inputRef.current.value = "";
+      }
       inputRef.current?.focus();
+    }
+  };
+
+  // Handle Enter key on input directly for faster USB scanner response
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const inputValue = inputRef.current?.value || barcode;
+      if (inputValue.trim()) {
+        onScan(inputValue.trim());
+        setBarcode("");
+        if (inputRef.current) {
+          inputRef.current.value = "";
+        }
+        inputRef.current?.focus();
+      }
     }
   };
 
@@ -191,8 +212,10 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
                   type="text"
                   value={barcode}
                   onChange={(e) => setBarcode(e.target.value)}
+                  onKeyDown={handleKeyDown}
                   placeholder="Наведите сканер..."
                   className="font-mono"
+                  autoComplete="off"
                   data-testid="input-usb-barcode"
                 />
               </div>
