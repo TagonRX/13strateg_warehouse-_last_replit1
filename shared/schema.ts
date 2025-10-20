@@ -136,6 +136,45 @@ export const globalSettings = pgTable("global_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Товары на тестировании (первое сканирование - начало теста)
+export const pendingTests = pgTable("pending_tests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  barcode: text("barcode").notNull().unique(), // Штрихкод товара
+  sku: text("sku"), // SKU если известен
+  productId: text("product_id"), // ID товара
+  name: text("name"), // Название товара
+  firstScanAt: timestamp("first_scan_at").defaultNow().notNull(), // Когда начали тестировать
+  firstScanBy: varchar("first_scan_by").references(() => users.id).notNull(), // Кто начал тестировать
+});
+
+// Протестированные товары (все кроме Faulty)
+export const testedItems = pgTable("tested_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  barcode: text("barcode").notNull(),
+  sku: text("sku"),
+  productId: text("product_id"),
+  name: text("name"),
+  condition: text("condition").notNull(), // Used, Exdisplay, New, Parts
+  firstScanAt: timestamp("first_scan_at").notNull(), // Когда начали тестировать
+  firstScanBy: varchar("first_scan_by").references(() => users.id).notNull(),
+  decisionAt: timestamp("decision_at").defaultNow().notNull(), // Когда приняли решение
+  decisionBy: varchar("decision_by").references(() => users.id).notNull(), // Кто принял решение
+});
+
+// Бракованные товары (Faulty) с аналитикой рабочих часов
+export const faultyStock = pgTable("faulty_stock", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  barcode: text("barcode").notNull(),
+  sku: text("sku"),
+  productId: text("product_id"),
+  name: text("name"),
+  firstScanAt: timestamp("first_scan_at").notNull(), // Когда начали тестировать
+  firstScanBy: varchar("first_scan_by").references(() => users.id).notNull(), // Кто начал тестировать
+  decisionAt: timestamp("decision_at").defaultNow().notNull(), // Когда приняли решение что faulty
+  decisionBy: varchar("decision_by").references(() => users.id).notNull(), // Кто принял решение
+  workingHours: integer("working_hours").notNull(), // Рабочие часы между первым и вторым сканированием (в минутах)
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -193,6 +232,21 @@ export const insertGlobalSettingSchema = createInsertSchema(globalSettings).omit
   updatedAt: true,
 });
 
+export const insertPendingTestSchema = createInsertSchema(pendingTests).omit({
+  id: true,
+  firstScanAt: true,
+});
+
+export const insertTestedItemSchema = createInsertSchema(testedItems).omit({
+  id: true,
+  decisionAt: true,
+});
+
+export const insertFaultyStockSchema = createInsertSchema(faultyStock).omit({
+  id: true,
+  decisionAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -223,3 +277,12 @@ export type CsvSource = typeof csvSources.$inferSelect;
 
 export type InsertGlobalSetting = z.infer<typeof insertGlobalSettingSchema>;
 export type GlobalSetting = typeof globalSettings.$inferSelect;
+
+export type InsertPendingTest = z.infer<typeof insertPendingTestSchema>;
+export type PendingTest = typeof pendingTests.$inferSelect;
+
+export type InsertTestedItem = z.infer<typeof insertTestedItemSchema>;
+export type TestedItem = typeof testedItems.$inferSelect;
+
+export type InsertFaultyStock = z.infer<typeof insertFaultyStockSchema>;
+export type FaultyStock = typeof faultyStock.$inferSelect;

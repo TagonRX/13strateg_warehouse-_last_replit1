@@ -25,6 +25,8 @@ import {
   Warehouse,
   AlertCircle,
   LogOut,
+  TestTube2,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -103,6 +105,7 @@ export default function AppLayout({
   }, [location, unresolvedCount]);
 
   const workerMenuItems = [
+    { title: "Тестирование товара", url: "/product-testing", icon: TestTube2 },
     { title: "Приход товара", url: "/stock-in", icon: PackagePlus },
     { title: "Сборка/Списание", url: "/stock-out", icon: PackageMinus },
     { title: "Picking List", url: "/picking", icon: ClipboardList },
@@ -113,6 +116,7 @@ export default function AppLayout({
   const adminMenuItems = [
     { title: "Пользователи", url: "/users", icon: Users },
     { title: "Массовая загрузка", url: "/bulk-upload", icon: Upload },
+    { title: "Бракованные товары", url: "/faulty-stock", icon: AlertTriangle },
     { title: "Логи событий", url: "/logs", icon: FileText },
     { title: "SKU Errors", url: "/sku-errors", icon: AlertCircle, showBadge: hasUnresolvedErrors },
     { title: "Аналитика", url: "/analytics", icon: BarChart3 },

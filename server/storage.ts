@@ -10,6 +10,9 @@ import {
   activeLocations,
   csvSources,
   globalSettings,
+  pendingTests,
+  testedItems,
+  faultyStock,
   type User, 
   type InsertUser,
   type InventoryItem,
@@ -29,7 +32,13 @@ import {
   type CsvSource,
   type InsertCsvSource,
   type GlobalSetting,
-  type InsertGlobalSetting
+  type InsertGlobalSetting,
+  type PendingTest,
+  type InsertPendingTest,
+  type TestedItem,
+  type InsertTestedItem,
+  type FaultyStock,
+  type InsertFaultyStock
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ilike } from "drizzle-orm";
 
@@ -129,6 +138,19 @@ export interface IStorage {
   // Global Settings methods
   getGlobalSetting(key: string): Promise<GlobalSetting | undefined>;
   upsertGlobalSetting(key: string, value: string): Promise<GlobalSetting>;
+
+  // Product Testing methods
+  startProductTest(test: InsertPendingTest): Promise<PendingTest>;
+  getPendingTestByBarcode(barcode: string): Promise<PendingTest | undefined>;
+  getAllPendingTests(): Promise<PendingTest[]>;
+  completePendingTest(barcode: string, condition: string, decisionBy: string, workingMinutes: number): Promise<TestedItem | FaultyStock>;
+  removePendingTestByBarcode(barcode: string): Promise<void>;
+  
+  // Tested Items methods
+  getAllTestedItems(): Promise<TestedItem[]>;
+  
+  // Faulty Stock methods
+  getAllFaultyStock(): Promise<FaultyStock[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -1172,6 +1194,88 @@ export class DbStorage implements IStorage {
       const result = await db.insert(globalSettings).values({ key, value }).returning();
       return result[0];
     }
+  }
+
+  // Product Testing methods
+  async startProductTest(test: InsertPendingTest): Promise<PendingTest> {
+    const result = await db.insert(pendingTests).values(test).returning();
+    return result[0];
+  }
+
+  async getPendingTestByBarcode(barcode: string): Promise<PendingTest | undefined> {
+    const result = await db
+      .select()
+      .from(pendingTests)
+      .where(eq(pendingTests.barcode, barcode))
+      .limit(1);
+    return result[0];
+  }
+
+  async getAllPendingTests(): Promise<PendingTest[]> {
+    return await db.select().from(pendingTests).orderBy(pendingTests.firstScanAt);
+  }
+
+  async completePendingTest(
+    barcode: string, 
+    condition: string, 
+    decisionBy: string, 
+    workingMinutes: number
+  ): Promise<TestedItem | FaultyStock> {
+    // Get pending test
+    const pending = await this.getPendingTestByBarcode(barcode);
+    if (!pending) {
+      throw new Error("Pending test not found");
+    }
+
+    if (condition === "Faulty") {
+      // Add to faulty stock
+      const result = await db.insert(faultyStock).values({
+        barcode: pending.barcode,
+        sku: pending.sku,
+        productId: pending.productId,
+        name: pending.name,
+        firstScanAt: pending.firstScanAt,
+        firstScanBy: pending.firstScanBy,
+        decisionBy,
+        workingHours: workingMinutes,
+      }).returning();
+
+      // Remove from pending tests
+      await db.delete(pendingTests).where(eq(pendingTests.barcode, barcode));
+
+      return result[0];
+    } else {
+      // Add to tested items
+      const result = await db.insert(testedItems).values({
+        barcode: pending.barcode,
+        sku: pending.sku,
+        productId: pending.productId,
+        name: pending.name,
+        condition,
+        firstScanAt: pending.firstScanAt,
+        firstScanBy: pending.firstScanBy,
+        decisionBy,
+      }).returning();
+
+      // Remove from pending tests
+      await db.delete(pendingTests).where(eq(pendingTests.barcode, barcode));
+
+      return result[0];
+    }
+  }
+
+  async removePendingTestByBarcode(barcode: string): Promise<void> {
+    await db.delete(pendingTests).where(eq(pendingTests.barcode, barcode));
+  }
+
+  // Tested Items methods
+  async getAllTestedItems(): Promise<TestedItem[]> {
+    return await db.select().from(testedItems).orderBy(testedItems.decisionAt);
+  }
+
+  // Faulty Stock methods
+  async getAllFaultyStock(): Promise<FaultyStock[]> {
+    return await db.select().from(faultyStock).orderBy(faultyStock.decisionAt);
   }
 }
 

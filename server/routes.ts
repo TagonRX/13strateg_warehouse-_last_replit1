@@ -131,6 +131,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           price: validation.data.price !== undefined ? validation.data.price : existing.price,
         });
 
+        // Remove from pending tests if barcode matches
+        if (validation.data.barcode) {
+          try {
+            await storage.removePendingTestByBarcode(validation.data.barcode);
+          } catch (error) {
+            // Silently ignore if not in pending tests
+          }
+        }
+
         return res.json(updated);
       } else {
         // Create new item with authenticated user ID
@@ -151,6 +160,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quantity: validation.data.quantity || null,
           price: validation.data.price || null,
         });
+
+        // Remove from pending tests if barcode matches
+        if (validation.data.barcode) {
+          try {
+            await storage.removePendingTestByBarcode(validation.data.barcode);
+          } catch (error) {
+            // Silently ignore if not in pending tests
+          }
+        }
 
         return res.status(201).json(item);
       }
@@ -230,6 +248,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           location: existing.location,
         });
         return res.json({ deleted: true, item: updated });
+      }
+
+      // Remove from pending tests if barcode matches (for inventory verification scans)
+      const barcodeToCheck = updates.barcode || existing.barcode;
+      if (barcodeToCheck) {
+        try {
+          await storage.removePendingTestByBarcode(barcodeToCheck);
+        } catch (error) {
+          // Silently ignore if not in pending tests
+        }
       }
 
       return res.json(updated);
@@ -1344,6 +1372,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ message: "Logged out successfully" });
     } catch (error: any) {
       console.error("Logout error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Product Testing - Start test (first scan)
+  app.post("/api/product-testing/start", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { barcode, sku, productId, name } = req.body;
+
+      if (!barcode) {
+        return res.status(400).json({ error: "Штрихкод обязателен" });
+      }
+
+      // Check if already in pending tests
+      const existing = await storage.getPendingTestByBarcode(barcode);
+      if (existing) {
+        return res.status(400).json({ error: "Товар уже находится на тестировании" });
+      }
+
+      const test = await storage.startProductTest({
+        barcode,
+        sku: sku || null,
+        productId: productId || null,
+        name: name || null,
+        firstScanBy: userId,
+      });
+
+      return res.json(test);
+    } catch (error: any) {
+      console.error("Start product test error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Product Testing - Complete test (second scan with condition selection)
+  app.post("/api/product-testing/complete", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { barcode, condition } = req.body;
+
+      if (!barcode || !condition) {
+        return res.status(400).json({ error: "Штрихкод и кондиция обязательны" });
+      }
+
+      const validConditions = ["Used", "Exdisplay", "New", "Parts", "Faulty"];
+      if (!validConditions.includes(condition)) {
+        return res.status(400).json({ error: "Неверная кондиция" });
+      }
+
+      // Get pending test
+      const pending = await storage.getPendingTestByBarcode(barcode);
+      if (!pending) {
+        return res.status(404).json({ error: "Товар не найден в списке тестирования" });
+      }
+
+      // Calculate working hours
+      const { calculateWorkingMinutes } = await import("./utils/workingHours");
+      const workingMinutes = calculateWorkingMinutes(
+        new Date(pending.firstScanAt),
+        new Date()
+      );
+
+      // Complete test
+      const result = await storage.completePendingTest(barcode, condition, userId, workingMinutes);
+
+      return res.json(result);
+    } catch (error: any) {
+      console.error("Complete product test error:", error);
+      return res.status(500).json({ error: error.message || "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Get all pending tests
+  app.get("/api/product-testing/pending", requireAuth, async (req, res) => {
+    try {
+      const tests = await storage.getAllPendingTests();
+      return res.json(tests);
+    } catch (error: any) {
+      console.error("Get pending tests error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Get all tested items
+  app.get("/api/product-testing/tested", requireAuth, async (req, res) => {
+    try {
+      const items = await storage.getAllTestedItems();
+      return res.json(items);
+    } catch (error: any) {
+      console.error("Get tested items error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Get all faulty stock (admin only)
+  app.get("/api/faulty-stock", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const items = await storage.getAllFaultyStock();
+      return res.json(items);
+    } catch (error: any) {
+      console.error("Get faulty stock error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });

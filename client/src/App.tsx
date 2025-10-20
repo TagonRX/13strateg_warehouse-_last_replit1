@@ -18,6 +18,8 @@ import EventLogsView from "@/components/EventLogsView";
 import WorkerAnalytics from "@/components/WorkerAnalytics";
 import SkuErrorsView from "@/components/SkuErrorsView";
 import RemoteBarcodeScanner from "@/components/RemoteBarcodeScanner";
+import ProductTesting from "@/pages/ProductTesting";
+import FaultyStockPage from "@/pages/FaultyStock";
 import NotFound from "@/pages/not-found";
 import * as api from "@/lib/api";
 import type { InventoryItem } from "@shared/schema";
@@ -442,6 +444,14 @@ function AppContent() {
         <Route path="/logs">
           <EventLogsView users={users} />
         </Route>
+        <Route path="/product-testing">
+          <ProductTesting />
+        </Route>
+        {user.role === "admin" && (
+          <Route path="/faulty-stock">
+            <FaultyStockPage />
+          </Route>
+        )}
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
