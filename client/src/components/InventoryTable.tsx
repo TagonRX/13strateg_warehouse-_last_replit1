@@ -215,9 +215,13 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+    onSuccess: async (updatedItem) => {
+      // Force refetch to ensure data is updated
+      await queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/inventory'] });
+      
       setEditingRow(null);
+      
       toast({
         title: "Обновлено",
         description: "Данные товара успешно обновлены",
