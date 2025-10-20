@@ -196,7 +196,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
           (item.productId || "").toLowerCase().includes(searchLower) ||
           (item.name || "").toLowerCase().includes(searchLower) ||
           item.sku.toLowerCase().includes(searchLower) ||
-          item.location.toLowerCase().includes(searchLower)
+          item.location.toLowerCase().includes(searchLower) ||
+          (item.barcode || "").toLowerCase().includes(searchLower)
       )
       .slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit));
   }, [sortedItems, search, pageLimit]);

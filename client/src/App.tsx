@@ -101,6 +101,7 @@ function AppContent() {
       location: string;
       quantity: number;
       barcode?: string;
+      price?: number;
     }) =>
       api.createInventoryItem(data),
     onSuccess: () => {

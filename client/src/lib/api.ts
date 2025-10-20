@@ -97,6 +97,7 @@ export async function createInventoryItem(
     location: string;
     quantity: number;
     barcode?: string;
+    price?: number;
   }
 ): Promise<InventoryItem> {
   const response = await fetch("/api/inventory", {

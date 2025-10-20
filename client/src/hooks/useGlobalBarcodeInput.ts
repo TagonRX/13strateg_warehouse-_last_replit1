@@ -1,18 +1,20 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * Hook для автоматического управления фокусом на поле ввода баркода.
+ * Hook для умного управления полем ввода баркода.
  * 
- * Этот hook решает проблему: USB-сканер пикает, но не заполняет поле,
- * если другое поле находится в фокусе.
+ * НОВАЯ ЛОГИКА (по запросу пользователя):
+ * - Мышка остается где пользователь хочет (НЕ крадём фокус)
+ * - Когда сканер отправляет данные → они попадают в поле баркода
+ * - Различаем сканер vs ручной ввод через глобальный keypress listener
  * 
- * Логика работы (event-driven):
- * 1. При монтировании компонента автоматически фокусируется на поле баркода
- * 2. При потере фокуса проверяет, куда ушел фокус
- * 3. Если фокус ушел на body (клик в пустое место) - возвращает фокус на баркод
- * 4. Если фокус ушел на другой элемент управления - НЕ мешает работе
+ * Как работает:
+ * 1. Начальный фокус только при монтировании (один раз)
+ * 2. Глобальный keydown listener перехватывает keypress события
+ * 3. Если пользователь НЕ печатает в другом input/textarea/select → направляем в barcode field
+ * 4. Если пользователь печатает в другом поле → НЕ трогаем
  * 
- * @param enabled - включить/выключить автофокус (по умолчанию true)
+ * @param enabled - включить/выключить умный автофокус (по умолчанию true)
  */
 export function useGlobalBarcodeInput(enabled: boolean = true) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -24,31 +26,39 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
 
     const barcodeInput = inputRef.current;
 
-    // Немедленный фокус при монтировании
+    // Начальный фокус только при монтировании (один раз)
     barcodeInput.focus();
 
-    // Event-driven: возвращаем фокус только при клике в пустое место
-    const handleBlur = () => {
-      // Небольшая задержка, чтобы activeElement успел обновиться
-      setTimeout(() => {
-        const activeElement = document.activeElement;
-        
-        // Возвращаем фокус ТОЛЬКО если фокус ушел на body или null
-        // Все остальные элементы (button, select, input) сохраняют фокус
-        const shouldRefocus = 
-          !activeElement || 
-          activeElement === document.body;
+    // Глобальный keydown listener - перехватывает ввод со сканера
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      
+      // Если фокус на input/textarea/select - НЕ перехватываем
+      // Пользователь вручную печатает в другом поле - не трогаем
+      if (
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        activeElement instanceof HTMLSelectElement
+      ) {
+        return;
+      }
 
-        if (shouldRefocus && barcodeInput) {
-          barcodeInput.focus();
-        }
-      }, 10);
+      // Игнорируем модификаторы и спец.клавиши
+      if (e.ctrlKey || e.altKey || e.metaKey || e.key.length !== 1) {
+        return;
+      }
+
+      // Обычная клавиша нажата вне input полей → направляем в barcode field
+      // Это работает для USB сканеров которые эмулируют клавиатуру
+      barcodeInput.focus();
+      // Событие всплывет и попадет в focused barcode input
     };
 
-    barcodeInput.addEventListener('blur', handleBlur);
+    // Слушаем на capture phase для раннего перехвата
+    document.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
-      barcodeInput.removeEventListener('blur', handleBlur);
+      document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [enabled]);
 

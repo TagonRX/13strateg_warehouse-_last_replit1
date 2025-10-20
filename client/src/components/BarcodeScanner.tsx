@@ -124,7 +124,8 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
   // Handle Enter key on input directly for faster USB scanner response
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      e.preventDefault();
+      e.preventDefault(); // Предотвращает default поведение (submit формы)
+      e.stopPropagation(); // Останавливает всплытие события к родителям
       const inputValue = inputRef.current?.value || barcode;
       if (inputValue.trim()) {
         onScan(inputValue.trim());
@@ -189,7 +190,7 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
           </TabsList>
           
           <TabsContent value="usb" className="mt-4">
-            <form onSubmit={handleUSBScan} className="space-y-4">
+            <div className="space-y-4">
               {isConnected && (
                 <Alert>
                   <Wifi className="h-4 w-4" />
@@ -215,10 +216,10 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
                   data-testid="input-usb-barcode"
                 />
               </div>
-              <Button type="submit" className="w-full" data-testid="button-submit-barcode">
+              <Button type="button" onClick={handleUSBScan} className="w-full" data-testid="button-submit-barcode">
                 Подтвердить
               </Button>
-            </form>
+            </div>
           </TabsContent>
           
           <TabsContent value="mobile" className="mt-4">
