@@ -165,17 +165,28 @@ export default function ProductTesting() {
     setTimeout(() => currentInputRef.current?.focus(), 100);
   };
 
+  // Callback ref который объединяет оба ref'а в зависимости от режима
+  const setInputRef = (element: HTMLInputElement | null) => {
+    if (scannerMode === "usb") {
+      if (usbBarcodeRef) {
+        (usbBarcodeRef as any).current = element;
+      }
+    } else {
+      if (barcodeInputRef) {
+        (barcodeInputRef as any).current = element;
+      }
+    }
+  };
+
+  // Получаем текущий ref для фокуса и других операций
+  const currentInputRef = scannerMode === "usb" ? usbBarcodeRef : barcodeInputRef;
+
   // Auto-focus on mount и синхронизация ref'ов
   useEffect(() => {
-    if (scannerMode === "usb" && usbBarcodeRef.current) {
-      usbBarcodeRef.current.focus();
-    } else if (barcodeInputRef.current) {
-      barcodeInputRef.current.focus();
+    if (currentInputRef.current) {
+      currentInputRef.current.focus();
     }
   }, [scannerMode]);
-
-  // Объединенный ref для input - в USB режиме используем usbBarcodeRef
-  const currentInputRef = scannerMode === "usb" ? usbBarcodeRef : barcodeInputRef;
 
   const isPending = startTestMutation.isPending || completeTestMutation.isPending;
 
@@ -241,7 +252,7 @@ export default function ProductTesting() {
                 <div className="space-y-2">
                   <Label htmlFor="barcode">Штрихкод</Label>
                   <Input
-                    ref={currentInputRef}
+                    ref={setInputRef}
                     id="barcode"
                     data-testid="input-barcode"
                     value={barcode}
@@ -333,7 +344,7 @@ export default function ProductTesting() {
                     <div className="space-y-2">
                       <Label htmlFor="barcode-second">Штрихкод</Label>
                       <Input
-                        ref={currentInputRef}
+                        ref={setInputRef}
                         id="barcode-second"
                         data-testid="input-barcode-second"
                         value={barcode}
