@@ -1267,10 +1267,10 @@ export class DbStorage implements IStorage {
   }
 
   async removePendingTestByBarcode(barcode: string): Promise<void> {
-    // Remove from both pending_tests and tested_items
-    // This ensures auto-cleanup when item is stocked in or verified
+    // Remove ONLY from pending_tests (not tested_items)
+    // tested_items is a history log and should not be auto-deleted
+    // Only pending tests should be removed when item is stocked in or verified
     await db.delete(pendingTests).where(eq(pendingTests.barcode, barcode));
-    await db.delete(testedItems).where(eq(testedItems.barcode, barcode));
   }
 
   async deletePendingTest(barcode: string): Promise<void> {
