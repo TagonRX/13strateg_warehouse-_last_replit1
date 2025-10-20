@@ -57,6 +57,12 @@ export default function ProductTesting() {
     queryFn: getCurrentUser,
   });
 
+  // Debug: log current user
+  useEffect(() => {
+    console.log('[ProductTesting] Current user:', currentUser);
+    console.log('[ProductTesting] Is admin?', currentUser?.role === "admin");
+  }, [currentUser]);
+
   // Start test mutation (first scan)
   const startTestMutation = useMutation({
     mutationFn: async (data: { barcode: string }) => {

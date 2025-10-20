@@ -28,11 +28,18 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
   const originalSelectionEnd = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!enabled || !inputRef.current) {
+    if (!enabled) {
+      return;
+    }
+
+    // Ждём пока inputRef станет доступен
+    if (!inputRef.current) {
+      console.warn('[Barcode Scanner] Input ref not ready yet, retrying...');
       return;
     }
 
     const barcodeInput = inputRef.current;
+    console.log('[Barcode Scanner] Hook activated, barcodeInput:', barcodeInput);
 
     // Начальный фокус при монтировании
     barcodeInput.focus();
@@ -382,7 +389,7 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
         window.clearTimeout(inactivityTimer.current);
       }
     };
-  }, [enabled]);
+  }, [enabled, inputRef.current]); // Добавляем зависимость от inputRef.current
 
   return { inputRef };
 }
