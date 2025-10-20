@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +33,10 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
   // Bulk mode states
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [scannedBarcodes, setScannedBarcodes] = useState<string[]>([]);
+  
+  // Track manual location edits and previous auto-extracted value
+  const [locationTouched, setLocationTouched] = useState(false);
+  const prevExtracted = useRef<string>("");
 
   // WebSocket for phone mode
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
@@ -59,6 +63,36 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       }
     }
   }, [lastMessage, scannerMode, isBulkMode]);
+
+  // Автоматическое извлечение локации из SKU (первые 4 символа до "-")
+  useEffect(() => {
+    if (sku) {
+      // Унифицированная логика извлечения: до 4 символов до "-" или до конца строки
+      const dashIndex = sku.indexOf("-");
+      const end = dashIndex >= 0 ? Math.min(4, dashIndex) : Math.min(4, sku.length);
+      const extracted = sku.substring(0, end);
+      
+      // Обновляем локацию только если:
+      // 1. Пользователь не редактировал вручную, ИЛИ
+      // 2. Текущая локация совпадает с предыдущим авто-значением
+      if (!locationTouched || location === prevExtracted.current) {
+        setLocation(extracted);
+        prevExtracted.current = extracted;
+        setLocationTouched(false); // Сбрасываем флаг при авто-обновлении
+      }
+    } else {
+      // Если SKU пустой и локация была авто-заполнена - очищаем
+      if (!locationTouched) {
+        setLocation("");
+        prevExtracted.current = "";
+      }
+    }
+  }, [sku, location, locationTouched]);
+
+  const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLocation(e.target.value.toUpperCase());
+    setLocationTouched(true); // Отмечаем что пользователь редактировал вручную
+  };
 
   const handleRemoveBarcode = (index: number) => {
     setScannedBarcodes(scannedBarcodes.filter((_, i) => i !== index));
@@ -105,6 +139,8 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       setSku("");
       setLocation("");
       setScannedBarcodes([]);
+      setLocationTouched(false);
+      prevExtracted.current = "";
     } else {
       // Обычный режим
       onSubmit({
@@ -123,6 +159,8 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       setLocation("");
       setQuantity(1);
       setBarcode("");
+      setLocationTouched(false);
+      prevExtracted.current = "";
     }
   };
 
@@ -183,7 +221,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
             <Input
               id="location"
               value={location}
-              onChange={(e) => setLocation(e.target.value.toUpperCase())}
+              onChange={handleLocationChange}
               placeholder="A101"
               required
               data-testid="input-location"

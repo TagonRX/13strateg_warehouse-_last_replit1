@@ -86,7 +86,7 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
       }
 
       // Только печатные символы
-      if (e.key.length !== 1) {
+      if (!e.key || e.key.length !== 1) {
         return;
       }
 
