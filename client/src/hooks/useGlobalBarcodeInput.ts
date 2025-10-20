@@ -50,8 +50,28 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
 
     // Глобальный keydown listener - строгая маршрутизация с pre-buffering
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Игнорируем модификаторы
+      // Логирование для отладки сканера (только в dev режиме)
+      if (import.meta.env.DEV && e.key.length === 1) {
+        console.log('[Barcode Scanner Debug]', {
+          key: e.key,
+          ctrl: e.ctrlKey,
+          alt: e.altKey,
+          meta: e.metaKey,
+          activeElement: document.activeElement?.tagName,
+          scannerActive: scannerActive.current
+        });
+      }
+
+      // КРИТИЧНО: Блокируем команды которые могут открывать окна/вкладки
+      // Даже если это от сканера - предотвращаем их выполнение
       if (e.ctrlKey || e.altKey || e.metaKey) {
+        // Блокируем опасные комбинации (Ctrl+T, Ctrl+N, Ctrl+W и т.д.)
+        const dangerousKeys = ['t', 'n', 'w', 'o', 'p', 'Tab'];
+        if (dangerousKeys.includes(e.key.toLowerCase()) || dangerousKeys.includes(e.key)) {
+          console.warn('[Barcode Scanner] Blocked dangerous key combination:', e.key);
+          e.preventDefault();
+          e.stopPropagation();
+        }
         return;
       }
 
@@ -300,12 +320,29 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
       }
     };
 
+    // Дополнительный обработчик для блокировки браузерных действий
+    const preventBrowserActions = (e: KeyboardEvent) => {
+      // Блокируем Ctrl/Cmd комбинации которые могут открывать окна
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        const key = e.key.toLowerCase();
+        // Список опасных клавиш: новая вкладка, окно, печать, поиск и т.д.
+        if (['t', 'n', 'w', 'o', 'p', 'f', 'k', 'l'].includes(key)) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          return false;
+        }
+      }
+    };
+
     // Слушаем на capture phase для раннего перехвата
+    document.addEventListener('keydown', preventBrowserActions, true);
     document.addEventListener('keydown', handleKeyDown, true);
     document.addEventListener('focusin', handleFocusChange);
     barcodeInput.addEventListener('blur', handleBlur);
 
     return () => {
+      document.removeEventListener('keydown', preventBrowserActions, true);
       document.removeEventListener('keydown', handleKeyDown, true);
       document.removeEventListener('focusin', handleFocusChange);
       barcodeInput.removeEventListener('blur', handleBlur);
