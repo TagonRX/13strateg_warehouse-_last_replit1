@@ -28,8 +28,9 @@ export default function ProductTesting() {
   // WebSocket for phone mode
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
 
-  // USB scanner routing - активна только в USB режиме (как в StockInForm)
-  const { inputRef: barcodeInputRef } = useGlobalBarcodeInput(scannerMode === "usb");
+  // USB scanner routing - ВСЕГДА АКТИВЕН для автоматического ввода штрихкодов
+  // Когда включен режим телефона, WebSocket перехватит ввод отдельно
+  const { inputRef: barcodeInputRef } = useGlobalBarcodeInput(true);
 
   // Обработка сообщений от телефона через WebSocket
   useEffect(() => {
