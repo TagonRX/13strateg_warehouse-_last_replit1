@@ -44,10 +44,7 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
         // Add barcode with quantity from remote scan
         const existing = value.find(m => m.code === barcode);
         
-        if (mappedQuantity >= totalQuantity) {
-          alert(`Нельзя добавить баркод: все ${totalQuantity} товар(ов) уже имеют баркоды`);
-          return;
-        }
+        // Allow adding barcodes - one item can have multiple barcodes
         
         if (existing) {
           // Increment quantity
@@ -132,10 +129,12 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
 
     const existing = value.find(m => m.code === scannedCode);
     
-    // Check if adding would exceed total quantity
-    if (mappedQuantity >= totalQuantity) {
-      alert(`Нельзя добавить баркод: все ${totalQuantity} товар(ов) уже имеют баркоды`);
-      return;
+    // Allow adding barcodes even if all items are mapped
+    // One item can have multiple barcodes (e.g., internal code, EAN, UPC)
+    // Only warn but don't block
+    if (mappedQuantity >= totalQuantity && !existing) {
+      // Just add with qty=1 without blocking
+      // This allows multiple barcodes per item
     }
     
     if (existing) {

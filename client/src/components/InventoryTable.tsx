@@ -298,6 +298,12 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     } catch (e) {
       console.error("Failed to parse barcodeMappings:", e);
     }
+    
+    // Migrate old simple barcode to barcodeMappings format
+    // Use qty=1 to allow adding additional barcodes
+    if (barcodeMappings.length === 0 && item.barcode) {
+      barcodeMappings = [{ code: item.barcode, qty: 1 }];
+    }
 
     setEditingRow({
       id: item.id,
@@ -361,6 +367,22 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const renderRow = (item: InventoryItem, isExpanded: boolean = false) => {
     const isEditing = editingRow?.id === item.id;
     const volume = item.volume || (item.length && item.width && item.height ? item.length * item.width * item.height : undefined);
+    
+    // Extract barcodes for display
+    let displayBarcodes: string = "-";
+    if (item.barcodeMappings) {
+      try {
+        const mappings: BarcodeMapping[] = JSON.parse(item.barcodeMappings);
+        if (mappings.length > 0) {
+          displayBarcodes = mappings.map(m => `${m.code}(${m.qty})`).join(", ");
+        }
+      } catch (e) {
+        // If parsing fails, fall back to simple barcode field
+        displayBarcodes = item.barcode || "-";
+      }
+    } else if (item.barcode) {
+      displayBarcodes = item.barcode;
+    }
 
     if (isEditing && editingRow) {
       return (
@@ -503,7 +525,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         <TableCell style={{ width: `${columnWidths.name}px`, minWidth: `${columnWidths.name}px` }} className="text-xs">{item.name || "-"}</TableCell>
         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="font-mono text-xs">{item.sku}</TableCell>
         <TableCell style={{ width: `${columnWidths.quantity}px`, minWidth: `${columnWidths.quantity}px` }} className="text-right text-xs font-medium">{item.quantity}</TableCell>
-        <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="font-mono text-xs">{item.barcode || "-"}</TableCell>
+        <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="font-mono text-xs">{displayBarcodes}</TableCell>
         <TableCell style={{ width: `${columnWidths.price}px`, minWidth: `${columnWidths.price}px` }} className="text-xs">{item.price || "-"}</TableCell>
         <TableCell style={{ width: `${columnWidths.dimensions}px`, minWidth: `${columnWidths.dimensions}px` }} className="text-xs">
           {item.length || item.width || item.height ? (
