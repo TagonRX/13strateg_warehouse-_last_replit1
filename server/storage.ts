@@ -145,6 +145,7 @@ export interface IStorage {
   getAllPendingTests(): Promise<PendingTest[]>;
   completePendingTest(barcode: string, condition: string, decisionBy: string, workingMinutes: number): Promise<TestedItem | FaultyStock>;
   removePendingTestByBarcode(barcode: string): Promise<void>;
+  deletePendingTest(barcode: string): Promise<void>;
   
   // Tested Items methods
   getAllTestedItems(): Promise<TestedItem[]>;
@@ -1269,6 +1270,11 @@ export class DbStorage implements IStorage {
     // This ensures auto-cleanup when item is stocked in or verified
     await db.delete(pendingTests).where(eq(pendingTests.barcode, barcode));
     await db.delete(testedItems).where(eq(testedItems.barcode, barcode));
+  }
+
+  async deletePendingTest(barcode: string): Promise<void> {
+    // Admin-only delete: only removes from pending_tests (not tested_items)
+    await db.delete(pendingTests).where(eq(pendingTests.barcode, barcode));
   }
 
   // Tested Items methods

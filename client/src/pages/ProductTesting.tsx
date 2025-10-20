@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Scan, CheckCircle2, AlertCircle, Usb, Smartphone, Wifi } from "lucide-react";
+import { Loader2, Scan, CheckCircle2, AlertCircle, Usb, Smartphone, Wifi, Trash2 } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import type { PendingTest, TestedItem } from "@shared/schema";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { getCurrentUser } from "@/lib/api";
 
 type ScannerMode = "usb" | "phone";
 
@@ -48,6 +49,12 @@ export default function ProductTesting() {
   // Fetch tested items
   const { data: testedItems = [] } = useQuery<TestedItem[]>({
     queryKey: ["/api/product-testing/tested"],
+  });
+
+  // Get current user to check admin rights
+  const { data: currentUser } = useQuery({
+    queryKey: ["/api/auth/me"],
+    queryFn: getCurrentUser,
   });
 
   // Start test mutation (first scan)
@@ -155,6 +162,28 @@ export default function ProductTesting() {
       condition: selectedCondition,
     });
   };
+
+  // Delete pending test mutation (admin only)
+  const deletePendingTestMutation = useMutation({
+    mutationFn: async (barcode: string) => {
+      const res = await apiRequest("DELETE", `/api/product-testing/pending/${barcode}`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/product-testing/pending"] });
+      toast({
+        title: "Товар удален",
+        description: "Товар удален из списка тестирования",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: error.message,
+      });
+    },
+  });
 
   // Cancel second scan
   const handleCancel = () => {
@@ -372,6 +401,7 @@ export default function ProductTesting() {
                     <TableHead>SKU</TableHead>
                     <TableHead>Название</TableHead>
                     <TableHead>Начато</TableHead>
+                    {currentUser?.role === "admin" && <TableHead className="w-12"></TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -383,6 +413,24 @@ export default function ProductTesting() {
                       <TableCell className="text-sm text-muted-foreground">
                         {format(new Date(test.firstScanAt), "dd.MM.yyyy HH:mm", { locale: ru })}
                       </TableCell>
+                      {currentUser?.role === "admin" && (
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deletePendingTestMutation.mutate(test.barcode)}
+                            disabled={deletePendingTestMutation.isPending}
+                            data-testid={`button-delete-pending-${test.barcode}`}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            {deletePendingTestMutation.isPending ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

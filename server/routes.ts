@@ -1487,6 +1487,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete pending test (admin only)
+  app.delete("/api/product-testing/pending/:barcode", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { barcode } = req.params;
+
+      if (!barcode) {
+        return res.status(400).json({ error: "Штрихкод обязателен" });
+      }
+
+      // Check if test exists
+      const pending = await storage.getPendingTestByBarcode(barcode);
+      if (!pending) {
+        return res.status(404).json({ error: "Товар не найден в списке тестирования" });
+      }
+
+      // Delete the pending test
+      await storage.deletePendingTest(barcode);
+
+      return res.json({ message: "Товар удален из списка тестирования" });
+    } catch (error: any) {
+      console.error("Delete pending test error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Get all faulty stock (admin only)
   app.get("/api/faulty-stock", requireAuth, requireAdmin, async (req, res) => {
     try {
