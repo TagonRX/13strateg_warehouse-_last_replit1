@@ -48,10 +48,8 @@ interface InventoryTableProps {
 
 interface EditingRow {
   id: string;
-  productId: string;
   name: string;
   sku: string;
-  location: string;
   quantity: number;
   barcode: string;
   barcodeMappings: BarcodeMapping[];
@@ -133,10 +131,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   // Default column widths
   const defaultWidths = {
     actions: 48,
-    location: 100,
-    productId: 140,
-    name: 200,
-    sku: 120,
+    name: 250,
+    sku: 150,
     quantity: 100,
     barcode: 150,
     price: 100,
@@ -193,10 +189,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     return sortedItems
       .filter(
         (item) =>
-          (item.productId || "").toLowerCase().includes(searchLower) ||
           (item.name || "").toLowerCase().includes(searchLower) ||
           item.sku.toLowerCase().includes(searchLower) ||
-          item.location.toLowerCase().includes(searchLower) ||
           (item.barcode || "").toLowerCase().includes(searchLower)
       )
       .slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit));
@@ -307,10 +301,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
 
     setEditingRow({
       id: item.id,
-      productId: item.productId || "",
       name: item.name || "",
       sku: item.sku,
-      location: item.location,
       quantity: item.quantity,
       barcode: item.barcode || "",
       barcodeMappings,
@@ -341,10 +333,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     updateMutation.mutate({
       id: editingRow.id,
       updates: {
-        productId: editingRow.productId || undefined,
         name: editingRow.name || undefined,
         sku: editingRow.sku,
-        location: editingRow.location,
         quantity: editingRow.quantity,
         barcode: editingRow.barcode || undefined,
         barcodeMappings: barcodeMappingsJson,
@@ -396,22 +386,6 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                 <X className="w-4 h-4" />
               </Button>
             </div>
-          </TableCell>
-          <TableCell style={{ width: `${columnWidths.location}px`, minWidth: `${columnWidths.location}px` }}>
-            <Input
-              value={editingRow.location}
-              onChange={(e) => setEditingRow({...editingRow, location: e.target.value.toUpperCase()})}
-              className="h-8 w-full font-mono text-xs"
-              maxLength={5}
-            />
-          </TableCell>
-          <TableCell style={{ width: `${columnWidths.productId}px`, minWidth: `${columnWidths.productId}px` }}>
-            <Input
-              value={editingRow.productId}
-              onChange={(e) => setEditingRow({...editingRow, productId: e.target.value})}
-              className="h-8 w-full font-mono text-xs"
-              maxLength={14}
-            />
           </TableCell>
           <TableCell style={{ width: `${columnWidths.name}px`, minWidth: `${columnWidths.name}px` }}>
             <Input
@@ -520,8 +494,6 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
             )}
           </div>
         </TableCell>
-        <TableCell style={{ width: `${columnWidths.location}px`, minWidth: `${columnWidths.location}px` }} className="font-mono text-xs">{isExpanded ? "" : item.location}</TableCell>
-        <TableCell style={{ width: `${columnWidths.productId}px`, minWidth: `${columnWidths.productId}px` }} className="font-mono text-xs">{item.productId || "-"}</TableCell>
         <TableCell style={{ width: `${columnWidths.name}px`, minWidth: `${columnWidths.name}px` }} className="text-xs">{item.name || "-"}</TableCell>
         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="font-mono text-xs">{item.sku}</TableCell>
         <TableCell style={{ width: `${columnWidths.quantity}px`, minWidth: `${columnWidths.quantity}px` }} className="text-right text-xs font-medium">{item.quantity}</TableCell>
@@ -559,7 +531,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск по ID, названию, SKU или локации..."
+              placeholder="Поиск по названию, SKU или штрихкоду..."
               className="pl-10"
               data-testid="input-search-inventory"
             />
@@ -583,12 +555,6 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12" style={{ width: `${columnWidths.actions}px`, minWidth: `${columnWidths.actions}px` }}></TableHead>
-                <ResizableHeader columnKey="location" width={columnWidths.location} onResize={handleResize} className="text-xs">
-                  Локация
-                </ResizableHeader>
-                <ResizableHeader columnKey="productId" width={columnWidths.productId} onResize={handleResize} className="text-xs">
-                  ID товара
-                </ResizableHeader>
                 <ResizableHeader columnKey="name" width={columnWidths.name} onResize={handleResize} className="text-xs">
                   Название
                 </ResizableHeader>
@@ -640,12 +606,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                             {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                           </div>
                         </TableCell>
-                        <TableCell style={{ width: `${columnWidths.location}px`, minWidth: `${columnWidths.location}px` }} className="font-mono text-xs font-bold">{firstItem.location}</TableCell>
-                        <TableCell style={{ width: `${columnWidths.productId}px`, minWidth: `${columnWidths.productId}px` }} className="text-xs text-muted-foreground">
-                          {groupItems.length} позиций
-                        </TableCell>
                         <TableCell style={{ width: `${columnWidths.name}px`, minWidth: `${columnWidths.name}px` }} className="text-xs text-muted-foreground">
-                          {uniqueSkus} SKU
+                          {groupItems.length} позиций
                         </TableCell>
                         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.quantity}px`, minWidth: `${columnWidths.quantity}px` }} className="text-right text-xs font-medium">{totalQuantity}</TableCell>

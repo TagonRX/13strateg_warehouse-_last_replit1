@@ -14,15 +14,15 @@ Preferred communication style: Simple, everyday language.
 *   **State Management**: TanStack Query for server state, local React state for UI.
 *   **Routing**: Wouter.
 *   **Styling**: Tailwind CSS with custom design tokens.
-*   **Key UI Patterns**: Role-based sidebar navigation, responsive design, card-based interface, real-time toast notifications, progress indicators, resizable table columns with persistence, multi-select filter for warehouse locations. Barcode scanning support in inventory editing via USB scanner (with fast input handling for immediate Enter processing) or mobile camera. Remote barcode scanning with quantity support via WebSocket.
+*   **Key UI Patterns**: Role-based sidebar navigation (renamed "Приход товара" to "Приёмка/размещение товара"), responsive design, card-based interface, real-time toast notifications, progress indicators, resizable table columns with persistence, multi-select filter for warehouse locations. Inventory table hides Location and Product ID columns (auto-extracted from SKU and CSV respectively). Barcode scanning support in inventory editing via USB scanner (with fast input handling for immediate Enter processing) or mobile camera. Remote barcode scanning with quantity support via WebSocket.
 
 ### Backend
 *   **Runtime**: Node.js with Express.js, TypeScript with ES Modules.
 *   **API Design**: RESTful JSON API (`/api` prefix).
 *   **Authentication**: Session-based with BCrypt (10 salt rounds), Bearer token support, role-based middleware (`requireAuth`, `requireAdmin`).
 *   **Database ORM**: Drizzle ORM.
-*   **Architectural Decisions**: Monorepo structure (`client/`, `server/`, `shared/`), shared TypeScript types, Zod for schema validation, Vite middleware for HMR, esbuild for production bundling.
-*   **Core API Routes**: Authentication, inventory management (CRUD, bulk import, file synchronization), warehouse capacity analysis, user management, event logging, SKU error management, worker analytics, picking list management.
+*   **Architectural Decisions**: Monorepo structure (`client/`, `server/`, `shared/`), shared TypeScript types, Zod for schema validation, Vite middleware for HMR, esbuild for production bundling. Auto-location extraction: warehouse location automatically extracted from SKU using pattern matching (e.g., "A101-F" → "A101").
+*   **Core API Routes**: Authentication, inventory management (CRUD with auto-location extraction from SKU, bulk import, file synchronization), warehouse capacity analysis, user management, event logging, SKU error management, worker analytics, picking list management.
 *   **Real-time Communication**: WebSocket server for device-to-device communication (remote scanning, picking list synchronization).
 
 ### Database Schema

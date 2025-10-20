@@ -10,6 +10,22 @@ import path from "path";
 import { z } from "zod";
 import { promises as dns } from "dns";
 
+// Helper function to extract location from SKU
+// SKU format examples:
+// - A101-F → Location: A101 (letter + 1-3 digits)
+// - A107Y-E → Location: A107 (letter + 1-3 digits, ignore rest)
+// - E501-N → Location: E501 (letter + 1-3 digits)
+// - kjkhk → Location: kjkhk (no pattern match, use full SKU)
+function extractLocationFromSKU(sku: string): string {
+  // Match: single letter followed by 1-3 digits at the start
+  const match = sku.match(/^([A-Z]\d{1,3})/i);
+  if (match) {
+    return match[1].toUpperCase();
+  }
+  // If no pattern match, return the full SKU as location
+  return sku;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user (check token validity)
   app.get("/api/auth/me", requireAuth, async (req, res) => {
@@ -110,9 +126,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existing && validation.data.productId) {
         // Update existing item
         const quantityToAdd = validation.data.quantity ?? 1;
+        const location = validation.data.location || extractLocationFromSKU(validation.data.sku);
         const updated = await storage.updateInventoryItem(validation.data.productId, {
           quantity: existing.quantity + quantityToAdd,
-          location: validation.data.location,
+          location,
           sku: validation.data.sku,
           barcode: validation.data.barcode,
         });
@@ -126,7 +143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productId: validation.data.productId || null,
           itemName: validation.data.name || null,
           sku: validation.data.sku,
-          location: validation.data.location,
+          location,
           quantity: quantityToAdd,
           price: validation.data.price !== undefined ? validation.data.price : existing.price,
         });
@@ -143,8 +160,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(updated);
       } else {
         // Create new item with authenticated user ID
+        // Extract location from SKU if not provided
+        const location = validation.data.location || extractLocationFromSKU(validation.data.sku);
         const item = await storage.createInventoryItem({
           ...validation.data,
+          location,
           createdBy: userId,
         });
 
@@ -156,7 +176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productId: validation.data.productId || null,
           itemName: validation.data.name || null,
           sku: validation.data.sku,
-          location: validation.data.location,
+          location,
           quantity: validation.data.quantity || null,
           price: validation.data.price || null,
         });

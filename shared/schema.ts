@@ -16,10 +16,10 @@ export const users = pgTable("users", {
 // Товары в инвентаре
 export const inventoryItems = pgTable("inventory_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  productId: text("product_id"), // ID товара (опционально, может синхронизироваться через CSV)
+  productId: text("product_id"), // ID товара (опционально, автоматически из CSV)
   name: text("name"), // Название (опционально, может добавиться через CSV)
   sku: text("sku").notNull(), // SKU = Локация (обязательно)
-  location: text("location").notNull(), // То же что SKU (автоматически)
+  location: text("location").notNull(), // Автоматически извлекается из SKU
   quantity: integer("quantity").notNull().default(1),
   barcode: text("barcode"), // Опционально (устаревшее - используется для обратной совместимости)
   barcodeMappings: text("barcode_mappings"), // JSON массив: [{ code: "123", qty: 2 }, { code: "456", qty: 3 }]
