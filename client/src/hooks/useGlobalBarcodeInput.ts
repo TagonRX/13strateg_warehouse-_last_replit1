@@ -399,5 +399,11 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
     };
   }, [enabled, inputElement]); // Перезапускается когда inputElement становится доступным
 
-  return { inputRef };
+  // Создаём объект с .current для обратной совместимости
+  const refObject = {
+    current: inputElement,
+  };
+
+  // Возвращаем callback ref как inputRef
+  return { inputRef, refObject };
 }

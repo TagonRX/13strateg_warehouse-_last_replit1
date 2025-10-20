@@ -1512,6 +1512,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete tested item (admin only)
+  app.delete("/api/product-testing/tested/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).json({ error: "ID обязателен" });
+      }
+
+      // Delete the tested item
+      await storage.deleteTestedItem(id);
+
+      return res.json({ message: "Протестированный товар удален" });
+    } catch (error: any) {
+      console.error("Delete tested item error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Get all faulty stock (admin only)
   app.get("/api/faulty-stock", requireAuth, requireAdmin, async (req, res) => {
     try {

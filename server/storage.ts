@@ -149,6 +149,7 @@ export interface IStorage {
   
   // Tested Items methods
   getAllTestedItems(): Promise<TestedItem[]>;
+  deleteTestedItem(id: string): Promise<void>;
   
   // Faulty Stock methods
   getAllFaultyStock(): Promise<FaultyStock[]>;
@@ -1280,6 +1281,11 @@ export class DbStorage implements IStorage {
   // Tested Items methods
   async getAllTestedItems(): Promise<TestedItem[]> {
     return await db.select().from(testedItems).orderBy(testedItems.decisionAt);
+  }
+
+  async deleteTestedItem(id: string): Promise<void> {
+    // Admin-only delete: removes tested item by ID
+    await db.delete(testedItems).where(eq(testedItems.id, id));
   }
 
   // Faulty Stock methods

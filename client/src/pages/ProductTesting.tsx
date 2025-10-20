@@ -31,7 +31,7 @@ export default function ProductTesting() {
 
   // USB scanner routing - ВСЕГДА АКТИВЕН для автоматического ввода штрихкодов
   // Когда включен режим телефона, WebSocket перехватит ввод отдельно
-  const { inputRef: barcodeInputRef } = useGlobalBarcodeInput(true);
+  const { inputRef, refObject: barcodeInputRef } = useGlobalBarcodeInput(true);
 
   // Обработка сообщений от телефона через WebSocket
   useEffect(() => {
@@ -180,6 +180,28 @@ export default function ProductTesting() {
       toast({
         title: "Товар удален",
         description: "Товар удален из списка тестирования",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: error.message,
+      });
+    },
+  });
+
+  // Delete tested item mutation (admin only)
+  const deleteTestedItemMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/product-testing/tested/${id}`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/product-testing/tested"] });
+      toast({
+        title: "Товар удален",
+        description: "Протестированный товар удален",
       });
     },
     onError: (error: Error) => {
@@ -363,7 +385,7 @@ export default function ProductTesting() {
                     <div className="space-y-2">
                       <Label htmlFor="barcode-second">Штрихкод</Label>
                       <Input
-                        ref={barcodeInputRef}
+                        ref={inputRef}
                         id="barcode-second"
                         data-testid="input-barcode-second"
                         value={barcode}
@@ -465,6 +487,7 @@ export default function ProductTesting() {
                     <TableHead>Название</TableHead>
                     <TableHead>Кондиция</TableHead>
                     <TableHead>Дата решения</TableHead>
+                    {currentUser?.role === "admin" && <TableHead className="w-12"></TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -486,6 +509,24 @@ export default function ProductTesting() {
                       <TableCell className="text-sm text-muted-foreground">
                         {format(new Date(item.decisionAt), "dd.MM.yyyy HH:mm", { locale: ru })}
                       </TableCell>
+                      {currentUser?.role === "admin" && (
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteTestedItemMutation.mutate(item.id)}
+                            disabled={deleteTestedItemMutation.isPending}
+                            data-testid={`button-delete-tested-${item.id}`}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            {deleteTestedItemMutation.isPending ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
