@@ -8,6 +8,7 @@ import { Smartphone, Usb, Camera, X, Wifi } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 
 interface BarcodeScannerProps {
   onScan: (barcode: string) => void;
@@ -22,16 +23,11 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const lastProcessedMessageRef = useRef<any>(null);
 
-  // Auto-focus для USB сканера
-  useEffect(() => {
-    if (mode === "usb" && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [mode]);
+  // Глобальный автофокус на поле баркода (работает на всех страницах)
+  const { inputRef } = useGlobalBarcodeInput(mode === "usb");
 
   // Handle incoming WebSocket messages (for receiving scans from phone)
   useEffect(() => {

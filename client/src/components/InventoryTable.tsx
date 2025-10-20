@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import {
   Table,
   TableBody,
@@ -180,22 +180,31 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     }));
   };
 
-  // Sort items by location A-Z first
-  const sortedItems = [...items].sort((a, b) => {
-    return a.location.localeCompare(b.location, undefined, { numeric: true, sensitivity: 'base' });
-  });
+  // Sort items by location A-Z first (memoized for performance)
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      return a.location.localeCompare(b.location, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [items]);
 
-  const filteredItems = sortedItems
-    .filter(
-      (item) =>
-        (item.productId || "").toLowerCase().includes(search.toLowerCase()) ||
-        (item.name || "").toLowerCase().includes(search.toLowerCase()) ||
-        item.sku.toLowerCase().includes(search.toLowerCase()) ||
-        item.location.toLowerCase().includes(search.toLowerCase())
-    )
-    .slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit));
+  // Filter and paginate items (memoized to prevent lag on search input)
+  const filteredItems = useMemo(() => {
+    const searchLower = search.toLowerCase();
+    return sortedItems
+      .filter(
+        (item) =>
+          (item.productId || "").toLowerCase().includes(searchLower) ||
+          (item.name || "").toLowerCase().includes(searchLower) ||
+          item.sku.toLowerCase().includes(searchLower) ||
+          item.location.toLowerCase().includes(searchLower)
+      )
+      .slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit));
+  }, [sortedItems, search, pageLimit]);
 
-  const groupedItems = groupItemsByLocation(filteredItems);
+  // Group items by location (memoized)
+  const groupedItems = useMemo(() => {
+    return groupItemsByLocation(filteredItems);
+  }, [filteredItems]);
 
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string; updates: Partial<InventoryItem> }) => {
