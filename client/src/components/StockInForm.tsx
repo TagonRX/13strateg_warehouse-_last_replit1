@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Package, Trash2 } from "lucide-react";
+import { Package, Trash2, Usb, Smartphone, Wifi } from "lucide-react";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface StockInFormProps {
   onSubmit: (data: {
@@ -15,9 +16,10 @@ interface StockInFormProps {
     location: string;
     quantity: number;
     barcode?: string;
-    price?: number;
   }) => void;
 }
+
+type ScannerMode = "usb" | "phone";
 
 export default function StockInForm({ onSubmit }: StockInFormProps) {
   const [productId, setProductId] = useState("");
@@ -26,15 +28,37 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
   const [location, setLocation] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [barcode, setBarcode] = useState("");
-  const [price, setPrice] = useState("");
+  const [scannerMode, setScannerMode] = useState<ScannerMode>("usb");
   
   // Bulk mode states
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [scannedBarcodes, setScannedBarcodes] = useState<string[]>([]);
 
+  // WebSocket for phone mode
+  const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
+
   // Строгая маршрутизация: данные со сканера ТОЛЬКО в barcode поле
-  const { inputRef: barcodeInputRef } = useGlobalBarcodeInput(!isBulkMode);
-  const { inputRef: bulkBarcodeInputRef } = useGlobalBarcodeInput(isBulkMode);
+  // В USB режиме работает глобальная маршрутизация
+  const { inputRef: barcodeInputRef } = useGlobalBarcodeInput(!isBulkMode && scannerMode === "usb");
+  const { inputRef: bulkBarcodeInputRef } = useGlobalBarcodeInput(isBulkMode && scannerMode === "usb");
+
+  // Обработка сообщений от телефона
+  useEffect(() => {
+    if (lastMessage?.type === "barcode_scanned" && scannerMode === "phone") {
+      const code = lastMessage.barcode;
+      const qty = lastMessage.quantity || 1;
+      
+      if (isBulkMode) {
+        // Добавляем все штрихкоды в список
+        const codes = Array(qty).fill(code);
+        setScannedBarcodes(prev => [...prev, ...codes]);
+      } else {
+        // Обычный режим - заполняем поля
+        setBarcode(code);
+        setQuantity(qty);
+      }
+    }
+  }, [lastMessage, scannerMode, isBulkMode]);
 
   const handleRemoveBarcode = (index: number) => {
     setScannedBarcodes(scannedBarcodes.filter((_, i) => i !== index));
@@ -73,7 +97,6 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         location,
         quantity: scannedBarcodes.length,
         barcode: scannedBarcodes[0] || undefined,
-        price: price ? parseInt(price) : undefined,
       });
       
       // Очистка формы
@@ -81,7 +104,6 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       setName("");
       setSku("");
       setLocation("");
-      setPrice("");
       setScannedBarcodes([]);
     } else {
       // Обычный режим
@@ -92,7 +114,6 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         location,
         quantity,
         barcode: barcode || undefined,
-        price: price ? parseInt(price) : undefined,
       });
       
       // Очистка формы
@@ -102,22 +123,58 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       setLocation("");
       setQuantity(1);
       setBarcode("");
-      setPrice("");
     }
   };
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle>Информация о товаре</CardTitle>
-        <Button 
-          variant={isBulkMode ? "default" : "outline"} 
-          onClick={handleToggleBulkMode}
-          data-testid="button-toggle-bulk-mode"
-        >
-          <Package className="w-4 h-4 mr-2" />
-          {isBulkMode ? "Обычный режим" : "Массовое добавление"}
-        </Button>
+      <CardHeader className="space-y-3 pb-3">
+        <div className="flex flex-row items-center justify-between">
+          <CardTitle>Информация о товаре</CardTitle>
+          <Button 
+            variant={isBulkMode ? "default" : "outline"} 
+            onClick={handleToggleBulkMode}
+            data-testid="button-toggle-bulk-mode"
+          >
+            <Package className="w-4 h-4 mr-2" />
+            {isBulkMode ? "Обычный режим" : "Массовое добавление"}
+          </Button>
+        </div>
+        
+        {/* Scanner Mode Selector */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground mr-2">Сканер:</span>
+          <Button
+            size="sm"
+            variant={scannerMode === "usb" ? "default" : "outline"}
+            onClick={() => setScannerMode("usb")}
+            data-testid="button-scanner-usb"
+            className="h-8"
+          >
+            <Usb className="w-3.5 h-3.5 mr-1.5" />
+            USB
+          </Button>
+          <Button
+            size="sm"
+            variant={scannerMode === "phone" ? "default" : "outline"}
+            onClick={() => setScannerMode("phone")}
+            data-testid="button-scanner-phone"
+            className="h-8"
+          >
+            <Smartphone className="w-3.5 h-3.5 mr-1.5" />
+            Телефон
+          </Button>
+          
+          {/* Phone Connection Indicator */}
+          {scannerMode === "phone" && (
+            <div className="flex items-center gap-1.5 ml-2 px-2 py-1 rounded-md bg-muted/50">
+              <Wifi className={`w-3.5 h-3.5 ${isPhoneConnected ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`} />
+              <span className={`text-xs font-medium ${isPhoneConnected ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                {isPhoneConnected ? "Подключен" : "Ожидание..."}
+              </span>
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -156,19 +213,6 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="price">Цена</Label>
-            <Input
-              id="price"
-              type="number"
-              min="0"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="0"
-              data-testid="input-price"
-            />
-          </div>
-          
-          <div className="space-y-2">
             <Label htmlFor="sku">SKU *</Label>
             <Input
               id="sku"
@@ -200,10 +244,11 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
               <div className="space-y-2">
                 <Label>Штрихкод (сканируйте каждый товар)</Label>
                 <Input
-                  ref={bulkBarcodeInputRef}
-                  placeholder="Отсканируйте штрихкод и нажмите Enter"
+                  ref={scannerMode === "usb" ? bulkBarcodeInputRef : undefined}
+                  placeholder={scannerMode === "usb" ? "Отсканируйте штрихкод и нажмите Enter" : "Отсканируйте с телефона"}
                   className="font-mono"
-                  onKeyDown={handleBulkBarcodeInput}
+                  onKeyDown={scannerMode === "usb" ? handleBulkBarcodeInput : undefined}
+                  readOnly={scannerMode === "phone"}
                   data-testid="input-bulk-barcode"
                 />
               </div>
@@ -223,11 +268,12 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
               <Label htmlFor="barcode">Штрихкод</Label>
               <Input
                 id="barcode"
-                ref={barcodeInputRef}
+                ref={scannerMode === "usb" ? barcodeInputRef : undefined}
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
-                placeholder="Введите или отсканируйте"
+                placeholder={scannerMode === "usb" ? "Введите или отсканируйте" : "Отсканируйте с телефона"}
                 className="font-mono"
+                readOnly={scannerMode === "phone"}
                 data-testid="input-barcode"
               />
             </div>
