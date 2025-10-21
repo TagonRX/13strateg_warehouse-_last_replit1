@@ -29,9 +29,8 @@ export default function ProductTesting() {
   // WebSocket for phone mode
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
 
-  // USB scanner routing - ВСЕГДА АКТИВЕН для автоматического ввода штрихкодов
-  // Когда включен режим телефона, WebSocket перехватит ввод отдельно
-  const { inputRef, refObject: barcodeInputRef } = useGlobalBarcodeInput(true);
+  // USB scanner routing - работает ТОЛЬКО в USB режиме
+  const { inputRef: barcodeInputRef, refObject: barcodeRef } = useGlobalBarcodeInput(scannerMode === "usb");
 
   // Обработка сообщений от телефона через WebSocket
   useEffect(() => {
@@ -78,7 +77,7 @@ export default function ProductTesting() {
       setCurrentTest(data);
       setMode("second-scan");
       setBarcode("");
-      setTimeout(() => barcodeInputRef.current?.focus(), 100);
+      setTimeout(() => barcodeRef.current?.focus(), 100);
     },
     onError: (error: Error) => {
       toast({
@@ -87,7 +86,7 @@ export default function ProductTesting() {
         description: error.message,
       });
       setBarcode("");
-      setTimeout(() => barcodeInputRef.current?.focus(), 100);
+      setTimeout(() => barcodeRef.current?.focus(), 100);
     },
   });
 
@@ -109,7 +108,7 @@ export default function ProductTesting() {
       setMode("first-scan");
       setSelectedCondition("");
       setBarcode("");
-      setTimeout(() => barcodeInputRef.current?.focus(), 100);
+      setTimeout(() => barcodeRef.current?.focus(), 100);
     },
     onError: (error: Error) => {
       toast({
@@ -118,7 +117,7 @@ export default function ProductTesting() {
         description: error.message,
       });
       setBarcode("");
-      setTimeout(() => barcodeInputRef.current?.focus(), 100);
+      setTimeout(() => barcodeRef.current?.focus(), 100);
     },
   });
 
@@ -139,7 +138,7 @@ export default function ProductTesting() {
       if (pending) {
         setCurrentTest(pending);
         setBarcode("");
-        setTimeout(() => barcodeInputRef.current?.focus(), 100);
+        setTimeout(() => barcodeRef.current?.focus(), 100);
       } else {
         toast({
           variant: "destructive",
@@ -147,7 +146,7 @@ export default function ProductTesting() {
           description: "Товар не найден в списке тестирования",
         });
         setBarcode("");
-        setTimeout(() => barcodeInputRef.current?.focus(), 100);
+        setTimeout(() => barcodeRef.current?.focus(), 100);
       }
     }
   };
@@ -197,13 +196,13 @@ export default function ProductTesting() {
     setMode("first-scan");
     setSelectedCondition("");
     setBarcode("");
-    setTimeout(() => barcodeInputRef.current?.focus(), 100);
+    setTimeout(() => barcodeRef.current?.focus(), 100);
   };
 
   // Auto-focus on mount (простой подход как в StockInForm)
   useEffect(() => {
-    if (barcodeInputRef.current) {
-      barcodeInputRef.current.focus();
+    if (barcodeRef.current) {
+      barcodeRef.current.focus();
     }
   }, [scannerMode]);
 
@@ -362,7 +361,7 @@ export default function ProductTesting() {
                     <div className="space-y-2">
                       <Label htmlFor="barcode-second">Штрихкод</Label>
                       <Input
-                        ref={inputRef}
+                        ref={barcodeInputRef}
                         id="barcode-second"
                         data-testid="input-barcode-second"
                         value={barcode}
