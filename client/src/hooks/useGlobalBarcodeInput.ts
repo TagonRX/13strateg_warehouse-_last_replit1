@@ -35,6 +35,56 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
     }
   }, []);
 
+  // Ранняя блокировка - работает даже когда inputElement еще не готов
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    // КРИТИЧНО: Блокируем контекстное меню и комбинации клавиш СРАЗУ
+    // даже если inputElement еще не готов
+    const earlyPreventContextMenu = (e: Event) => {
+      console.warn('[Barcode Scanner] Early blocked context menu');
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return false;
+    };
+
+    const earlyPreventRightClick = (e: MouseEvent) => {
+      if (e.button === 2) {
+        console.warn('[Barcode Scanner] Early blocked right click');
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return false;
+      }
+    };
+
+    const earlyPreventBrowserActions = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        const allowedKeys = ['a', 'c', 'v', 'x', 'z', 'y'];
+        if (!allowedKeys.includes(e.key.toLowerCase())) {
+          console.warn('[Barcode Scanner] Early prevented browser action:', e.key);
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          return false;
+        }
+      }
+    };
+
+    document.addEventListener('contextmenu', earlyPreventContextMenu, true);
+    document.addEventListener('mousedown', earlyPreventRightClick, true);
+    document.addEventListener('keydown', earlyPreventBrowserActions, true);
+
+    return () => {
+      document.removeEventListener('contextmenu', earlyPreventContextMenu, true);
+      document.removeEventListener('mousedown', earlyPreventRightClick, true);
+      document.removeEventListener('keydown', earlyPreventBrowserActions, true);
+    };
+  }, [enabled]);
+
   useEffect(() => {
     if (!enabled) {
       return;
@@ -379,16 +429,40 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
       }
     };
 
+    // Блокируем контекстное меню (правый клик и клавишные комбинации)
+    const preventContextMenu = (e: Event) => {
+      console.warn('[Barcode Scanner] Blocked context menu');
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return false;
+    };
+
+    // Блокируем все mousedown события с правой кнопкой
+    const preventRightClick = (e: MouseEvent) => {
+      if (e.button === 2) { // Правая кнопка мыши
+        console.warn('[Barcode Scanner] Blocked right click');
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return false;
+      }
+    };
+
     // Слушаем на capture phase для раннего перехвата
     document.addEventListener('keydown', preventBrowserActions, true);
     document.addEventListener('keydown', handleKeyDown, true);
     document.addEventListener('focusin', handleFocusChange);
+    document.addEventListener('contextmenu', preventContextMenu, true);
+    document.addEventListener('mousedown', preventRightClick, true);
     barcodeInput.addEventListener('blur', handleBlur);
 
     return () => {
       document.removeEventListener('keydown', preventBrowserActions, true);
       document.removeEventListener('keydown', handleKeyDown, true);
       document.removeEventListener('focusin', handleFocusChange);
+      document.removeEventListener('contextmenu', preventContextMenu, true);
+      document.removeEventListener('mousedown', preventRightClick, true);
       barcodeInput.removeEventListener('blur', handleBlur);
       if (detectionTimer.current) {
         window.clearTimeout(detectionTimer.current);
