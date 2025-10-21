@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, X, Check, Wifi, WifiOff } from "lucide-react";
+import { Camera, X, Check, Wifi, WifiOff, AlertCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function ScannerMode() {
   const { toast } = useToast();
@@ -16,6 +17,7 @@ export default function ScannerMode() {
   const [html5QrCode, setHtml5QrCode] = useState<Html5Qrcode | null>(null);
   const [quantity, setQuantity] = useState("1");
   const [lastBarcode, setLastBarcode] = useState<string>("");
+  const [cameraError, setCameraError] = useState<string>("");
 
   const { data: currentUser } = useQuery<any>({
     queryKey: ["/api/auth/me"],
@@ -30,6 +32,7 @@ export default function ScannerMode() {
   }, [html5QrCode]);
 
   const startScanning = async () => {
+    setCameraError("");
     try {
       const scanner = new Html5Qrcode("qr-reader");
       setHtml5QrCode(scanner);
@@ -50,16 +53,30 @@ export default function ScannerMode() {
       );
 
       setScanning(true);
+      setCameraError("");
       toast({
         title: "Камера запущена",
         description: "Наведите камеру на штрихкод",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Camera start error:", error);
+      
+      let errorMessage = "Не удалось запустить камеру";
+      if (error?.message?.includes("Permission")) {
+        errorMessage = "Разрешите доступ к камере в настройках браузера";
+      } else if (error?.message?.includes("NotFound")) {
+        errorMessage = "Камера не найдена на устройстве";
+      } else if (error?.message?.includes("NotAllowed")) {
+        errorMessage = "Доступ к камере запрещен. Проверьте разрешения браузера";
+      }
+      
+      setCameraError(errorMessage);
+      setHtml5QrCode(null);
+      
       toast({
         variant: "destructive",
-        title: "Ошибка",
-        description: "Не удалось запустить камеру",
+        title: "Ошибка камеры",
+        description: errorMessage,
       });
     }
   };
@@ -87,7 +104,7 @@ export default function ScannerMode() {
     // Send barcode via WebSocket
     const qty = parseInt(quantity) || 1;
     sendMessage({
-      type: "barcode_scan",
+      type: "barcode_scanned",
       barcode,
       quantity: qty,
     });
@@ -129,11 +146,27 @@ export default function ScannerMode() {
         </CardHeader>
         <CardContent className="space-y-4">
           {!isConnected && (
-            <div className="p-4 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
-              <p className="text-sm text-amber-800 dark:text-amber-200">
+            <Alert className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950">
+              <AlertCircle className="h-4 w-4 text-amber-800 dark:text-amber-200" />
+              <AlertDescription className="text-amber-800 dark:text-amber-200">
                 Нет подключения к серверу. Убедитесь что вы авторизованы на компьютере.
-              </p>
-            </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {cameraError && (
+            <Alert className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
+              <AlertCircle className="h-4 w-4 text-red-800 dark:text-red-200" />
+              <AlertDescription className="text-red-800 dark:text-red-200">
+                {cameraError}
+                <div className="mt-2 text-xs">
+                  <strong>Как исправить:</strong><br/>
+                  1. Откройте настройки браузера<br/>
+                  2. Найдите "Разрешения сайта"<br/>
+                  3. Разрешите доступ к камере для этого сайта
+                </div>
+              </AlertDescription>
+            </Alert>
           )}
 
           <div className="space-y-2">
