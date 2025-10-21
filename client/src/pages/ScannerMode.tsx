@@ -242,19 +242,21 @@ export default function ScannerMode() {
             )}
           </div>
 
-          {scanning && (
-            <div className="space-y-2">
-              <div id="qr-reader" className="rounded-md overflow-hidden" />
-              {lastBarcode && (
-                <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-600" />
-                  <span className="text-sm font-mono text-green-800 dark:text-green-200">
-                    {lastBarcode}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
+          {/* QR Reader - всегда в DOM, но скрыт когда не сканируем */}
+          <div className="space-y-2">
+            <div 
+              id="qr-reader" 
+              className={`rounded-md overflow-hidden ${scanning ? 'block' : 'hidden'}`} 
+            />
+            {scanning && lastBarcode && (
+              <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-mono text-green-800 dark:text-green-200">
+                  {lastBarcode}
+                </span>
+              </div>
+            )}
+          </div>
 
           <div className="pt-4 border-t">
             <p className="text-xs text-muted-foreground text-center">
