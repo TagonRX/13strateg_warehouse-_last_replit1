@@ -18,6 +18,7 @@ export default function ScannerMode() {
   const [quantity, setQuantity] = useState("1");
   const [lastBarcode, setLastBarcode] = useState<string>("");
   const [cameraError, setCameraError] = useState<string>("");
+  const [pendingBarcode, setPendingBarcode] = useState<string>(""); // Баркод ожидающий подтверждения
 
   const { data: currentUser } = useQuery<any>({
     queryKey: ["/api/auth/me"],
@@ -52,7 +53,7 @@ export default function ScannerMode() {
 
       const config = {
         fps: 10,
-        qrbox: { width: 250, height: 250 },
+        qrbox: { width: 350, height: 350 }, // Увеличен размер для лучшего зума
         aspectRatio: 1.0,
       };
 
@@ -137,25 +138,50 @@ export default function ScannerMode() {
   };
 
   const handleScan = (barcode: string) => {
-    if (!barcode || barcode === lastBarcode) return;
+    if (!barcode || barcode === pendingBarcode) return;
 
-    setLastBarcode(barcode);
+    // Показываем баркод для подтверждения
+    setPendingBarcode(barcode);
+    
+    // Останавливаем сканирование для показа подтверждения
+    if (html5QrCode) {
+      html5QrCode.pause(true);
+    }
+  };
 
-    // Send barcode via WebSocket
+  const handleConfirmSend = () => {
+    if (!pendingBarcode) return;
+
+    setLastBarcode(pendingBarcode);
+
+    // Отправляем баркод через WebSocket
     const qty = parseInt(quantity) || 1;
     sendMessage({
       type: "barcode_scanned",
-      barcode,
+      barcode: pendingBarcode,
       quantity: qty,
     });
 
     toast({
       title: "✓ Отправлено",
-      description: `Штрихкод: ${barcode}, Кол-во: ${qty}`,
+      description: `Штрихкод: ${pendingBarcode}, Кол-во: ${qty}`,
     });
+
+    // Очищаем и возобновляем сканирование
+    setPendingBarcode("");
+    if (html5QrCode) {
+      html5QrCode.resume();
+    }
 
     // Clear last barcode after 2 seconds to allow re-scanning
     setTimeout(() => setLastBarcode(""), 2000);
+  };
+
+  const handleCancelScan = () => {
+    setPendingBarcode("");
+    if (html5QrCode) {
+      html5QrCode.resume();
+    }
   };
 
   return (
@@ -243,25 +269,74 @@ export default function ScannerMode() {
           </div>
 
           {/* QR Reader - всегда в DOM */}
-          <div className="space-y-2">
-            {scanning && (
-              <div className="text-center text-sm text-muted-foreground mb-2">
-                Камера активна - наведите на штрихкод
+          <div className="space-y-3">
+            {scanning && !pendingBarcode && (
+              <div className="text-center text-sm text-muted-foreground">
+                Наведите камеру на штрихкод
               </div>
             )}
-            <div 
-              id="qr-reader" 
-              className="rounded-md overflow-hidden w-full border-2 border-dashed border-muted"
-              style={{ 
-                minHeight: '300px',
-                backgroundColor: scanning ? 'transparent' : '#f5f5f5'
-              }}
-            />
-            {scanning && lastBarcode && (
+            
+            {/* Область камеры */}
+            <div className="relative">
+              <div 
+                id="qr-reader" 
+                className="rounded-md overflow-hidden w-full border-2 border-dashed border-muted"
+                style={{ 
+                  minHeight: '400px', // Увеличена высота
+                  backgroundColor: scanning ? 'transparent' : '#f5f5f5'
+                }}
+              />
+              
+              {/* Оверлей с подтверждением баркода */}
+              {pendingBarcode && (
+                <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded-md">
+                  <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+                    <div className="text-center space-y-4">
+                      <div className="text-lg font-semibold text-foreground">
+                        Найден штрихкод
+                      </div>
+                      
+                      <div className="p-4 bg-muted rounded-md">
+                        <div className="text-2xl font-mono font-bold text-primary break-all">
+                          {pendingBarcode}
+                        </div>
+                      </div>
+                      
+                      <div className="text-sm text-muted-foreground">
+                        Количество: {quantity}
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleCancelScan}
+                          variant="outline"
+                          className="flex-1"
+                          data-testid="button-cancel-scan"
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Отмена
+                        </Button>
+                        <Button
+                          onClick={handleConfirmSend}
+                          className="flex-1"
+                          data-testid="button-confirm-send"
+                        >
+                          <Check className="w-4 h-4 mr-2" />
+                          Отправить
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Последний отправленный баркод */}
+            {scanning && lastBarcode && !pendingBarcode && (
               <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md flex items-center gap-2">
                 <Check className="w-4 h-4 text-green-600" />
                 <span className="text-sm font-mono text-green-800 dark:text-green-200">
-                  {lastBarcode}
+                  Отправлено: {lastBarcode}
                 </span>
               </div>
             )}
