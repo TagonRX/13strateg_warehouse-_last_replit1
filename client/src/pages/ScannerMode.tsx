@@ -242,11 +242,15 @@ export default function ScannerMode() {
             )}
           </div>
 
-          {/* QR Reader - всегда в DOM, но скрыт когда не сканируем */}
+          {/* QR Reader - всегда в DOM */}
           <div className="space-y-2">
             <div 
               id="qr-reader" 
-              className={`rounded-md overflow-hidden ${scanning ? 'block' : 'hidden'}`} 
+              className="rounded-md overflow-hidden w-full"
+              style={{ 
+                minHeight: scanning ? '300px' : '0px',
+                display: scanning ? 'block' : 'none'
+              }}
             />
             {scanning && lastBarcode && (
               <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md flex items-center gap-2">
