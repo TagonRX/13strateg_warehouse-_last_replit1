@@ -145,6 +145,7 @@ export interface IStorage {
   getAllPendingTests(): Promise<PendingTest[]>;
   completePendingTest(barcode: string, condition: string, decisionBy: string, workingMinutes: number): Promise<TestedItem | FaultyStock>;
   removePendingTestByBarcode(barcode: string): Promise<void>;
+  deletePendingTest(id: string): Promise<void>;
   
   // Tested Items methods
   getAllTestedItems(): Promise<TestedItem[]>;
@@ -152,6 +153,8 @@ export interface IStorage {
   
   // Faulty Stock methods
   getAllFaultyStock(): Promise<FaultyStock[]>;
+  deleteFaultyStockItem(id: string): Promise<void>;
+  deleteAllFaultyStock(condition: string): Promise<number>;
 }
 
 export class DbStorage implements IStorage {
@@ -1228,13 +1231,14 @@ export class DbStorage implements IStorage {
       throw new Error("Pending test not found");
     }
 
-    if (condition === "Faulty") {
-      // Add to faulty stock
+    if (condition === "Faulty" || condition === "Parts") {
+      // Add to faulty stock (both Faulty and Parts)
       const result = await db.insert(faultyStock).values({
         barcode: pending.barcode,
         sku: pending.sku,
         productId: pending.productId,
         name: pending.name,
+        condition,
         firstScanAt: pending.firstScanAt,
         firstScanBy: pending.firstScanBy,
         decisionBy,
@@ -1246,7 +1250,7 @@ export class DbStorage implements IStorage {
 
       return result[0];
     } else {
-      // Add to tested items
+      // Add to tested items (Used, Exdisplay, New)
       const result = await db.insert(testedItems).values({
         barcode: pending.barcode,
         sku: pending.sku,
@@ -1272,9 +1276,9 @@ export class DbStorage implements IStorage {
     await db.delete(testedItems).where(eq(testedItems.barcode, barcode));
   }
 
-  async deletePendingTest(barcode: string): Promise<void> {
-    // Admin-only delete: only removes from pending_tests (not tested_items)
-    await db.delete(pendingTests).where(eq(pendingTests.barcode, barcode));
+  async deletePendingTest(id: string): Promise<void> {
+    // Admin-only delete: removes pending test by ID
+    await db.delete(pendingTests).where(eq(pendingTests.id, id));
   }
 
   // Tested Items methods
@@ -1290,6 +1294,21 @@ export class DbStorage implements IStorage {
   // Faulty Stock methods
   async getAllFaultyStock(): Promise<FaultyStock[]> {
     return await db.select().from(faultyStock).orderBy(faultyStock.decisionAt);
+  }
+
+  async deleteFaultyStockItem(id: string): Promise<void> {
+    await db.delete(faultyStock).where(eq(faultyStock.id, id));
+  }
+
+  async deleteAllFaultyStock(condition: string): Promise<number> {
+    const items = await db.select().from(faultyStock).where(eq(faultyStock.condition, condition));
+    const count = items.length;
+    
+    if (count > 0) {
+      await db.delete(faultyStock).where(eq(faultyStock.condition, condition));
+    }
+    
+    return count;
   }
 }
 

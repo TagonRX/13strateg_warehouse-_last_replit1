@@ -161,16 +161,17 @@ export const testedItems = pgTable("tested_items", {
   decisionBy: varchar("decision_by").references(() => users.id).notNull(), // Кто принял решение
 });
 
-// Бракованные товары (Faulty) с аналитикой рабочих часов
+// Бракованные товары (Faulty и Parts) с аналитикой рабочих часов
 export const faultyStock = pgTable("faulty_stock", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   barcode: text("barcode").notNull(),
   sku: text("sku"),
   productId: text("product_id"),
   name: text("name"),
+  condition: text("condition").notNull(), // Faulty или Parts
   firstScanAt: timestamp("first_scan_at").notNull(), // Когда начали тестировать
   firstScanBy: varchar("first_scan_by").references(() => users.id).notNull(), // Кто начал тестировать
-  decisionAt: timestamp("decision_at").defaultNow().notNull(), // Когда приняли решение что faulty
+  decisionAt: timestamp("decision_at").defaultNow().notNull(), // Когда приняли решение что faulty/parts
   decisionBy: varchar("decision_by").references(() => users.id).notNull(), // Кто принял решение
   workingHours: integer("working_hours").notNull(), // Рабочие часы между первым и вторым сканированием (в минутах)
 });

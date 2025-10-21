@@ -1505,6 +1505,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete pending test (admin only)
+  app.delete("/api/product-testing/pending/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).json({ error: "ID обязателен" });
+      }
+
+      await storage.deletePendingTest(id);
+      return res.json({ message: "Тестируемый товар удален" });
+    } catch (error: any) {
+      console.error("Delete pending test error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Delete tested item (admin only)
   app.delete("/api/product-testing/tested/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
@@ -1531,6 +1548,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(items);
     } catch (error: any) {
       console.error("Get faulty stock error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Delete single faulty stock item (admin only)
+  app.delete("/api/faulty-stock/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = (req as any).userId;
+
+      if (!id) {
+        return res.status(400).json({ error: "ID обязателен" });
+      }
+
+      await storage.deleteFaultyStockItem(id);
+
+      // Log the event
+      await storage.createEventLog({
+        userId,
+        action: "FAULTY_STOCK_DELETED",
+        details: `Deleted faulty/parts item: ${id}`,
+      });
+
+      return res.json({ message: "Бракованный товар удален" });
+    } catch (error: any) {
+      console.error("Delete faulty stock item error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Delete all faulty stock items by condition (admin only)
+  app.delete("/api/faulty-stock/all/:condition", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { condition } = req.params;
+      const userId = (req as any).userId;
+
+      if (condition !== "Faulty" && condition !== "Parts") {
+        return res.status(400).json({ error: "Неверная кондиция. Допустимые значения: Faulty, Parts" });
+      }
+
+      const count = await storage.deleteAllFaultyStock(condition);
+
+      // Log the event
+      await storage.createEventLog({
+        userId,
+        action: "FAULTY_STOCK_BULK_DELETED",
+        details: `Deleted all ${condition} items (${count} items)`,
+      });
+
+      return res.json({ message: `Удалено товаров: ${count}`, count });
+    } catch (error: any) {
+      console.error("Delete all faulty stock error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });

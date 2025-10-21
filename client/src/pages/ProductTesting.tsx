@@ -21,7 +21,6 @@ type ScannerMode = "usb" | "phone";
 export default function ProductTesting() {
   const [barcode, setBarcode] = useState("");
   const [selectedCondition, setSelectedCondition] = useState<string>("");
-  const [mode, setMode] = useState<"first-scan" | "second-scan">("first-scan");
   const [currentTest, setCurrentTest] = useState<PendingTest | null>(null);
   const [scannerMode, setScannerMode] = useState<ScannerMode>("usb");
   const { toast } = useToast();
@@ -29,8 +28,29 @@ export default function ProductTesting() {
   // WebSocket for phone mode
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
 
-  // USB scanner routing - работает ТОЛЬКО в USB режиме
-  const { inputRef: barcodeInputRef, refObject: barcodeRef } = useGlobalBarcodeInput(scannerMode === "usb");
+  // USB scanner routing - ВСЕГДА создается, но активен только в USB режиме
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  
+  // Простой keydown listener для захвата сканера
+  useEffect(() => {
+    if (scannerMode !== "usb") return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Игнорируем модификаторы
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      
+      // Если фокус не на input, направляем туда
+      const activeElement = document.activeElement;
+      if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
+        if (e.key.length === 1 || e.key === 'Enter') {
+          barcodeInputRef.current?.focus();
+        }
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [scannerMode]);
 
   // Обработка сообщений от телефона через WebSocket
   useEffect(() => {
@@ -75,9 +95,8 @@ export default function ProductTesting() {
         description: `Товар ${data.barcode} добавлен в тестирование`,
       });
       setCurrentTest(data);
-      setMode("second-scan");
       setBarcode("");
-      setTimeout(() => barcodeRef.current?.focus(), 100);
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     },
     onError: (error: Error) => {
       toast({
@@ -86,7 +105,7 @@ export default function ProductTesting() {
         description: error.message,
       });
       setBarcode("");
-      setTimeout(() => barcodeRef.current?.focus(), 100);
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     },
   });
 
@@ -105,10 +124,9 @@ export default function ProductTesting() {
         description: "Товар обработан успешно",
       });
       setCurrentTest(null);
-      setMode("first-scan");
       setSelectedCondition("");
       setBarcode("");
-      setTimeout(() => barcodeRef.current?.focus(), 100);
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     },
     onError: (error: Error) => {
       toast({
@@ -117,7 +135,7 @@ export default function ProductTesting() {
         description: error.message,
       });
       setBarcode("");
-      setTimeout(() => barcodeRef.current?.focus(), 100);
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     },
   });
 
@@ -129,25 +147,17 @@ export default function ProductTesting() {
       return;
     }
 
-    if (mode === "first-scan") {
-      // First scan - start test
-      startTestMutation.mutate({ barcode: barcode.trim() });
+    // Проверяем есть ли уже этот товар в тестировании
+    const pending = pendingTests.find(p => p.barcode === barcode.trim());
+    
+    if (pending) {
+      // Повторное сканирование - показываем форму выбора состояния
+      setCurrentTest(pending);
+      setBarcode("");
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     } else {
-      // Second scan - check if it matches current test
-      const pending = pendingTests.find(p => p.barcode === barcode.trim());
-      if (pending) {
-        setCurrentTest(pending);
-        setBarcode("");
-        setTimeout(() => barcodeRef.current?.focus(), 100);
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Ошибка",
-          description: "Товар не найден в списке тестирования",
-        });
-        setBarcode("");
-        setTimeout(() => barcodeRef.current?.focus(), 100);
-      }
+      // Первое сканирование - добавляем в список тестирования
+      startTestMutation.mutate({ barcode: barcode.trim() });
     }
   };
 
@@ -167,6 +177,28 @@ export default function ProductTesting() {
       condition: selectedCondition,
     });
   };
+
+  // Delete pending test mutation (admin only)
+  const deletePendingTestMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/product-testing/pending/${id}`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/product-testing/pending"] });
+      toast({
+        title: "Товар удален",
+        description: "Тестируемый товар удален из списка",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: error.message,
+      });
+    },
+  });
 
   // Delete tested item mutation (admin only)
   const deleteTestedItemMutation = useMutation({
@@ -190,19 +222,18 @@ export default function ProductTesting() {
     },
   });
 
-  // Cancel second scan
+  // Cancel/reset
   const handleCancel = () => {
     setCurrentTest(null);
-    setMode("first-scan");
     setSelectedCondition("");
     setBarcode("");
-    setTimeout(() => barcodeRef.current?.focus(), 100);
+    setTimeout(() => barcodeInputRef.current?.focus(), 100);
   };
 
   // Auto-focus on mount (простой подход как в StockInForm)
   useEffect(() => {
-    if (barcodeRef.current) {
-      barcodeRef.current.focus();
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
     }
   }, [scannerMode]);
 
@@ -217,7 +248,7 @@ export default function ProductTesting() {
         <CardHeader className="space-y-3 pb-3">
           <CardTitle className="flex items-center gap-2">
             <Scan className="w-5 h-5" />
-            {mode === "first-scan" ? "Начать тестирование" : "Завершить тестирование"}
+            {!currentTest ? "Тестирование товаров" : "Выбор состояния"}
           </CardTitle>
           
           {/* Scanner Mode Selector */}
@@ -257,11 +288,12 @@ export default function ProductTesting() {
         </CardHeader>
         <CardContent className="space-y-4">
 
-          {mode === "first-scan" ? (
+          {!currentTest ? (
             <>
               <div className="p-4 bg-muted rounded-md">
                 <p className="text-sm text-muted-foreground">
-                  Отсканируйте товар для начала тестирования
+                  Первое сканирование - добавление в тестирование<br/>
+                  Повторное сканирование - выбор состояния
                 </p>
               </div>
               
@@ -286,7 +318,7 @@ export default function ProductTesting() {
                   className="w-full"
                 >
                   {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Начать тестирование
+                  Сканировать
                 </Button>
               </form>
             </>
@@ -405,6 +437,7 @@ export default function ProductTesting() {
                     <TableHead>SKU</TableHead>
                     <TableHead>Название</TableHead>
                     <TableHead>Начато</TableHead>
+                    {currentUser?.role === "admin" && <TableHead className="w-12"></TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -416,6 +449,19 @@ export default function ProductTesting() {
                       <TableCell className="text-sm text-muted-foreground">
                         {format(new Date(test.firstScanAt), "dd.MM.yyyy HH:mm", { locale: ru })}
                       </TableCell>
+                      {currentUser?.role === "admin" && (
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deletePendingTestMutation.mutate(test.id)}
+                            data-testid={`button-delete-pending-${test.barcode}`}
+                            className="h-8 w-8"
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

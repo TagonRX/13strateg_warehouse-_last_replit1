@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -128,6 +129,60 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const [editingRow, setEditingRow] = useState<EditingRow | null>(null);
   const { toast } = useToast();
 
+  // Fetch tested items for condition display
+  const { data: testedItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/tested-items'],
+  });
+
+  // Helper function to get condition by barcode
+  const getConditionByBarcode = (barcode: string | undefined, barcodeMappings?: string): string | null => {
+    // Collect all barcodes to check
+    let barcodesToCheck: string[] = [];
+    
+    // Add simple barcode if exists
+    if (barcode) {
+      barcodesToCheck.push(barcode);
+    }
+    
+    // Add barcodes from mappings if exists
+    if (barcodeMappings) {
+      try {
+        const mappings: BarcodeMapping[] = JSON.parse(barcodeMappings);
+        barcodesToCheck.push(...mappings.map(m => m.code));
+      } catch (e) {
+        // If parsing fails, ignore mappings
+      }
+    }
+    
+    // If no barcodes to check, return null
+    if (barcodesToCheck.length === 0) return null;
+    
+    // Find tested item by any of the barcodes
+    const testedItem = testedItems.find((item) => {
+      return barcodesToCheck.some(bc => item.barcode === bc);
+    });
+    
+    return testedItem?.condition || null;
+  };
+
+  // Helper function to get condition color classes
+  const getConditionClasses = (condition: string | null): string => {
+    if (!condition) return "";
+    
+    switch (condition) {
+      case "New":
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100";
+      case "Exdisplay":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100";
+      case "Used":
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100";
+      case "Parts":
+        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100";
+      default:
+        return "";
+    }
+  };
+
   // Default column widths
   const defaultWidths = {
     actions: 48,
@@ -135,6 +190,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     sku: 150,
     quantity: 100,
     barcode: 150,
+    condition: 120,
     price: 100,
     dimensions: 180,
     volume: 100,
@@ -419,6 +475,21 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
               totalQuantity={editingRow.quantity}
             />
           </TableCell>
+          <TableCell style={{ width: `${columnWidths.condition}px`, minWidth: `${columnWidths.condition}px` }} className="text-xs">
+            {(() => {
+              const barcodeMappingsJson = editingRow.barcodeMappings.length > 0 
+                ? JSON.stringify(editingRow.barcodeMappings)
+                : undefined;
+              const condition = getConditionByBarcode(editingRow.barcode, barcodeMappingsJson);
+              return condition ? (
+                <Badge variant="secondary" className={getConditionClasses(condition)} data-testid={`badge-condition-${item.id}`}>
+                  {condition}
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground" data-testid={`text-condition-${item.id}`}>-</span>
+              );
+            })()}
+          </TableCell>
           <TableCell style={{ width: `${columnWidths.price}px`, minWidth: `${columnWidths.price}px` }}>
             <Input
               type="number"
@@ -498,6 +569,18 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="font-mono text-xs">{item.sku}</TableCell>
         <TableCell style={{ width: `${columnWidths.quantity}px`, minWidth: `${columnWidths.quantity}px` }} className="text-right text-xs font-medium">{item.quantity}</TableCell>
         <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="font-mono text-xs">{displayBarcodes}</TableCell>
+        <TableCell style={{ width: `${columnWidths.condition}px`, minWidth: `${columnWidths.condition}px` }} className="text-xs">
+          {(() => {
+            const condition = getConditionByBarcode(item.barcode, item.barcodeMappings);
+            return condition ? (
+              <Badge variant="secondary" className={getConditionClasses(condition)} data-testid={`badge-condition-${item.id}`}>
+                {condition}
+              </Badge>
+            ) : (
+              <span className="text-muted-foreground" data-testid={`text-condition-${item.id}`}>-</span>
+            );
+          })()}
+        </TableCell>
         <TableCell style={{ width: `${columnWidths.price}px`, minWidth: `${columnWidths.price}px` }} className="text-xs">{item.price || "-"}</TableCell>
         <TableCell style={{ width: `${columnWidths.dimensions}px`, minWidth: `${columnWidths.dimensions}px` }} className="text-xs">
           {item.length || item.width || item.height ? (
@@ -567,6 +650,9 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                 <ResizableHeader columnKey="barcode" width={columnWidths.barcode} onResize={handleResize} className="text-xs">
                   Штрихкод
                 </ResizableHeader>
+                <ResizableHeader columnKey="condition" width={columnWidths.condition} onResize={handleResize} className="text-xs">
+                  Состояние
+                </ResizableHeader>
                 <ResizableHeader columnKey="price" width={columnWidths.price} onResize={handleResize} className="text-xs">
                   Цена
                 </ResizableHeader>
@@ -614,6 +700,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                         <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="text-xs text-muted-foreground">
                           {totalBarcodes} штрихкодов
                         </TableCell>
+                        <TableCell style={{ width: `${columnWidths.condition}px`, minWidth: `${columnWidths.condition}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.price}px`, minWidth: `${columnWidths.price}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.dimensions}px`, minWidth: `${columnWidths.dimensions}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.volume}px`, minWidth: `${columnWidths.volume}px` }} className="text-xs text-muted-foreground">-</TableCell>
