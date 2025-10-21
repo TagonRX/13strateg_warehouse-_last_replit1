@@ -244,12 +244,17 @@ export default function ScannerMode() {
 
           {/* QR Reader - всегда в DOM */}
           <div className="space-y-2">
+            {scanning && (
+              <div className="text-center text-sm text-muted-foreground mb-2">
+                Камера активна - наведите на штрихкод
+              </div>
+            )}
             <div 
               id="qr-reader" 
-              className="rounded-md overflow-hidden w-full"
+              className="rounded-md overflow-hidden w-full border-2 border-dashed border-muted"
               style={{ 
-                minHeight: scanning ? '300px' : '0px',
-                display: scanning ? 'block' : 'none'
+                minHeight: '300px',
+                backgroundColor: scanning ? 'transparent' : '#f5f5f5'
               }}
             />
             {scanning && lastBarcode && (
