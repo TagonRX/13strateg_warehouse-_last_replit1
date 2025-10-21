@@ -157,9 +157,9 @@ export default function ScannerMode() {
     // Отправляем баркод через WebSocket
     const qty = parseInt(quantity) || 1;
     sendMessage({
-      type: "barcode_scanned",
+      type: "remote_scan",
       barcode: pendingBarcode,
-      quantity: qty,
+      qty: qty,
     });
 
     toast({
