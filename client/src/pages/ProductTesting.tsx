@@ -215,49 +215,48 @@ export default function ProductTesting() {
 
       {/* Main Scanner Card */}
       <Card>
-        <CardHeader>
+        <CardHeader className="space-y-3 pb-3">
           <CardTitle className="flex items-center gap-2">
             <Scan className="w-5 h-5" />
             {mode === "first-scan" ? "Начать тестирование" : "Завершить тестирование"}
           </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          
           {/* Scanner Mode Selector */}
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Сканер:</span>
-            <div className="flex gap-1">
-              <Button
-                type="button"
-                variant={scannerMode === "usb" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setScannerMode("usb")}
-                data-testid="button-scanner-usb"
-                className="gap-1.5"
-              >
-                <Usb className="w-4 h-4" />
-                USB
-              </Button>
-              <Button
-                type="button"
-                variant={scannerMode === "phone" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setScannerMode("phone")}
-                data-testid="button-scanner-phone"
-                className="gap-1.5"
-              >
-                <Smartphone className="w-4 h-4" />
-                Телефон
-              </Button>
-            </div>
+            <span className="text-sm text-muted-foreground mr-2">Сканер:</span>
+            <Button
+              size="sm"
+              variant={scannerMode === "usb" ? "default" : "outline"}
+              onClick={() => setScannerMode("usb")}
+              data-testid="button-scanner-usb"
+              className="h-8"
+            >
+              <Usb className="w-3.5 h-3.5 mr-1.5" />
+              USB
+            </Button>
+            <Button
+              size="sm"
+              variant={scannerMode === "phone" ? "default" : "outline"}
+              onClick={() => setScannerMode("phone")}
+              data-testid="button-scanner-phone"
+              className="h-8"
+            >
+              <Smartphone className="w-3.5 h-3.5 mr-1.5" />
+              Телефон
+            </Button>
+            
+            {/* Phone Connection Indicator */}
             {scannerMode === "phone" && (
-              <div className="flex items-center gap-1.5 ml-2">
-                <Wifi className={`w-4 h-4 ${isPhoneConnected ? "text-green-600" : "text-amber-600"}`} />
-                <span className={`text-xs ${isPhoneConnected ? "text-green-600" : "text-amber-600"}`}>
-                  {isPhoneConnected ? "Подключен" : "Подключение..."}
+              <div className="flex items-center gap-1.5 ml-2 px-2 py-1 rounded-md bg-muted/50">
+                <Wifi className={`w-3.5 h-3.5 ${isPhoneConnected ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`} />
+                <span className={`text-xs font-medium ${isPhoneConnected ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                  {isPhoneConnected ? "Подключен" : "Ожидание..."}
                 </span>
               </div>
             )}
           </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
 
           {mode === "first-scan" ? (
             <>
