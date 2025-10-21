@@ -1438,6 +1438,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstScanBy: userId,
       });
 
+      // Log test start
+      await storage.createEventLog({
+        userId,
+        action: "TEST_START",
+        details: `Начато тестирование товара (штрихкод: ${barcode})`,
+        productId: productId || null,
+        itemName: name || null,
+        sku: sku || null,
+      });
+
       return res.json(test);
     } catch (error: any) {
       console.error("Start product test error:", error);
@@ -1475,6 +1485,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Complete test
       const result = await storage.completePendingTest(barcode, condition, userId, workingMinutes);
+
+      // Log test completion
+      await storage.createEventLog({
+        userId,
+        action: "TEST_COMPLETE",
+        details: `Завершено тестирование товара. Результат: ${condition}`,
+        productId: pending.productId || null,
+        itemName: pending.name || null,
+        sku: pending.sku || null,
+      });
 
       return res.json(result);
     } catch (error: any) {
