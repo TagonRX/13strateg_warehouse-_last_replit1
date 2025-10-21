@@ -33,7 +33,27 @@ export default function ScannerMode() {
 
   const startScanning = async () => {
     setCameraError("");
+    
+    // Проверка поддержки камеры браузером
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const errorMsg = "Ваш браузер не поддерживает доступ к камере. Используйте Chrome, Firefox или Safari.";
+      setCameraError(errorMsg);
+      toast({
+        variant: "destructive",
+        title: "Браузер не поддерживается",
+        description: errorMsg,
+      });
+      return;
+    }
+
     try {
+      // Сначала явно запрашиваем разрешение на камеру
+      await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then(stream => {
+          // Останавливаем поток - нам нужно только разрешение
+          stream.getTracks().forEach(track => track.stop());
+        });
+
       const scanner = new Html5Qrcode("qr-reader");
       setHtml5QrCode(scanner);
 
@@ -60,23 +80,40 @@ export default function ScannerMode() {
       });
     } catch (error: any) {
       console.error("Camera start error:", error);
+      console.error("Error name:", error?.name);
+      console.error("Error message:", error?.message);
       
       let errorMessage = "Не удалось запустить камеру";
-      if (error?.message?.includes("Permission")) {
-        errorMessage = "Разрешите доступ к камере в настройках браузера";
-      } else if (error?.message?.includes("NotFound")) {
-        errorMessage = "Камера не найдена на устройстве";
-      } else if (error?.message?.includes("NotAllowed")) {
-        errorMessage = "Доступ к камере запрещен. Проверьте разрешения браузера";
+      let helpText = "";
+      
+      // Более детальная обработка ошибок
+      if (error?.name === "NotAllowedError" || error?.message?.includes("NotAllowed")) {
+        errorMessage = "Доступ к камере запрещен";
+        helpText = "Нажмите на значок 🔒 в адресной строке браузера и разрешите доступ к камере";
+      } else if (error?.name === "NotFoundError" || error?.message?.includes("NotFound")) {
+        errorMessage = "Камера не найдена";
+        helpText = "Убедитесь что на вашем устройстве есть камера";
+      } else if (error?.name === "NotReadableError" || error?.message?.includes("NotReadable")) {
+        errorMessage = "Камера занята другим приложением";
+        helpText = "Закройте другие приложения использующие камеру и попробуйте снова";
+      } else if (error?.name === "OverconstrainedError" || error?.message?.includes("Overconstrained")) {
+        errorMessage = "Камера не поддерживает требуемые настройки";
+        helpText = "Попробуйте использовать другую камеру";
+      } else if (error?.name === "SecurityError" || error?.message?.includes("Security")) {
+        errorMessage = "Доступ заблокирован по соображениям безопасности";
+        helpText = "Убедитесь что сайт открыт через HTTPS";
+      } else if (error?.message?.includes("Permission")) {
+        errorMessage = "Нет разрешения на использование камеры";
+        helpText = "Разрешите доступ к камере в настройках браузера";
       }
       
-      setCameraError(errorMessage);
+      setCameraError(errorMessage + (helpText ? "\n\n" + helpText : ""));
       setHtml5QrCode(null);
       
       toast({
         variant: "destructive",
-        title: "Ошибка камеры",
-        description: errorMessage,
+        title: errorMessage,
+        description: helpText || "Проверьте разрешения браузера",
       });
     }
   };
@@ -157,14 +194,8 @@ export default function ScannerMode() {
           {cameraError && (
             <Alert className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
               <AlertCircle className="h-4 w-4 text-red-800 dark:text-red-200" />
-              <AlertDescription className="text-red-800 dark:text-red-200">
+              <AlertDescription className="text-red-800 dark:text-red-200 whitespace-pre-wrap">
                 {cameraError}
-                <div className="mt-2 text-xs">
-                  <strong>Как исправить:</strong><br/>
-                  1. Откройте настройки браузера<br/>
-                  2. Найдите "Разрешения сайта"<br/>
-                  3. Разрешите доступ к камере для этого сайта
-                </div>
               </AlertDescription>
             </Alert>
           )}
