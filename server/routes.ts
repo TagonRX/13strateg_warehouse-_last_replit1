@@ -118,6 +118,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: error.message });
       }
 
+      // Check if item is still in pending tests
+      if (validation.data.barcode) {
+        const pendingTest = await storage.getPendingTestByBarcode(validation.data.barcode);
+        if (pendingTest) {
+          return res.status(400).json({ 
+            error: "Товар находится на тестировании. Завершите тестирование перед размещением." 
+          });
+        }
+      }
+
       // Check if item with same productId already exists
       const existing = validation.data.productId 
         ? await storage.getInventoryItemByProductId(validation.data.productId)
@@ -270,13 +280,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ deleted: true, item: updated });
       }
 
-      // Remove from pending tests if barcode matches (for inventory verification scans)
+      // Check if item is still in pending tests
       const barcodeToCheck = updates.barcode || existing.barcode;
       if (barcodeToCheck) {
+        const pendingTest = await storage.getPendingTestByBarcode(barcodeToCheck);
+        if (pendingTest) {
+          return res.status(400).json({ 
+            error: "Товар находится на тестировании. Завершите тестирование перед размещением." 
+          });
+        }
+
+        // Remove from tested items list after placement
         try {
           await storage.removePendingTestByBarcode(barcodeToCheck);
         } catch (error) {
-          // Silently ignore if not in pending tests
+          // Silently ignore if not in tested items
         }
       }
 
@@ -1483,31 +1501,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(items);
     } catch (error: any) {
       console.error("Get tested items error:", error);
-      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
-    }
-  });
-
-  // Delete pending test (admin only)
-  app.delete("/api/product-testing/pending/:barcode", requireAuth, requireAdmin, async (req, res) => {
-    try {
-      const { barcode } = req.params;
-
-      if (!barcode) {
-        return res.status(400).json({ error: "Штрихкод обязателен" });
-      }
-
-      // Check if test exists
-      const pending = await storage.getPendingTestByBarcode(barcode);
-      if (!pending) {
-        return res.status(404).json({ error: "Товар не найден в списке тестирования" });
-      }
-
-      // Delete the pending test
-      await storage.deletePendingTest(barcode);
-
-      return res.json({ message: "Товар удален из списка тестирования" });
-    } catch (error: any) {
-      console.error("Delete pending test error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });

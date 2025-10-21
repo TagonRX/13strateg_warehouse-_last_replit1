@@ -145,7 +145,6 @@ export interface IStorage {
   getAllPendingTests(): Promise<PendingTest[]>;
   completePendingTest(barcode: string, condition: string, decisionBy: string, workingMinutes: number): Promise<TestedItem | FaultyStock>;
   removePendingTestByBarcode(barcode: string): Promise<void>;
-  deletePendingTest(barcode: string): Promise<void>;
   
   // Tested Items methods
   getAllTestedItems(): Promise<TestedItem[]>;
@@ -1267,10 +1266,10 @@ export class DbStorage implements IStorage {
   }
 
   async removePendingTestByBarcode(barcode: string): Promise<void> {
-    // Remove ONLY from pending_tests (not tested_items)
-    // tested_items is a history log and should not be auto-deleted
-    // Only pending tests should be removed when item is stocked in or verified
-    await db.delete(pendingTests).where(eq(pendingTests.barcode, barcode));
+    // This is called when item is stocked in or verified
+    // Should remove from tested_items (completed tests) but NOT from pending_tests
+    // If item is still in pending_tests, it shouldn't be placed - caller should check first
+    await db.delete(testedItems).where(eq(testedItems.barcode, barcode));
   }
 
   async deletePendingTest(barcode: string): Promise<void> {

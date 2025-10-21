@@ -169,28 +169,6 @@ export default function ProductTesting() {
     });
   };
 
-  // Delete pending test mutation (admin only)
-  const deletePendingTestMutation = useMutation({
-    mutationFn: async (barcode: string) => {
-      const res = await apiRequest("DELETE", `/api/product-testing/pending/${barcode}`);
-      return await res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/product-testing/pending"] });
-      toast({
-        title: "Товар удален",
-        description: "Товар удален из списка тестирования",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        variant: "destructive",
-        title: "Ошибка",
-        description: error.message,
-      });
-    },
-  });
-
   // Delete tested item mutation (admin only)
   const deleteTestedItemMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -429,7 +407,6 @@ export default function ProductTesting() {
                     <TableHead>SKU</TableHead>
                     <TableHead>Название</TableHead>
                     <TableHead>Начато</TableHead>
-                    {currentUser?.role === "admin" && <TableHead className="w-12"></TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -441,24 +418,6 @@ export default function ProductTesting() {
                       <TableCell className="text-sm text-muted-foreground">
                         {format(new Date(test.firstScanAt), "dd.MM.yyyy HH:mm", { locale: ru })}
                       </TableCell>
-                      {currentUser?.role === "admin" && (
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deletePendingTestMutation.mutate(test.barcode)}
-                            disabled={deletePendingTestMutation.isPending}
-                            data-testid={`button-delete-pending-${test.barcode}`}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            {deletePendingTestMutation.isPending ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </Button>
-                        </TableCell>
-                      )}
                     </TableRow>
                   ))}
                 </TableBody>
