@@ -94,7 +94,6 @@ export default function ProductTesting() {
         title: "Тестирование начато",
         description: `Товар ${data.barcode} добавлен в тестирование`,
       });
-      setCurrentTest(data);
       setBarcode("");
       setTimeout(() => barcodeInputRef.current?.focus(), 100);
     },
