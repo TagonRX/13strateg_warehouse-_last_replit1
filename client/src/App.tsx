@@ -20,6 +20,7 @@ import SkuErrorsView from "@/components/SkuErrorsView";
 import RemoteBarcodeScanner from "@/components/RemoteBarcodeScanner";
 import ProductTesting from "@/pages/ProductTesting";
 import FaultyStockPage from "@/pages/FaultyStock";
+import ScannerMode from "@/pages/ScannerMode";
 import NotFound from "@/pages/not-found";
 import * as api from "@/lib/api";
 import type { InventoryItem } from "@shared/schema";
@@ -452,6 +453,9 @@ function AppContent() {
             <FaultyStockPage />
           </Route>
         )}
+        <Route path="/scanner-mode">
+          <ScannerMode />
+        </Route>
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

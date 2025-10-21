@@ -27,6 +27,7 @@ import {
   LogOut,
   TestTube2,
   AlertTriangle,
+  Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -111,6 +112,7 @@ export default function AppLayout({
     { title: "Picking List", url: "/picking", icon: ClipboardList },
     { title: "Инвентаризация", url: "/inventory", icon: Package },
     { title: "Загрузка склада", url: "/warehouse", icon: Warehouse },
+    { title: "Режим сканера", url: "/scanner-mode", icon: Smartphone },
   ];
 
   const adminMenuItems = [
