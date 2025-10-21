@@ -47,13 +47,6 @@ export default function ScannerMode() {
     }
 
     try {
-      // Сначала явно запрашиваем разрешение на камеру
-      await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-        .then(stream => {
-          // Останавливаем поток - нам нужно только разрешение
-          stream.getTracks().forEach(track => track.stop());
-        });
-
       const scanner = new Html5Qrcode("qr-reader");
       setHtml5QrCode(scanner);
 
@@ -63,6 +56,7 @@ export default function ScannerMode() {
         aspectRatio: 1.0,
       };
 
+      // Html5Qrcode сам запросит разрешение на камеру
       await scanner.start(
         { facingMode: "environment" },
         config,
@@ -82,29 +76,38 @@ export default function ScannerMode() {
       console.error("Camera start error:", error);
       console.error("Error name:", error?.name);
       console.error("Error message:", error?.message);
+      console.error("Full error object:", error);
       
       let errorMessage = "Не удалось запустить камеру";
       let helpText = "";
       
       // Более детальная обработка ошибок
-      if (error?.name === "NotAllowedError" || error?.message?.includes("NotAllowed")) {
+      const errorStr = String(error?.message || error || "").toLowerCase();
+      
+      if (error?.name === "NotAllowedError" || errorStr.includes("notallowed") || errorStr.includes("permission denied")) {
         errorMessage = "Доступ к камере запрещен";
         helpText = "Нажмите на значок 🔒 в адресной строке браузера и разрешите доступ к камере";
-      } else if (error?.name === "NotFoundError" || error?.message?.includes("NotFound")) {
+      } else if (error?.name === "NotFoundError" || errorStr.includes("notfound") || errorStr.includes("no camera")) {
         errorMessage = "Камера не найдена";
         helpText = "Убедитесь что на вашем устройстве есть камера";
-      } else if (error?.name === "NotReadableError" || error?.message?.includes("NotReadable")) {
+      } else if (error?.name === "NotReadableError" || errorStr.includes("notreadable") || errorStr.includes("in use")) {
         errorMessage = "Камера занята другим приложением";
         helpText = "Закройте другие приложения использующие камеру и попробуйте снова";
-      } else if (error?.name === "OverconstrainedError" || error?.message?.includes("Overconstrained")) {
+      } else if (error?.name === "OverconstrainedError" || errorStr.includes("overconstrained")) {
         errorMessage = "Камера не поддерживает требуемые настройки";
         helpText = "Попробуйте использовать другую камеру";
-      } else if (error?.name === "SecurityError" || error?.message?.includes("Security")) {
+      } else if (error?.name === "SecurityError" || errorStr.includes("security")) {
         errorMessage = "Доступ заблокирован по соображениям безопасности";
         helpText = "Убедитесь что сайт открыт через HTTPS";
-      } else if (error?.message?.includes("Permission")) {
+      } else if (errorStr.includes("permission")) {
         errorMessage = "Нет разрешения на использование камеры";
         helpText = "Разрешите доступ к камере в настройках браузера";
+      } else if (errorStr.includes("https") || errorStr.includes("insecure")) {
+        errorMessage = "Требуется безопасное соединение";
+        helpText = "Камера работает только через HTTPS. Убедитесь что адрес начинается с https://";
+      } else {
+        // Показываем полное сообщение ошибки для отладки
+        helpText = `Детали: ${error?.message || String(error)}`;
       }
       
       setCameraError(errorMessage + (helpText ? "\n\n" + helpText : ""));
