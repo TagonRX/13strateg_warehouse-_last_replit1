@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
@@ -234,8 +235,10 @@ function WarehouseSettingsPanel({
 
 export default function WarehouseLoadingView({ locationGroups, userRole }: WarehouseLoadingViewProps) {
   const { toast } = useToast();
-  const [locationInput, setLocationInput] = useState<string>("");
-  const [locationSearchFilter, setLocationSearchFilter] = useState<string>(""); // Search filter for location management
+  const [locationList, setLocationList] = useState<string[]>([]);
+  const [locationRangeFrom, setLocationRangeFrom] = useState<string>("");
+  const [locationRangeTo, setLocationRangeTo] = useState<string>("");
+  const [newLocationName, setNewLocationName] = useState<string>("");
   const [letterFilter, setLetterFilter] = useState<string[]>([]); // Multi-select letter filter
   const [limitFilter, setLimitFilter] = useState<string>("100");
   const [onlyActiveLocations, setOnlyActiveLocations] = useState<boolean>(false); // Filter by active locations checkbox
@@ -315,10 +318,10 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     },
   });
 
-  // Initialize location input from active locations
+  // Initialize location list from active locations
   useEffect(() => {
-    if (activeLocations.length > 0 && !locationInput) {
-      setLocationInput(activeLocations.map(loc => loc.location).join("\n"));
+    if (activeLocations.length > 0 && locationList.length === 0) {
+      setLocationList(activeLocations.map(loc => loc.location));
     }
   }, [activeLocations]);
 
@@ -338,22 +341,9 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     return () => clearTimeout(timer);
   }, [maxqInput]);
 
-  // Parse location input
-  const parseLocationInput = (input: string): Set<string> => {
-    if (!input.trim()) return new Set();
-    return new Set(
-      input
-        .toUpperCase()
-        .split(/[\s,\n]+/)
-        .map(loc => loc.trim())
-        .filter(loc => loc.length > 0)
-    );
-  };
-
   // Save locations
   const handleSaveLocations = () => {
-    const locations = Array.from(parseLocationInput(locationInput));
-    setLocationsMutation.mutate(locations);
+    setLocationsMutation.mutate(locationList);
   };
 
   // Get all unique letters from locations
@@ -385,10 +375,52 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     );
   };
 
-  // Parse active locations set for filtering (memoized separately)
+  // Active locations set for filtering (memoized)
   const activeLocationsSet = useMemo(() => {
-    return parseLocationInput(locationInput);
-  }, [locationInput]);
+    return new Set(locationList.map(loc => loc.toUpperCase()));
+  }, [locationList]);
+
+  // Filter locations by range (С and ПО)
+  const filteredLocationList = useMemo(() => {
+    if (!locationRangeFrom && !locationRangeTo) {
+      return locationList;
+    }
+    return locationList.filter(loc => {
+      const upperLoc = loc.toUpperCase();
+      const from = locationRangeFrom.toUpperCase();
+      const to = locationRangeTo.toUpperCase();
+      
+      if (from && to) {
+        return upperLoc >= from && upperLoc <= to;
+      } else if (from) {
+        return upperLoc >= from;
+      } else if (to) {
+        return upperLoc <= to;
+      }
+      return true;
+    });
+  }, [locationList, locationRangeFrom, locationRangeTo]);
+
+  // Handler to add new location
+  const handleAddLocation = () => {
+    const trimmedName = newLocationName.trim().toUpperCase();
+    if (!trimmedName) return;
+    if (locationList.includes(trimmedName)) {
+      toast({
+        title: "Локация существует",
+        description: "Эта локация уже добавлена",
+        variant: "destructive",
+      });
+      return;
+    }
+    setLocationList([...locationList, trimmedName]);
+    setNewLocationName("");
+  };
+
+  // Handler to delete location
+  const handleDeleteLocation = (location: string) => {
+    setLocationList(locationList.filter(loc => loc !== location));
+  };
 
   // Filter locations based on active locations and TSKU/MAXQ filters
   const filteredLocations = useMemo(() => {
@@ -524,107 +556,120 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
               <CardTitle>Управление локациями (Администратор)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Search filter for locations */}
-              <div className="space-y-2">
-                <Label htmlFor="location-search">Поиск локации</Label>
-                <Input
-                  id="location-search"
-                  placeholder="Введите название локации..."
-                  value={locationSearchFilter}
-                  onChange={(e) => setLocationSearchFilter(e.target.value)}
-                  className="w-64"
-                  data-testid="input-location-search"
-                />
+              {/* Range filter */}
+              <div className="flex gap-4 items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="location-range-from">С</Label>
+                  <Input
+                    id="location-range-from"
+                    placeholder="A100"
+                    value={locationRangeFrom}
+                    onChange={(e) => setLocationRangeFrom(e.target.value.toUpperCase())}
+                    className="w-32 font-mono"
+                    data-testid="input-location-range-from"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="location-range-to">ПО</Label>
+                  <Input
+                    id="location-range-to"
+                    placeholder="A199"
+                    value={locationRangeTo}
+                    onChange={(e) => setLocationRangeTo(e.target.value.toUpperCase())}
+                    className="w-32 font-mono"
+                    data-testid="input-location-range-to"
+                  />
+                </div>
+                {(locationRangeFrom || locationRangeTo) && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setLocationRangeFrom("");
+                      setLocationRangeTo("");
+                    }}
+                    data-testid="button-clear-range-filter"
+                  >
+                    Очистить фильтр
+                  </Button>
+                )}
               </div>
 
+              {/* Locations table */}
               <div className="space-y-2">
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <Label htmlFor="location-input">
-                      Введите локации (столбиком, по одной)
-                    </Label>
-                    <div className="flex flex-col gap-1 mt-2 max-h-48 overflow-y-auto p-2 border rounded">
-                      {locationInput.split(/[\s,\n]+/)
-                        .filter(loc => loc.trim())
-                        .map((loc, originalIdx) => ({ loc, originalIdx })) // Pair with original index
-                        .filter(({ loc }) => {
-                          // Apply search filter
-                          if (!locationSearchFilter.trim()) return true;
-                          return loc.toUpperCase().includes(locationSearchFilter.toUpperCase());
-                        })
-                        .map(({ loc, originalIdx }) => {
-                          return (
-                            <div key={originalIdx} className="flex items-center gap-2">
-                              <Input
-                                value={loc.toUpperCase()}
-                                onChange={(e) => {
-                                  const locations = locationInput.split(/[\s,\n]+/).filter(l => l.trim());
-                                  locations[originalIdx] = e.target.value;
-                                  setLocationInput(locations.join("\n"));
-                                }}
-                                className="w-20 font-mono"
-                                data-testid={`input-location-${originalIdx}`}
-                              />
+                <Label>Список локаций</Label>
+                <div className="border rounded-md max-h-96 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-32">Локация</TableHead>
+                        <TableHead className="w-20 text-right">Действия</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredLocationList.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={2} className="text-center text-muted-foreground">
+                            Нет локаций
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredLocationList.map((location, index) => (
+                          <TableRow key={index} data-testid={`row-location-${index}`}>
+                            <TableCell className="font-mono font-semibold">
+                              {location}
+                            </TableCell>
+                            <TableCell className="text-right">
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => {
-                                  const locations = locationInput.split(/[\s,\n]+/).filter(l => l.trim());
-                                  locations.splice(originalIdx, 1);
-                                  setLocationInput(locations.join("\n"));
-                                }}
-                                data-testid={`button-remove-location-${originalIdx}`}
+                                onClick={() => handleDeleteLocation(location)}
+                                data-testid={`button-delete-location-${index}`}
                               >
-                                <X className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" />
                               </Button>
-                            </div>
-                          );
-                        })}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          const current = locationInput.trim();
-                          setLocationInput(current ? `${current}\nНОВАЯ` : "НОВАЯ");
-                        }}
-                        data-testid="button-add-location"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Добавить локацию
-                      </Button>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {parseLocationInput(locationInput).size} локаций введено
-                      {locationSearchFilter && ` (показано: ${locationInput.split(/[\s,\n]+/).filter(loc => loc.trim() && loc.toUpperCase().includes(locationSearchFilter.toUpperCase())).length})`}
-                    </p>
-                  </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  {locationList.length} локаций введено
+                  {(locationRangeFrom || locationRangeTo) && ` (показано: ${filteredLocationList.length})`}
+                </p>
               </div>
+
+              {/* Add new location */}
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="new-location-name">Новая локация</Label>
+                  <Input
+                    id="new-location-name"
+                    placeholder="Введите название локации..."
+                    value={newLocationName}
+                    onChange={(e) => setNewLocationName(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleAddLocation();
+                      }
+                    }}
+                    className="font-mono"
+                    data-testid="input-new-location"
+                  />
+                </div>
+                <Button onClick={handleAddLocation} data-testid="button-add-location">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Добавить
+                </Button>
+              </div>
+
+              {/* Save button */}
               <div className="flex gap-2">
                 <Button onClick={handleSaveLocations} data-testid="button-save-locations">
                   Сохранить локации
                 </Button>
-                {locationSearchFilter && (
-                  <Button 
-                    variant="destructive"
-                    onClick={() => {
-                      const locations = locationInput.split(/[\s,\n]+/).filter(l => l.trim());
-                      const filtered = locations.filter(loc => 
-                        !loc.toUpperCase().includes(locationSearchFilter.toUpperCase())
-                      );
-                      setLocationInput(filtered.join("\n"));
-                      setLocationSearchFilter("");
-                      toast({
-                        title: "Локации удалены",
-                        description: `Удалено ${locations.length - filtered.length} локаций`,
-                      });
-                    }}
-                    data-testid="button-delete-filtered-locations"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Удалить найденные ({locationInput.split(/[\s,\n]+/).filter(loc => loc.trim() && loc.toUpperCase().includes(locationSearchFilter.toUpperCase())).length})
-                  </Button>
-                )}
               </div>
             </CardContent>
           </Card>
