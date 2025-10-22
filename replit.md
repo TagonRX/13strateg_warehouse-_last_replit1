@@ -3,6 +3,19 @@
 ## Overview
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
+## Recent Changes
+
+### October 22, 2025
+**Performance & UX Improvements:**
+- **Warehouse Loading Filters**: Added 300ms debounce to TSKU/MAXQ filters in WarehouseLoadingView to eliminate input lag. Uses separate immediate UI state (tskuInput/maxqInput) and debounced filtering state (tskuFilter/maxqFilter) for optimal responsiveness.
+- **BarcodeEditor Complete Overhaul**: Replaced auto-save with explicit workflow:
+  - Auto-scan functionality: USB scans trigger on Enter, Camera/Phone scans auto-add to working list
+  - Each scan creates separate entry (even duplicates) with qty=1 for accurate tracking
+  - "Before/After" confirmation modal showing original vs. modified barcode mappings
+  - Explicit "Confirm"/"Cancel" buttons for all changes
+  - Capacity validation on all 5 ingestion paths (USB, Camera, WebSocket, Manual add, Quantity edit) using functional setState updates to prevent stale closures and negative unmappedQuantity values
+  - Real-time counters: Total / Mapped / Unmapped quantities with visual alerts when items remain unmapped
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
