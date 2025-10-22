@@ -449,11 +449,14 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const handleConditionChange = (value: string) => {
     if (!editingRow) return;
     
-    if (value === "Faulty") {
-      setPendingCondition(value);
+    // Convert "-" to empty string
+    const actualValue = value === "-" ? "" : value;
+    
+    if (actualValue === "Faulty") {
+      setPendingCondition(actualValue);
       setShowFaultyDialog(true);
     } else {
-      setEditingRow({ ...editingRow, condition: value });
+      setEditingRow({ ...editingRow, condition: actualValue });
     }
   };
 
@@ -476,41 +479,51 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const saveEdit = async () => {
     if (!editingRow) return;
 
-    const length = editingRow.length ? parseInt(editingRow.length) : undefined;
-    const width = editingRow.width ? parseInt(editingRow.width) : undefined;
-    const height = editingRow.height ? parseInt(editingRow.height) : undefined;
-    const volume = length && width && height ? length * width * height : undefined;
+    try {
+      const length = editingRow.length ? parseInt(editingRow.length) : undefined;
+      const width = editingRow.width ? parseInt(editingRow.width) : undefined;
+      const height = editingRow.height ? parseInt(editingRow.height) : undefined;
+      const volume = length && width && height ? length * width * height : undefined;
 
-    const barcodeMappingsJson = editingRow.barcodeMappings.length > 0 
-      ? JSON.stringify(editingRow.barcodeMappings)
-      : undefined;
+      const barcodeMappingsJson = editingRow.barcodeMappings.length > 0 
+        ? JSON.stringify(editingRow.barcodeMappings)
+        : undefined;
 
-    // First update the basic inventory item data
-    await updateMutation.mutateAsync({
-      id: editingRow.id,
-      updates: {
-        name: editingRow.name || undefined,
-        sku: editingRow.sku,
-        quantity: editingRow.quantity,
-        barcode: editingRow.barcode || undefined,
-        barcodeMappings: barcodeMappingsJson,
-        price: editingRow.price ? parseInt(editingRow.price) : undefined,
-        length,
-        width,
-        height,
-        volume,
-        weight: editingRow.weight ? parseInt(editingRow.weight) : undefined,
-      },
-    });
-
-    // Then update the condition if it was changed
-    const originalItem = items.find(item => item.id === editingRow.id);
-    const originalCondition = originalItem ? getConditionForItem(originalItem) || "" : "";
-    
-    if (editingRow.condition !== originalCondition) {
-      await updateConditionMutation.mutateAsync({
+      // First update the basic inventory item data
+      await updateMutation.mutateAsync({
         id: editingRow.id,
-        condition: editingRow.condition,
+        updates: {
+          name: editingRow.name || undefined,
+          sku: editingRow.sku,
+          quantity: editingRow.quantity,
+          barcode: editingRow.barcode || undefined,
+          barcodeMappings: barcodeMappingsJson,
+          price: editingRow.price ? parseInt(editingRow.price) : undefined,
+          length,
+          width,
+          height,
+          volume,
+          weight: editingRow.weight ? parseInt(editingRow.weight) : undefined,
+        },
+      });
+
+      // Then update the condition if it was changed (and if there's a barcode)
+      const hasBarcode = editingRow.barcodeMappings.length > 0 || editingRow.barcode;
+      const originalItem = items.find(item => item.id === editingRow.id);
+      const originalCondition = originalItem ? getConditionForItem(originalItem) || "" : "";
+      
+      if (hasBarcode && editingRow.condition !== originalCondition) {
+        await updateConditionMutation.mutateAsync({
+          id: editingRow.id,
+          condition: editingRow.condition,
+        });
+      }
+    } catch (error) {
+      console.error("Error saving edit:", error);
+      toast({
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Не удалось сохранить изменения",
+        variant: "destructive",
       });
     }
   };
@@ -587,22 +600,28 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
             />
           </TableCell>
           <TableCell style={{ width: `${columnWidths.condition}px`, minWidth: `${columnWidths.condition}px` }} className="text-xs">
-            <Select value={editingRow.condition} onValueChange={handleConditionChange}>
-              <SelectTrigger 
-                className={`h-8 w-full text-xs ${getConditionClasses(editingRow.condition)}`}
-                data-testid={`select-condition-${item.id}`}
-              >
-                <SelectValue placeholder="-" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">-</SelectItem>
-                <SelectItem value="New">New</SelectItem>
-                <SelectItem value="Used">Used</SelectItem>
-                <SelectItem value="Exdisplay">Exdisplay</SelectItem>
-                <SelectItem value="Parts">Parts</SelectItem>
-                <SelectItem value="Faulty">Faulty</SelectItem>
-              </SelectContent>
-            </Select>
+            {editingRow.barcodeMappings.length === 0 && !editingRow.barcode ? (
+              <div className="h-8 flex items-center text-muted-foreground text-xs">
+                Нет штрихкода
+              </div>
+            ) : (
+              <Select value={editingRow.condition || "-"} onValueChange={handleConditionChange}>
+                <SelectTrigger 
+                  className={`h-8 w-full text-xs ${getConditionClasses(editingRow.condition)}`}
+                  data-testid={`select-condition-${item.id}`}
+                >
+                  <SelectValue placeholder="-" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="-">-</SelectItem>
+                  <SelectItem value="New">New</SelectItem>
+                  <SelectItem value="Used">Used</SelectItem>
+                  <SelectItem value="Exdisplay">Exdisplay</SelectItem>
+                  <SelectItem value="Parts">Parts</SelectItem>
+                  <SelectItem value="Faulty">Faulty</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </TableCell>
           <TableCell style={{ width: `${columnWidths.price}px`, minWidth: `${columnWidths.price}px` }}>
             <Input
