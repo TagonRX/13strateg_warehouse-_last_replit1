@@ -5,7 +5,46 @@ This project is a comprehensive warehouse management system designed to streamli
 
 ## Recent Changes
 
-### October 22, 2025
+### October 22, 2025 (Session 2)
+**Major Feature Enhancements:**
+- **Location Management Refactor**: Redesigned from text-based to table-based UI with array-based state for optimal performance:
+  - Range filtering with "С...ПО..." inputs for efficient location selection
+  - Single-input add location field with immediate table updates
+  - Array-based state (`locationList: string[]`) eliminates parsing overhead
+  - Collapsible admin sections for Location Management and TSKU/MAXQ Settings
+  - Keyboard-accessible chevron rotation using `group data-[state=open]:rotate-180` pattern
+- **Warehouse Loading Validation**: Added location consistency checks:
+  - Only displays locations from the managed locations list
+  - Memoized `managedLocationsSet` for O(1) location lookups
+  - Warning alerts for items in unmanaged locations
+- **Daily Picking List Enhancements**: Inventory depletion warnings with color-coded rows:
+  - Three-tier warning system: critical (red), warning (yellow), safe (green)
+  - Accounts for already-picked quantities using `remainingQuantity = requiredQuantity - pickedQuantity`
+  - Real-time display of current inventory, remaining to pick, and final quantity after picking
+  - Fixed calculation bug to prevent false warnings for partially/fully picked items
+- **Inventory Condition Editing**: Full condition management in InventoryTable:
+  - Added editable Select dropdown in edit mode with options: New, Used, Exdisplay, Parts, Faulty
+  - Color-coded badges: Blue (New), Green (Exdisplay), Yellow (Used), Gray (Parts), Red (Faulty)
+  - AlertDialog confirmation for Faulty selection with Russian localization
+  - Backend API endpoint (PATCH /api/inventory/:id/condition) with database updates to tested_items/faulty_stock tables
+  - Intelligent data routing: tested_items for New/Used/Exdisplay, faulty_stock for Faulty, both for Parts
+- **Event Logs CSV Export**: Professional data export functionality:
+  - "Экспорт в CSV" button with Download icon
+  - Exports currently filtered logs with all active filters
+  - Semicolon delimiter for Russian Excel compatibility
+  - UTF-8 BOM for proper Cyrillic encoding
+  - Date format: DD.MM.YYYY HH:MM:SS
+  - Proper escaping for special characters (quotes, semicolons, newlines)
+  - Timestamped filenames: logs_YYYYMMDD_HHMMSS.csv
+  - Toast notifications showing export count
+- **Stock-In Form Layout Optimization**: Improved SKU/Location workflow:
+  - Reordered fields: ID товара → Название → SKU + Локация (side-by-side 50%/50%)
+  - Location field now disabled (gray, read-only) with auto-fill from SKU
+  - Removed required asterisk from Location label
+  - Simplified state management by removing manual edit tracking
+  - Visual clarity: Location clearly appears as auto-filled, non-editable field
+
+### October 22, 2025 (Session 1)
 **Performance & UX Improvements:**
 - **Warehouse Loading Filters**: Added 300ms debounce to TSKU/MAXQ filters in WarehouseLoadingView to eliminate input lag. Uses separate immediate UI state (tskuInput/maxqInput) and debounced filtering state (tskuFilter/maxqFilter) for optimal responsiveness.
 - **BarcodeEditor Complete Overhaul**: Replaced auto-save with explicit workflow:
