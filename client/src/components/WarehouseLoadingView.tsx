@@ -235,8 +235,10 @@ function WarehouseSettingsPanel({
 export default function WarehouseLoadingView({ locationGroups, userRole }: WarehouseLoadingViewProps) {
   const { toast } = useToast();
   const [locationInput, setLocationInput] = useState<string>("");
+  const [locationSearchFilter, setLocationSearchFilter] = useState<string>(""); // Search filter for location management
   const [letterFilter, setLetterFilter] = useState<string[]>([]); // Multi-select letter filter
   const [limitFilter, setLimitFilter] = useState<string>("100");
+  const [onlyActiveLocations, setOnlyActiveLocations] = useState<boolean>(false); // Filter by active locations checkbox
   
   // Separate input state (immediate) and filter state (debounced)
   const [tskuInput, setTskuInput] = useState<string>("");
@@ -390,14 +392,13 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
 
   // Filter locations based on active locations and TSKU/MAXQ filters
   const filteredLocations = useMemo(() => {
-    // Start with appropriate base: 
-    // If letter filter is active, use all locations and ignore active locations filter
-    // Otherwise, filter by active locations if specified
-    let filtered = letterFilter.length > 0
-      ? locationGroups 
-      : (activeLocationsSet.size > 0
-          ? locationGroups.filter(loc => activeLocationsSet.has(loc.location.toUpperCase()))
-          : locationGroups);
+    // Start with all locations by default
+    let filtered = locationGroups;
+    
+    // Filter by active locations only if checkbox is enabled AND active locations exist
+    if (onlyActiveLocations && activeLocationsSet.size > 0) {
+      filtered = filtered.filter(loc => activeLocationsSet.has(loc.location.toUpperCase()));
+    }
 
     // Filter by letters (if specified) - multi-select
     if (letterFilter.length > 0) {
@@ -468,7 +469,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       // Single letter or no letter filter - apply limit to total
       return filtered.slice(0, limit);
     }
-  }, [locationGroups, activeLocationsSet, letterFilter, tskuFilter, tskuOperator, maxqFilter, maxqOperator, limitFilter]);
+  }, [locationGroups, activeLocationsSet, onlyActiveLocations, letterFilter, tskuFilter, tskuOperator, maxqFilter, maxqOperator, limitFilter]);
 
   // Group locations by letter for column layout
   const locationsByLetter = useMemo(() => {
@@ -523,6 +524,19 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
               <CardTitle>Управление локациями (Администратор)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Search filter for locations */}
+              <div className="space-y-2">
+                <Label htmlFor="location-search">Поиск локации</Label>
+                <Input
+                  id="location-search"
+                  placeholder="Введите название локации..."
+                  value={locationSearchFilter}
+                  onChange={(e) => setLocationSearchFilter(e.target.value)}
+                  className="w-64"
+                  data-testid="input-location-search"
+                />
+              </div>
+
               <div className="space-y-2">
                 <div className="flex gap-2 items-end">
                   <div className="flex-1">
@@ -530,32 +544,42 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                       Введите локации (столбиком, по одной)
                     </Label>
                     <div className="flex flex-col gap-1 mt-2 max-h-48 overflow-y-auto p-2 border rounded">
-                      {locationInput.split(/[\s,\n]+/).filter(loc => loc.trim()).map((loc, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <Input
-                            value={loc.toUpperCase()}
-                            onChange={(e) => {
-                              const locations = locationInput.split(/[\s,\n]+/).filter(l => l.trim());
-                              locations[idx] = e.target.value;
-                              setLocationInput(locations.join("\n"));
-                            }}
-                            className="w-20 font-mono"
-                            data-testid={`input-location-${idx}`}
-                          />
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              const locations = locationInput.split(/[\s,\n]+/).filter(l => l.trim());
-                              locations.splice(idx, 1);
-                              setLocationInput(locations.join("\n"));
-                            }}
-                            data-testid={`button-remove-location-${idx}`}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
+                      {locationInput.split(/[\s,\n]+/)
+                        .filter(loc => loc.trim())
+                        .map((loc, originalIdx) => ({ loc, originalIdx })) // Pair with original index
+                        .filter(({ loc }) => {
+                          // Apply search filter
+                          if (!locationSearchFilter.trim()) return true;
+                          return loc.toUpperCase().includes(locationSearchFilter.toUpperCase());
+                        })
+                        .map(({ loc, originalIdx }) => {
+                          return (
+                            <div key={originalIdx} className="flex items-center gap-2">
+                              <Input
+                                value={loc.toUpperCase()}
+                                onChange={(e) => {
+                                  const locations = locationInput.split(/[\s,\n]+/).filter(l => l.trim());
+                                  locations[originalIdx] = e.target.value;
+                                  setLocationInput(locations.join("\n"));
+                                }}
+                                className="w-20 font-mono"
+                                data-testid={`input-location-${originalIdx}`}
+                              />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  const locations = locationInput.split(/[\s,\n]+/).filter(l => l.trim());
+                                  locations.splice(originalIdx, 1);
+                                  setLocationInput(locations.join("\n"));
+                                }}
+                                data-testid={`button-remove-location-${originalIdx}`}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          );
+                        })}
                       <Button
                         size="sm"
                         variant="outline"
@@ -571,13 +595,37 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                     </div>
                     <p className="text-sm text-muted-foreground mt-2">
                       {parseLocationInput(locationInput).size} локаций введено
+                      {locationSearchFilter && ` (показано: ${locationInput.split(/[\s,\n]+/).filter(loc => loc.trim() && loc.toUpperCase().includes(locationSearchFilter.toUpperCase())).length})`}
                     </p>
                   </div>
                 </div>
               </div>
-              <Button onClick={handleSaveLocations} data-testid="button-save-locations">
-                Сохранить локации
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={handleSaveLocations} data-testid="button-save-locations">
+                  Сохранить локации
+                </Button>
+                {locationSearchFilter && (
+                  <Button 
+                    variant="destructive"
+                    onClick={() => {
+                      const locations = locationInput.split(/[\s,\n]+/).filter(l => l.trim());
+                      const filtered = locations.filter(loc => 
+                        !loc.toUpperCase().includes(locationSearchFilter.toUpperCase())
+                      );
+                      setLocationInput(filtered.join("\n"));
+                      setLocationSearchFilter("");
+                      toast({
+                        title: "Локации удалены",
+                        description: `Удалено ${locations.length - filtered.length} локаций`,
+                      });
+                    }}
+                    data-testid="button-delete-filtered-locations"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Удалить найденные ({locationInput.split(/[\s,\n]+/).filter(loc => loc.trim() && loc.toUpperCase().includes(locationSearchFilter.toUpperCase())).length})
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -738,6 +786,25 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
               </SelectContent>
             </Select>
           </div>
+          {userRole === "admin" && activeLocations.length > 0 && (
+            <div className="space-y-2">
+              <Label>Доп. фильтры</Label>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="only-active-locations"
+                  checked={onlyActiveLocations}
+                  onCheckedChange={(checked) => setOnlyActiveLocations(!!checked)}
+                  data-testid="checkbox-only-active-locations"
+                />
+                <Label 
+                  htmlFor="only-active-locations"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Только активные ({activeLocations.length})
+                </Label>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
