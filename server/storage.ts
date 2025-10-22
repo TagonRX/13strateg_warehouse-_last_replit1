@@ -196,10 +196,11 @@ export class DbStorage implements IStorage {
     const items = await db
       .select({
         ...getTableColumns(inventoryItems),
-        condition: testedItems.condition,
+        condition: sql<string | null>`COALESCE(${testedItems.condition}, ${faultyStock.condition})`.as('condition'),
       })
       .from(inventoryItems)
       .leftJoin(testedItems, eq(inventoryItems.barcode, testedItems.barcode))
+      .leftJoin(faultyStock, eq(inventoryItems.barcode, faultyStock.barcode))
       .orderBy(inventoryItems.createdAt);
     
     return items as (InventoryItem & { condition?: string | null })[];

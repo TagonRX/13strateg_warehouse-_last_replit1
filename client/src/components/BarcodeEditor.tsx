@@ -24,6 +24,7 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<"usb" | "camera">("usb");
   const [scannedCode, setScannedCode] = useState("");
+  const [usbQty, setUsbQty] = useState("1"); // Quantity for USB scanner
   const [manualCode, setManualCode] = useState("");
   const [manualQty, setManualQty] = useState("1");
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -146,20 +147,29 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
     e.preventDefault();
     if (!scannedCode.trim()) return;
 
+    const qty = parseInt(usbQty) || 1;
+    if (qty <= 0) return;
+
     // Check capacity
-    if (mappedQuantity >= totalQuantity) {
-      alert(`Нельзя добавить баркод: превышен лимит ${totalQuantity} товар(ов)`);
+    if (mappedQuantity + qty > totalQuantity) {
+      alert(`Нельзя добавить ${qty} баркод(ов): превышен лимит ${totalQuantity} товар(ов). Свободно: ${unmappedQuantity}`);
       setScannedCode("");
+      // Refocus immediately
+      setTimeout(() => inputRef.current?.focus(), 0);
       return;
     }
 
-    // Always add as new entry with qty=1
-    setWorkingBarcodes([...workingBarcodes, { code: scannedCode, qty: 1 }]);
+    // Add N entries with this barcode (where N = qty)
+    const newEntries: BarcodeMapping[] = [];
+    for (let i = 0; i < qty; i++) {
+      newEntries.push({ code: scannedCode, qty: 1 });
+    }
+    
+    setWorkingBarcodes([...workingBarcodes, ...newEntries]);
     setScannedCode("");
     
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
+    // Refocus immediately after state update
+    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   // Manual add with custom quantity
@@ -211,12 +221,26 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
   };
 
   const handleConfirm = () => {
+    // Show confirmation dialog with quantity comparison
+    setShowConfirmation(true);
+  };
+
+  const handleFinalConfirm = () => {
     onChange(workingBarcodes);
+    setShowConfirmation(false);
     setIsOpen(false);
+  };
+
+  const handleCorrect = () => {
+    // Return to editing mode
+    setShowConfirmation(false);
+    // Refocus on input
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   const handleCancel = () => {
     setWorkingBarcodes([...originalBarcodes]);
+    setShowConfirmation(false);
     setIsOpen(false);
   };
 
@@ -303,18 +327,32 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
               {/* Auto-scan input */}
               <div>
                 <div className="text-sm font-medium mb-2">Сканирование (авто-добавление)</div>
-                <form onSubmit={handleUsbScan}>
+                <form onSubmit={handleUsbScan} className="flex gap-2">
                   <Input
                     ref={inputRef}
                     value={scannedCode}
                     onChange={(e) => setScannedCode(e.target.value)}
                     placeholder="Отсканируйте баркод (Enter для добавления)..."
-                    className="font-mono"
+                    className="font-mono flex-1"
                     data-testid="input-usb-barcode"
+                    autoFocus
+                  />
+                  <Input
+                    type="number"
+                    value={usbQty}
+                    onChange={(e) => setUsbQty(e.target.value)}
+                    onBlur={() => {
+                      // Refocus scanner input when user finishes editing quantity
+                      setTimeout(() => inputRef.current?.focus(), 0);
+                    }}
+                    placeholder="Кол-во"
+                    className="w-20"
+                    min={1}
+                    data-testid="input-usb-qty"
                   />
                 </form>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Каждый скан добавляет новую строку, даже если баркод одинаковый
+                  Укажите количество, затем сканируйте. Будет добавлено столько баркодов, сколько указано.
                 </p>
               </div>
 
@@ -491,37 +529,106 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
         </div>
       </DialogContent>
 
-      {/* Confirmation dialog when closing with unsaved changes */}
-      {showConfirmation && (
+      {/* Confirmation dialog with quantity comparison */}
+      {showConfirmation && hasChanges && (
         <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Несохраненные изменения</DialogTitle>
+              <DialogTitle>Подтверждение изменений</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                У вас есть несохраненные изменения. Что вы хотите сделать?
-              </p>
-              <div className="flex gap-2">
+              {/* Quantity comparison */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded">
+                <div className="text-center">
+                  <div className="text-sm text-muted-foreground mb-1">Было товаров</div>
+                  <div className="text-3xl font-bold">{originalBarcodes.reduce((sum, b) => sum + b.qty, 0)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-sm text-muted-foreground mb-1">Стало товаров</div>
+                  <div className="text-3xl font-bold">{mappedQuantity}</div>
+                </div>
+              </div>
+
+              {/* Quantity mismatch warning */}
+              {mappedQuantity !== totalQuantity && (
+                <Alert variant={mappedQuantity > totalQuantity ? "destructive" : "default"}>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    {mappedQuantity > totalQuantity ? (
+                      <>
+                        ⚠️ <strong>Превышение:</strong> Отсканировано {mappedQuantity} товар(ов), 
+                        но ожидалось {totalQuantity}. Будет добавлено {mappedQuantity - totalQuantity} лишних.
+                      </>
+                    ) : (
+                      <>
+                        ⚠️ <strong>Недостача:</strong> Отсканировано {mappedQuantity} из {totalQuantity} товар(ов). 
+                        {totalQuantity - mappedQuantity} товар(ов) останутся без баркода.
+                      </>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Barcode comparison */}
+              <div className="border rounded p-3">
+                <div className="text-sm font-medium mb-2">Сравнение баркодов:</div>
+                <div className="grid grid-cols-2 gap-4 text-sm max-h-60 overflow-y-auto">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1 font-semibold">Было:</div>
+                    <div className="space-y-0.5">
+                      {originalBarcodes.length === 0 ? (
+                        <div className="text-muted-foreground italic">Нет баркодов</div>
+                      ) : (
+                        originalBarcodes.map((b, i) => (
+                          <div key={i} className="font-mono text-xs truncate bg-muted/30 p-1 rounded" title={b.code}>
+                            {b.code} (×{b.qty})
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1 font-semibold">Стало:</div>
+                    <div className="space-y-0.5">
+                      {workingBarcodes.length === 0 ? (
+                        <div className="text-muted-foreground italic">Нет баркодов</div>
+                      ) : (
+                        workingBarcodes.map((b, i) => (
+                          <div key={i} className="font-mono text-xs truncate bg-muted/30 p-1 rounded" title={b.code}>
+                            {b.code} (×{b.qty})
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-col gap-2">
                 <Button 
-                  onClick={() => {
-                    setShowConfirmation(false);
-                    handleConfirm();
-                  }}
-                  className="flex-1"
+                  onClick={handleFinalConfirm}
+                  className="w-full"
+                  data-testid="button-final-confirm"
                 >
-                  Сохранить и закрыть
+                  ✓ Подтвердить изменения
                 </Button>
-                <Button 
-                  onClick={() => {
-                    setShowConfirmation(false);
-                    handleCancel();
-                  }}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  Отменить изменения
-                </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button 
+                    onClick={handleCorrect}
+                    variant="outline"
+                    data-testid="button-correct"
+                  >
+                    🔧 Исправить
+                  </Button>
+                  <Button 
+                    onClick={handleCancel}
+                    variant="outline"
+                    data-testid="button-final-cancel"
+                  >
+                    ✗ Отменить всё
+                  </Button>
+                </div>
               </div>
             </div>
           </DialogContent>
