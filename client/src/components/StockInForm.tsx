@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,10 +33,6 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
   // Bulk mode states
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [scannedBarcodes, setScannedBarcodes] = useState<string[]>([]);
-  
-  // Track manual location edits and previous auto-extracted value
-  const [locationTouched, setLocationTouched] = useState(false);
-  const prevExtracted = useRef<string>("");
 
   // WebSocket for phone mode
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
@@ -71,28 +67,11 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       const dashIndex = sku.indexOf("-");
       const end = dashIndex >= 0 ? Math.min(4, dashIndex) : Math.min(4, sku.length);
       const extracted = sku.substring(0, end);
-      
-      // Обновляем локацию только если:
-      // 1. Пользователь не редактировал вручную, ИЛИ
-      // 2. Текущая локация совпадает с предыдущим авто-значением
-      if (!locationTouched || location === prevExtracted.current) {
-        setLocation(extracted);
-        prevExtracted.current = extracted;
-        setLocationTouched(false); // Сбрасываем флаг при авто-обновлении
-      }
+      setLocation(extracted);
     } else {
-      // Если SKU пустой и локация была авто-заполнена - очищаем
-      if (!locationTouched) {
-        setLocation("");
-        prevExtracted.current = "";
-      }
+      setLocation("");
     }
-  }, [sku, location, locationTouched]);
-
-  const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocation(e.target.value.toUpperCase());
-    setLocationTouched(true); // Отмечаем что пользователь редактировал вручную
-  };
+  }, [sku]);
 
   const handleRemoveBarcode = (index: number) => {
     setScannedBarcodes(scannedBarcodes.filter((_, i) => i !== index));
@@ -139,8 +118,6 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       setSku("");
       setLocation("");
       setScannedBarcodes([]);
-      setLocationTouched(false);
-      prevExtracted.current = "";
     } else {
       // Обычный режим
       onSubmit({
@@ -159,8 +136,6 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       setLocation("");
       setQuantity(1);
       setBarcode("");
-      setLocationTouched(false);
-      prevExtracted.current = "";
     }
   };
 
@@ -217,18 +192,6 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="location">Локация *</Label>
-            <Input
-              id="location"
-              value={location}
-              onChange={handleLocationChange}
-              placeholder="A101"
-              required
-              data-testid="input-location"
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="productId">ID товара</Label>
             <Input
               id="productId"
@@ -250,16 +213,29 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
             />
           </div>
           
-          <div className="space-y-2">
-            <Label htmlFor="sku">SKU *</Label>
-            <Input
-              id="sku"
-              value={sku}
-              onChange={(e) => setSku(e.target.value.toUpperCase())}
-              placeholder="A101-J"
-              required
-              data-testid="input-sku"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="sku">SKU *</Label>
+              <Input
+                id="sku"
+                value={sku}
+                onChange={(e) => setSku(e.target.value.toUpperCase())}
+                placeholder="A101-J"
+                required
+                data-testid="input-sku"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Локация</Label>
+              <Input
+                id="location"
+                value={location}
+                placeholder="A101"
+                disabled
+                className="bg-muted text-muted-foreground"
+                data-testid="input-location"
+              />
+            </div>
           </div>
           
           {!isBulkMode && (
