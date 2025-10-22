@@ -507,12 +507,11 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         },
       });
 
-      // Then update the condition if it was changed (and if there's a barcode)
-      const hasBarcode = editingRow.barcodeMappings.length > 0 || editingRow.barcode;
+      // Then update the condition if it was changed
       const originalItem = items.find(item => item.id === editingRow.id);
       const originalCondition = originalItem ? getConditionForItem(originalItem) || "" : "";
       
-      if (hasBarcode && editingRow.condition !== originalCondition) {
+      if (editingRow.condition !== originalCondition) {
         await updateConditionMutation.mutateAsync({
           id: editingRow.id,
           condition: editingRow.condition,
@@ -600,28 +599,22 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
             />
           </TableCell>
           <TableCell style={{ width: `${columnWidths.condition}px`, minWidth: `${columnWidths.condition}px` }} className="text-xs">
-            {editingRow.barcodeMappings.length === 0 && !editingRow.barcode ? (
-              <div className="h-8 flex items-center text-muted-foreground text-xs">
-                Нет штрихкода
-              </div>
-            ) : (
-              <Select value={editingRow.condition || "-"} onValueChange={handleConditionChange}>
-                <SelectTrigger 
-                  className={`h-8 w-full text-xs ${getConditionClasses(editingRow.condition)}`}
-                  data-testid={`select-condition-${item.id}`}
-                >
-                  <SelectValue placeholder="-" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="-">-</SelectItem>
-                  <SelectItem value="New">New</SelectItem>
-                  <SelectItem value="Used">Used</SelectItem>
-                  <SelectItem value="Exdisplay">Exdisplay</SelectItem>
-                  <SelectItem value="Parts">Parts</SelectItem>
-                  <SelectItem value="Faulty">Faulty</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
+            <Select value={editingRow.condition || "-"} onValueChange={handleConditionChange}>
+              <SelectTrigger 
+                className={`h-8 w-full text-xs ${getConditionClasses(editingRow.condition)}`}
+                data-testid={`select-condition-${item.id}`}
+              >
+                <SelectValue placeholder="-" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="-">-</SelectItem>
+                <SelectItem value="New">New</SelectItem>
+                <SelectItem value="Used">Used</SelectItem>
+                <SelectItem value="Exdisplay">Exdisplay</SelectItem>
+                <SelectItem value="Parts">Parts</SelectItem>
+                <SelectItem value="Faulty">Faulty</SelectItem>
+              </SelectContent>
+            </Select>
           </TableCell>
           <TableCell style={{ width: `${columnWidths.price}px`, minWidth: `${columnWidths.price}px` }}>
             <Input

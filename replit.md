@@ -18,6 +18,16 @@ This project is a comprehensive warehouse management system designed to streamli
   - Removed `.toUpperCase()` transformation from onChange handler
   - Applied CSS class `uppercase` instead for visual display
   - Eliminated parsing overhead causing input lag
+- **Inventory Edit White Screen**: Fixed crash when editing items in inventory table:
+  - **SelectItem Fix**: Changed empty condition value from `value=""` to `value="-"` (empty string breaks React Select)
+  - **Error Handling**: Added try-catch in saveEdit function to prevent UI crashes
+  - **Condition Conversion**: "-" automatically converts to empty string when saving
+- **Condition Support for Items Without Barcodes**: Extended condition tracking to all inventory items:
+  - **Schema Update**: Added `condition` field to `inventory_items` table for items without barcodes
+  - **Dual Storage**: Items with barcodes use tested_items/faulty_stock tables, items without use inventory_items.condition
+  - **UI Update**: Removed barcode requirement - condition Select now available for all items
+  - **Query Update**: getAllInventoryItems now uses COALESCE to check all three sources: `inventoryItems.condition → testedItems.condition → faultyStock.condition`
+  - **Backend Logic**: updateItemCondition detects barcode presence and routes to appropriate storage
 
 ### October 22, 2025 (Session 2)
 **Major Feature Enhancements:**

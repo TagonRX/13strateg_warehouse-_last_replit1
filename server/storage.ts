@@ -197,7 +197,7 @@ export class DbStorage implements IStorage {
     const items = await db
       .select({
         ...getTableColumns(inventoryItems),
-        condition: sql<string | null>`COALESCE(${testedItems.condition}, ${faultyStock.condition})`.as('condition'),
+        condition: sql<string | null>`COALESCE(${inventoryItems.condition}, ${testedItems.condition}, ${faultyStock.condition})`.as('condition'),
       })
       .from(inventoryItems)
       .leftJoin(testedItems, eq(inventoryItems.barcode, testedItems.barcode))
@@ -689,8 +689,16 @@ export class DbStorage implements IStorage {
       primaryBarcode = item.barcode;
     }
 
+    // If no barcode, store condition directly in inventory_items table
     if (!primaryBarcode) {
-      throw new Error("No barcode found for this item");
+      await db
+        .update(inventoryItems)
+        .set({
+          condition: condition || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(inventoryItems.id, itemId));
+      return;
     }
 
     // If condition is empty or "-", remove from both tables
