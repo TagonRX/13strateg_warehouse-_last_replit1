@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -237,8 +237,13 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   const [locationInput, setLocationInput] = useState<string>("");
   const [letterFilter, setLetterFilter] = useState<string[]>([]); // Multi-select letter filter
   const [limitFilter, setLimitFilter] = useState<string>("100");
+  
+  // Separate input state (immediate) and filter state (debounced)
+  const [tskuInput, setTskuInput] = useState<string>("");
   const [tskuFilter, setTskuFilter] = useState<string>("");
   const [tskuOperator, setTskuOperator] = useState<string>("=");
+  
+  const [maxqInput, setMaxqInput] = useState<string>("");
   const [maxqFilter, setMaxqFilter] = useState<string>("");
   const [maxqOperator, setMaxqOperator] = useState<string>("=");
 
@@ -314,6 +319,22 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       setLocationInput(activeLocations.map(loc => loc.location).join("\n"));
     }
   }, [activeLocations]);
+
+  // Debounce TSKU filter (300ms delay)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setTskuFilter(tskuInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [tskuInput]);
+
+  // Debounce MAXQ filter (300ms delay)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMaxqFilter(maxqInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [maxqInput]);
 
   // Parse location input
   const parseLocationInput = (input: string): Set<string> => {
@@ -669,8 +690,8 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                 id="tsku-filter"
                 type="number"
                 placeholder="Например: 2"
-                value={tskuFilter}
-                onChange={(e) => setTskuFilter(e.target.value)}
+                value={tskuInput}
+                onChange={(e) => setTskuInput(e.target.value)}
                 className="w-32"
                 data-testid="input-tsku-filter"
               />
@@ -695,8 +716,8 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                 id="maxq-filter"
                 type="number"
                 placeholder="Например: 5"
-                value={maxqFilter}
-                onChange={(e) => setMaxqFilter(e.target.value)}
+                value={maxqInput}
+                onChange={(e) => setMaxqInput(e.target.value)}
                 className="w-32"
                 data-testid="input-maxq-filter"
               />
