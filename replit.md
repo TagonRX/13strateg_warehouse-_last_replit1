@@ -35,6 +35,12 @@ This project is a comprehensive warehouse management system designed to streamli
   - Modified getAllInventoryItems() SQL query with dual LEFT JOIN to tested_items and faulty_stock
   - Uses COALESCE(testedItems.condition, faultyStock.condition) for unified condition retrieval
   - Condition now displays for all tested products regardless of final destination table
+- **Warehouse Loading View Improvements**: Enhanced location display and management:
+  - **Default Display Logic**: Changed from showing only active locations to showing ALL locations by default
+  - **Optional Active Filter**: Added checkbox "Только активные (N)" for admins to optionally filter by active locations only
+  - **Location Search**: Added search field in admin location management to filter locations by name
+  - **Mass Delete**: Added "Удалить найденные (N)" button to delete all locations matching search filter
+  - **Duplicate Handling**: Fixed index tracking to correctly edit/delete duplicate locations using `{ loc, originalIdx }` pairing before filtering
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
