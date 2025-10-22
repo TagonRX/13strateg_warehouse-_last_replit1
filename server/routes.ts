@@ -338,6 +338,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update item condition (PATCH /api/inventory/:id/condition)
+  app.patch("/api/inventory/:id/condition", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { id } = req.params;
+      const { condition } = req.body;
+
+      // Get existing item
+      const existing = await storage.getInventoryItemById(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Товар не найден" });
+      }
+
+      // Update condition in database
+      await storage.updateItemCondition(id, condition, userId);
+
+      // Log the event
+      await storage.createEventLog({
+        userId,
+        action: "CONDITION_UPDATE",
+        details: `Updated condition for ${existing.name || existing.sku} to ${condition || "none"}`,
+        productId: existing.productId || null,
+        itemName: existing.name || null,
+        sku: existing.sku,
+        location: existing.location,
+      });
+
+      return res.json({ success: true, condition });
+    } catch (error: any) {
+      console.error("Update condition error:", error);
+      return res.status(500).json({ error: error.message || "Внутренняя ошибка сервера" });
+    }
+  });
+
   app.post("/api/inventory/bulk-upload", requireAuth, async (req, res) => {
     try {
       const userId = (req as any).userId; // From requireAuth middleware

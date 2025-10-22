@@ -61,6 +61,7 @@ export interface IStorage {
   updateInventoryItemById(id: string, updates: Partial<InsertInventoryItem>): Promise<InventoryItem>;
   deleteInventoryItem(id: string, userId: string): Promise<boolean>;
   bulkUpsertInventoryItems(items: InsertInventoryItem[]): Promise<{ success: number; updated: number; errors: number }>;
+  updateItemCondition(itemId: string, condition: string, userId: string): Promise<void>;
   
   // Event log methods
   createEventLog(log: InsertEventLog): Promise<EventLog>;
@@ -661,6 +662,188 @@ export class DbStorage implements IStorage {
     });
 
     return true;
+  }
+
+  async updateItemCondition(itemId: string, condition: string, userId: string): Promise<void> {
+    // Get the inventory item
+    const item = await this.getInventoryItemById(itemId);
+    if (!item) {
+      throw new Error("Inventory item not found");
+    }
+
+    // Get the primary barcode
+    let primaryBarcode: string | null = null;
+    if (item.barcodeMappings) {
+      try {
+        const mappings = JSON.parse(item.barcodeMappings);
+        if (mappings.length > 0) {
+          primaryBarcode = mappings[0].code;
+        }
+      } catch (e) {
+        // If parsing fails, fall back to simple barcode
+      }
+    }
+    
+    // Use simple barcode if no mappings
+    if (!primaryBarcode && item.barcode) {
+      primaryBarcode = item.barcode;
+    }
+
+    if (!primaryBarcode) {
+      throw new Error("No barcode found for this item");
+    }
+
+    // If condition is empty or "-", remove from both tables
+    if (!condition || condition === "" || condition === "-") {
+      // Delete from testedItems
+      await db.delete(testedItems).where(eq(testedItems.barcode, primaryBarcode));
+      
+      // Delete from faultyStock
+      await db.delete(faultyStock).where(eq(faultyStock.barcode, primaryBarcode));
+      
+      return;
+    }
+
+    // Get existing tested item to calculate workingHours if needed
+    const existingTested = await db
+      .select()
+      .from(testedItems)
+      .where(eq(testedItems.barcode, primaryBarcode))
+      .limit(1);
+    
+    const workingMinutes = existingTested.length > 0 ? existingTested[0].workingMinutes : 0;
+    const workingHours = Math.round(workingMinutes / 60 * 100) / 100; // Convert to hours with 2 decimal places
+
+    // Handle different conditions
+    if (condition === "New" || condition === "Used" || condition === "Exdisplay") {
+      // Insert/update in testedItems only
+      const existingTestedItem = await db
+        .select()
+        .from(testedItems)
+        .where(eq(testedItems.barcode, primaryBarcode))
+        .limit(1);
+
+      if (existingTestedItem.length > 0) {
+        // Update existing
+        await db
+          .update(testedItems)
+          .set({
+            condition,
+            testedBy: userId,
+            testedAt: new Date(),
+          })
+          .where(eq(testedItems.barcode, primaryBarcode));
+      } else {
+        // Insert new
+        await db.insert(testedItems).values({
+          barcode: primaryBarcode,
+          productId: item.productId || null,
+          name: item.name || null,
+          sku: item.sku,
+          condition,
+          workingMinutes: 0,
+          testedBy: userId,
+        });
+      }
+
+      // Remove from faultyStock if exists
+      await db.delete(faultyStock).where(eq(faultyStock.barcode, primaryBarcode));
+      
+    } else if (condition === "Faulty") {
+      // Insert/update in faultyStock only
+      const existingFaulty = await db
+        .select()
+        .from(faultyStock)
+        .where(eq(faultyStock.barcode, primaryBarcode))
+        .limit(1);
+
+      if (existingFaulty.length > 0) {
+        // Update existing
+        await db
+          .update(faultyStock)
+          .set({
+            condition,
+            workingHours,
+            decisionBy: userId,
+            decisionAt: new Date(),
+          })
+          .where(eq(faultyStock.barcode, primaryBarcode));
+      } else {
+        // Insert new
+        await db.insert(faultyStock).values({
+          barcode: primaryBarcode,
+          productId: item.productId || null,
+          name: item.name || null,
+          sku: item.sku,
+          condition,
+          workingHours,
+          decisionBy: userId,
+        });
+      }
+
+      // Remove from testedItems if exists
+      await db.delete(testedItems).where(eq(testedItems.barcode, primaryBarcode));
+      
+    } else if (condition === "Parts") {
+      // Insert/update in BOTH testedItems AND faultyStock
+      
+      // Update/insert testedItems
+      const existingTestedItem = await db
+        .select()
+        .from(testedItems)
+        .where(eq(testedItems.barcode, primaryBarcode))
+        .limit(1);
+
+      if (existingTestedItem.length > 0) {
+        await db
+          .update(testedItems)
+          .set({
+            condition,
+            testedBy: userId,
+            testedAt: new Date(),
+          })
+          .where(eq(testedItems.barcode, primaryBarcode));
+      } else {
+        await db.insert(testedItems).values({
+          barcode: primaryBarcode,
+          productId: item.productId || null,
+          name: item.name || null,
+          sku: item.sku,
+          condition,
+          workingMinutes: 0,
+          testedBy: userId,
+        });
+      }
+
+      // Update/insert faultyStock
+      const existingFaulty = await db
+        .select()
+        .from(faultyStock)
+        .where(eq(faultyStock.barcode, primaryBarcode))
+        .limit(1);
+
+      if (existingFaulty.length > 0) {
+        await db
+          .update(faultyStock)
+          .set({
+            condition,
+            workingHours,
+            decisionBy: userId,
+            decisionAt: new Date(),
+          })
+          .where(eq(faultyStock.barcode, primaryBarcode));
+      } else {
+        await db.insert(faultyStock).values({
+          barcode: primaryBarcode,
+          productId: item.productId || null,
+          name: item.name || null,
+          sku: item.sku,
+          condition,
+          workingHours,
+          decisionBy: userId,
+        });
+      }
+    }
   }
 
   async deleteItemsByLocation(location: string, userId: string): Promise<number> {

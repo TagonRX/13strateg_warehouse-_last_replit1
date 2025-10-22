@@ -13,6 +13,16 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Search, ChevronDown, ChevronRight, Pencil, Save, X, Trash2 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -55,6 +65,7 @@ interface EditingRow {
   quantity: number;
   barcode: string;
   barcodeMappings: BarcodeMapping[];
+  condition: string;
   price: string;
   length: string;
   width: string;
@@ -128,6 +139,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const [pageLimit, setPageLimit] = useState<string>("50");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [editingRow, setEditingRow] = useState<EditingRow | null>(null);
+  const [showFaultyDialog, setShowFaultyDialog] = useState(false);
+  const [pendingCondition, setPendingCondition] = useState<string>("");
   const { toast } = useToast();
 
   // Fetch tested items for condition display
@@ -148,6 +161,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100";
       case "Parts":
         return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100";
+      case "Faulty":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100";
       default:
         return "";
     }
@@ -350,6 +365,44 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     },
   });
 
+  const updateConditionMutation = useMutation({
+    mutationFn: async (data: { id: string; condition: string }) => {
+      const response = await fetch(`/api/inventory/${data.id}/condition`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${api.getAuthToken()}`,
+        },
+        body: JSON.stringify({ condition: data.condition }),
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      
+      return response.json();
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/tested-items'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/inventory'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/tested-items'] });
+      
+      toast({
+        title: "Обновлено",
+        description: "Состояние товара успешно обновлено",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const toggleGroup = (groupKey: string) => {
     const newExpanded = new Set(expandedGroups);
     if (newExpanded.has(groupKey)) {
@@ -384,6 +437,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       quantity: item.quantity,
       barcode: item.barcode || "",
       barcodeMappings,
+      condition: getConditionForItem(item) || "",
       price: item.price?.toString() || "",
       length: item.length?.toString() || "",
       width: item.width?.toString() || "",
@@ -392,11 +446,34 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     });
   };
 
+  const handleConditionChange = (value: string) => {
+    if (!editingRow) return;
+    
+    if (value === "Faulty") {
+      setPendingCondition(value);
+      setShowFaultyDialog(true);
+    } else {
+      setEditingRow({ ...editingRow, condition: value });
+    }
+  };
+
+  const confirmFaultyCondition = () => {
+    if (!editingRow) return;
+    setEditingRow({ ...editingRow, condition: pendingCondition });
+    setShowFaultyDialog(false);
+    setPendingCondition("");
+  };
+
+  const cancelFaultyCondition = () => {
+    setShowFaultyDialog(false);
+    setPendingCondition("");
+  };
+
   const cancelEdit = () => {
     setEditingRow(null);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingRow) return;
 
     const length = editingRow.length ? parseInt(editingRow.length) : undefined;
@@ -408,7 +485,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       ? JSON.stringify(editingRow.barcodeMappings)
       : undefined;
 
-    updateMutation.mutate({
+    // First update the basic inventory item data
+    await updateMutation.mutateAsync({
       id: editingRow.id,
       updates: {
         name: editingRow.name || undefined,
@@ -424,6 +502,17 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         weight: editingRow.weight ? parseInt(editingRow.weight) : undefined,
       },
     });
+
+    // Then update the condition if it was changed
+    const originalItem = items.find(item => item.id === editingRow.id);
+    const originalCondition = originalItem ? getConditionForItem(originalItem) || "" : "";
+    
+    if (editingRow.condition !== originalCondition) {
+      await updateConditionMutation.mutateAsync({
+        id: editingRow.id,
+        condition: editingRow.condition,
+      });
+    }
   };
 
   const deleteItem = (id: string) => {
@@ -498,16 +587,22 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
             />
           </TableCell>
           <TableCell style={{ width: `${columnWidths.condition}px`, minWidth: `${columnWidths.condition}px` }} className="text-xs">
-            {(() => {
-              const condition = getConditionForItem(item, editingRow.barcode, editingRow.barcodeMappings);
-              return condition ? (
-                <Badge variant="secondary" className={getConditionClasses(condition)} data-testid={`badge-condition-${item.id}`}>
-                  {condition}
-                </Badge>
-              ) : (
-                <span className="text-muted-foreground" data-testid={`text-condition-${item.id}`}>-</span>
-              );
-            })()}
+            <Select value={editingRow.condition} onValueChange={handleConditionChange}>
+              <SelectTrigger 
+                className={`h-8 w-full text-xs ${getConditionClasses(editingRow.condition)}`}
+                data-testid={`select-condition-${item.id}`}
+              >
+                <SelectValue placeholder="-" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">-</SelectItem>
+                <SelectItem value="New">New</SelectItem>
+                <SelectItem value="Used">Used</SelectItem>
+                <SelectItem value="Exdisplay">Exdisplay</SelectItem>
+                <SelectItem value="Parts">Parts</SelectItem>
+                <SelectItem value="Faulty">Faulty</SelectItem>
+              </SelectContent>
+            </Select>
           </TableCell>
           <TableCell style={{ width: `${columnWidths.price}px`, minWidth: `${columnWidths.price}px` }}>
             <Input
@@ -740,6 +835,25 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
           </div>
         )}
       </CardContent>
+
+      <AlertDialog open={showFaultyDialog} onOpenChange={setShowFaultyDialog}>
+        <AlertDialogContent data-testid="dialog-faulty-confirmation">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Подтверждение установки состояния 'Faulty'</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы уверены, что хотите установить состояние 'Faulty' для этого товара?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelFaultyCondition} data-testid="button-cancel-faulty">
+              Отменить
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmFaultyCondition} data-testid="button-confirm-faulty">
+              Подтвердить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
