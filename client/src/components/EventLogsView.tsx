@@ -5,7 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Calendar } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, Calendar, Download } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import type { EventLog, User } from "@shared/schema";
 
 interface EventLogsViewProps {
@@ -18,6 +20,8 @@ export default function EventLogsView({ users }: EventLogsViewProps) {
   const [selectedUser, setSelectedUser] = useState<string>("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const { toast } = useToast();
 
   const queryParams = new URLSearchParams();
   queryParams.set("limit", pageLimit === "all" ? "10000" : pageLimit);
@@ -47,6 +51,80 @@ export default function EventLogsView({ users }: EventLogsViewProps) {
       LOCATION_DELETED: "destructive",
     };
     return variants[action] || "outline";
+  };
+
+  const formatDateForCSV = (dateString: string | Date) => {
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
+  };
+
+  const escapeCSVValue = (value: string | null | undefined): string => {
+    if (!value) return "-";
+    const stringValue = String(value);
+    if (stringValue.includes(';') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
+  const exportToCSV = () => {
+    if (logs.length === 0) return;
+
+    setIsExporting(true);
+
+    try {
+      const headers = ["Дата", "Работник", "Действие", "ID товара", "Название", "SKU", "Локация", "Детали"];
+      const csvRows = [headers.join(";")];
+
+      logs.forEach(log => {
+        const row = [
+          formatDateForCSV(log.createdAt),
+          escapeCSVValue(getUserName(log.userId)),
+          escapeCSVValue(log.action),
+          escapeCSVValue(log.productId),
+          escapeCSVValue(log.itemName),
+          escapeCSVValue(log.sku),
+          escapeCSVValue(log.location),
+          escapeCSVValue(log.details)
+        ];
+        csvRows.push(row.join(";"));
+      });
+
+      const csvContent = csvRows.join("\n");
+      const BOM = "\uFEFF";
+      const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+
+      const now = new Date();
+      const filename = `logs_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}.csv`;
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Экспорт завершен",
+        description: `Экспортировано записей: ${logs.length}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Ошибка экспорта",
+        description: "Не удалось экспортировать логи",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -108,8 +186,17 @@ export default function EventLogsView({ users }: EventLogsViewProps) {
           </div>
         </div>
 
-        {/* Page Limit */}
-        <div className="flex justify-end">
+        {/* Page Limit and Export */}
+        <div className="flex justify-end gap-3">
+          <Button
+            variant="outline"
+            onClick={exportToCSV}
+            disabled={logs.length === 0 || isExporting}
+            data-testid="button-export-csv"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            {isExporting ? "Экспортируется..." : "Экспорт в CSV"}
+          </Button>
           <Select value={pageLimit} onValueChange={setPageLimit}>
             <SelectTrigger data-testid="select-logs-page-limit" className="w-32">
               <SelectValue />
