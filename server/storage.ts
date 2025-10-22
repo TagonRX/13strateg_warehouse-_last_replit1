@@ -704,15 +704,37 @@ export class DbStorage implements IStorage {
       return;
     }
 
-    // Get existing tested item to calculate workingHours if needed
+    // Get existing tested item, pending test, or faulty stock to use timestamps if they exist
     const existingTested = await db
       .select()
       .from(testedItems)
       .where(eq(testedItems.barcode, primaryBarcode))
       .limit(1);
     
-    const workingMinutes = existingTested.length > 0 ? existingTested[0].workingMinutes : 0;
-    const workingHours = Math.round(workingMinutes / 60 * 100) / 100; // Convert to hours with 2 decimal places
+    const existingPending = await db
+      .select()
+      .from(pendingTests)
+      .where(eq(pendingTests.barcode, primaryBarcode))
+      .limit(1);
+    
+    const existingFaultyRecord = await db
+      .select()
+      .from(faultyStock)
+      .where(eq(faultyStock.barcode, primaryBarcode))
+      .limit(1);
+    
+    // Calculate working minutes for faulty items (stored as integer minutes in DB)
+    // Priority: pendingTests > testedItems > existingFaulty > now
+    const firstScanTime = existingPending.length > 0 
+      ? existingPending[0].firstScanAt 
+      : existingTested.length > 0 
+        ? existingTested[0].firstScanAt 
+        : existingFaultyRecord.length > 0
+          ? existingFaultyRecord[0].firstScanAt
+          : new Date();
+    
+    const workingMillis = new Date().getTime() - firstScanTime.getTime();
+    const workingMinutes = Math.round(workingMillis / (1000 * 60)); // Convert to integer minutes
 
     // Handle different conditions
     if (condition === "New" || condition === "Used" || condition === "Exdisplay") {
@@ -729,25 +751,39 @@ export class DbStorage implements IStorage {
           .update(testedItems)
           .set({
             condition,
-            testedBy: userId,
-            testedAt: new Date(),
+            decisionBy: userId,
+            decisionAt: new Date(),
           })
           .where(eq(testedItems.barcode, primaryBarcode));
       } else {
-        // Insert new
+        // Insert new - use first scan data with priority chain
+        const firstScanAt = existingPending.length > 0 
+          ? existingPending[0].firstScanAt 
+          : existingFaultyRecord.length > 0
+            ? existingFaultyRecord[0].firstScanAt
+            : new Date();
+        const firstScanBy = existingPending.length > 0 
+          ? existingPending[0].firstScanBy 
+          : existingFaultyRecord.length > 0
+            ? existingFaultyRecord[0].firstScanBy
+            : userId;
+        
         await db.insert(testedItems).values({
           barcode: primaryBarcode,
           productId: item.productId || null,
           name: item.name || null,
           sku: item.sku,
           condition,
-          workingMinutes: 0,
-          testedBy: userId,
+          firstScanAt,
+          firstScanBy,
+          decisionBy: userId,
+          decisionAt: new Date(),
         });
       }
 
-      // Remove from faultyStock if exists
+      // Remove from faultyStock and pendingTests if exists
       await db.delete(faultyStock).where(eq(faultyStock.barcode, primaryBarcode));
+      await db.delete(pendingTests).where(eq(pendingTests.barcode, primaryBarcode));
       
     } else if (condition === "Faulty") {
       // Insert/update in faultyStock only
@@ -763,29 +799,60 @@ export class DbStorage implements IStorage {
           .update(faultyStock)
           .set({
             condition,
-            workingHours,
+            workingHours: workingMinutes,
             decisionBy: userId,
             decisionAt: new Date(),
           })
           .where(eq(faultyStock.barcode, primaryBarcode));
       } else {
-        // Insert new
+        // Insert new - use first scan data with priority chain
+        const firstScanAt = existingPending.length > 0 
+          ? existingPending[0].firstScanAt 
+          : existingTested.length > 0
+            ? existingTested[0].firstScanAt
+            : new Date();
+        const firstScanBy = existingPending.length > 0 
+          ? existingPending[0].firstScanBy 
+          : existingTested.length > 0
+            ? existingTested[0].firstScanBy
+            : userId;
+        
         await db.insert(faultyStock).values({
           barcode: primaryBarcode,
           productId: item.productId || null,
           name: item.name || null,
           sku: item.sku,
           condition,
-          workingHours,
+          workingHours: workingMinutes,
+          firstScanAt,
+          firstScanBy,
           decisionBy: userId,
+          decisionAt: new Date(),
         });
       }
 
-      // Remove from testedItems if exists
+      // Remove from testedItems and pendingTests if exists
       await db.delete(testedItems).where(eq(testedItems.barcode, primaryBarcode));
+      await db.delete(pendingTests).where(eq(pendingTests.barcode, primaryBarcode));
       
     } else if (condition === "Parts") {
       // Insert/update in BOTH testedItems AND faultyStock
+      
+      // Get first scan data with priority chain
+      const firstScanAt = existingPending.length > 0 
+        ? existingPending[0].firstScanAt 
+        : existingTested.length > 0
+          ? existingTested[0].firstScanAt
+          : existingFaultyRecord.length > 0
+            ? existingFaultyRecord[0].firstScanAt
+            : new Date();
+      const firstScanBy = existingPending.length > 0 
+        ? existingPending[0].firstScanBy 
+        : existingTested.length > 0
+          ? existingTested[0].firstScanBy
+          : existingFaultyRecord.length > 0
+            ? existingFaultyRecord[0].firstScanBy
+            : userId;
       
       // Update/insert testedItems
       const existingTestedItem = await db
@@ -799,8 +866,8 @@ export class DbStorage implements IStorage {
           .update(testedItems)
           .set({
             condition,
-            testedBy: userId,
-            testedAt: new Date(),
+            decisionBy: userId,
+            decisionAt: new Date(),
           })
           .where(eq(testedItems.barcode, primaryBarcode));
       } else {
@@ -810,8 +877,10 @@ export class DbStorage implements IStorage {
           name: item.name || null,
           sku: item.sku,
           condition,
-          workingMinutes: 0,
-          testedBy: userId,
+          firstScanAt,
+          firstScanBy,
+          decisionBy: userId,
+          decisionAt: new Date(),
         });
       }
 
@@ -827,7 +896,7 @@ export class DbStorage implements IStorage {
           .update(faultyStock)
           .set({
             condition,
-            workingHours,
+            workingHours: workingMinutes,
             decisionBy: userId,
             decisionAt: new Date(),
           })
@@ -839,10 +908,16 @@ export class DbStorage implements IStorage {
           name: item.name || null,
           sku: item.sku,
           condition,
-          workingHours,
+          workingHours: workingMinutes,
+          firstScanAt,
+          firstScanBy,
           decisionBy: userId,
+          decisionAt: new Date(),
         });
       }
+      
+      // Remove from pendingTests if exists
+      await db.delete(pendingTests).where(eq(pendingTests.barcode, primaryBarcode));
     }
   }
 
