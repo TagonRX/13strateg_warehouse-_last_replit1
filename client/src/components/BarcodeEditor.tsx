@@ -147,25 +147,29 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
     e.preventDefault();
     if (!scannedCode.trim()) return;
 
+    const barcode = scannedCode; // Capture current value
     const qty = parseInt(usbQty) || 1;
     if (qty <= 0) return;
 
-    // Check capacity
-    if (mappedQuantity + qty > totalQuantity) {
-      alert(`Нельзя добавить ${qty} баркод(ов): превышен лимит ${totalQuantity} товар(ов). Свободно: ${unmappedQuantity}`);
-      setScannedCode("");
-      // Refocus immediately
-      setTimeout(() => inputRef.current?.focus(), 0);
-      return;
-    }
+    // Use functional update to avoid stale closure
+    setWorkingBarcodes(prev => {
+      const currentMapped = prev.reduce((sum, m) => sum + m.qty, 0);
+      
+      // Check capacity
+      if (currentMapped + qty > totalQuantity) {
+        alert(`Нельзя добавить ${qty} баркод(ов): превышен лимит ${totalQuantity} товар(ов). Свободно: ${totalQuantity - currentMapped}`);
+        return prev; // Return unchanged
+      }
 
-    // Add N entries with this barcode (where N = qty)
-    const newEntries: BarcodeMapping[] = [];
-    for (let i = 0; i < qty; i++) {
-      newEntries.push({ code: scannedCode, qty: 1 });
-    }
+      // Add N entries with this barcode (where N = qty)
+      const newEntries: BarcodeMapping[] = [];
+      for (let i = 0; i < qty; i++) {
+        newEntries.push({ code: barcode, qty: 1 });
+      }
+      
+      return [...prev, ...newEntries];
+    });
     
-    setWorkingBarcodes([...workingBarcodes, ...newEntries]);
     setScannedCode("");
     
     // Refocus immediately after state update
@@ -176,28 +180,35 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
   const handleManualAdd = () => {
     if (!manualCode.trim()) return;
     
+    const barcode = manualCode; // Capture current value
     const qty = parseInt(manualQty) || 1;
     if (qty <= 0) return;
 
-    // Check capacity
-    if (mappedQuantity + qty > totalQuantity) {
-      alert(`Нельзя добавить ${qty} баркод(ов): превышен лимит ${totalQuantity} товар(ов). Свободно: ${unmappedQuantity}`);
-      return;
-    }
+    // Use functional update to avoid stale closure
+    setWorkingBarcodes(prev => {
+      const currentMapped = prev.reduce((sum, m) => sum + m.qty, 0);
+      
+      // Check capacity
+      if (currentMapped + qty > totalQuantity) {
+        alert(`Нельзя добавить ${qty} баркод(ов): превышен лимит ${totalQuantity} товар(ов). Свободно: ${totalQuantity - currentMapped}`);
+        return prev; // Return unchanged
+      }
 
-    // Add as separate entries (qty times)
-    const newEntries: BarcodeMapping[] = [];
-    for (let i = 0; i < qty; i++) {
-      newEntries.push({ code: manualCode, qty: 1 });
-    }
+      // Add as separate entries (qty times)
+      const newEntries: BarcodeMapping[] = [];
+      for (let i = 0; i < qty; i++) {
+        newEntries.push({ code: barcode, qty: 1 });
+      }
+      
+      return [...prev, ...newEntries];
+    });
     
-    setWorkingBarcodes([...workingBarcodes, ...newEntries]);
     setManualCode("");
     setManualQty("1");
   };
 
   const handleRemoveBarcode = (index: number) => {
-    setWorkingBarcodes(workingBarcodes.filter((_, i) => i !== index));
+    setWorkingBarcodes(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleUpdateQuantity = (index: number, newQty: number) => {
@@ -206,18 +217,22 @@ export default function BarcodeEditor({ value, onChange, totalQuantity }: Barcod
       return;
     }
     
-    // Check capacity for quantity increase
-    const oldQty = workingBarcodes[index].qty;
-    const qtyDelta = newQty - oldQty;
-    
-    if (qtyDelta > 0 && mappedQuantity + qtyDelta > totalQuantity) {
-      alert(`Нельзя увеличить количество: превышен лимит ${totalQuantity} товар(ов). Свободно: ${unmappedQuantity}`);
-      return;
-    }
-    
-    setWorkingBarcodes(workingBarcodes.map((m, i) => 
-      i === index ? { ...m, qty: newQty } : m
-    ));
+    // Use functional update to avoid stale closure
+    setWorkingBarcodes(prev => {
+      const oldQty = prev[index].qty;
+      const qtyDelta = newQty - oldQty;
+      const currentMapped = prev.reduce((sum, m) => sum + m.qty, 0);
+      
+      // Check capacity for quantity increase
+      if (qtyDelta > 0 && currentMapped + qtyDelta > totalQuantity) {
+        alert(`Нельзя увеличить количество: превышен лимит ${totalQuantity} товар(ов). Свободно: ${totalQuantity - currentMapped}`);
+        return prev; // Return unchanged
+      }
+      
+      return prev.map((m, i) => 
+        i === index ? { ...m, qty: newQty } : m
+      );
+    });
   };
 
   const handleConfirm = () => {

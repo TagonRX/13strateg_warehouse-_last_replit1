@@ -15,6 +15,26 @@ This project is a comprehensive warehouse management system designed to streamli
   - Explicit "Confirm"/"Cancel" buttons for all changes
   - Capacity validation on all 5 ingestion paths (USB, Camera, WebSocket, Manual add, Quantity edit) using functional setState updates to prevent stale closures and negative unmappedQuantity values
   - Real-time counters: Total / Mapped / Unmapped quantities with visual alerts when items remain unmapped
+- **USB Scanner Quantity Feature**: Added bulk barcode creation workflow:
+  - Quantity field allows workers to specify N units before scanning
+  - Single scan creates N separate barcode entries (each with qty=1) for accurate tracking
+  - Focus management: autoFocus on scanner input + onBlur refocus from quantity field
+  - UI guidance: "Укажите количество, затем сканируйте. Будет добавлено столько баркодов, сколько указано."
+  - **Critical Bug Fix**: Resolved stale closure issues in all barcode handlers (handleUsbScan, handleManualAdd, handleUpdateQuantity, handleRemoveBarcode):
+    - All functions now use functional setState updates: `setWorkingBarcodes(prev => ...)`
+    - Barcode values captured before callback: `const barcode = scannedCode;` to prevent stale references
+    - Capacity checks use fresh `currentMapped` computed inside update function
+    - Scanner input now clears correctly after each scan via `setScannedCode("")`
+    - Verified via end-to-end testing: multiple bulk additions work correctly
+- **Enhanced Confirmation Dialog**: Improved barcode change verification:
+  - Shows "Было X товаров / Стало Y товаров" comparison with large, prominent numbers
+  - Quantity mismatch alerts: "Превышение" (red) for overages, "Недостача" (yellow) for shortages
+  - Side-by-side barcode mapping comparison (original vs. modified)
+  - Three action buttons: "Подтвердить изменения" (saves), "Исправить" (returns to editing), "Отменить всё" (discards)
+- **Inventory Condition Display**: Fixed condition field visibility in inventory tables:
+  - Modified getAllInventoryItems() SQL query with dual LEFT JOIN to tested_items and faulty_stock
+  - Uses COALESCE(testedItems.condition, faultyStock.condition) for unified condition retrieval
+  - Condition now displays for all tested products regardless of final destination table
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
