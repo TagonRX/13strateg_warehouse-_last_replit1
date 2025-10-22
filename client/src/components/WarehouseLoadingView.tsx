@@ -13,8 +13,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, X, Trash2, ChevronDown } from "lucide-react";
+import { Plus, X, Trash2, ChevronDown, AlertCircle } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface LocationGroup {
   location: string;
@@ -242,7 +243,6 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   const [newLocationName, setNewLocationName] = useState<string>("");
   const [letterFilter, setLetterFilter] = useState<string[]>([]); // Multi-select letter filter
   const [limitFilter, setLimitFilter] = useState<string>("100");
-  const [onlyActiveLocations, setOnlyActiveLocations] = useState<boolean>(false); // Filter by active locations checkbox
   
   // Separate input state (immediate) and filter state (debounced)
   const [tskuInput, setTskuInput] = useState<string>("");
@@ -380,10 +380,20 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     );
   };
 
-  // Active locations set for filtering (memoized)
-  const activeLocationsSet = useMemo(() => {
+  // Managed locations set for filtering (memoized)
+  const managedLocationsSet = useMemo(() => {
     return new Set(locationList.map(loc => loc.toUpperCase()));
   }, [locationList]);
+
+  // Count items in non-managed locations
+  const nonManagedItemsCount = useMemo(() => {
+    return locationGroups.reduce((count, loc) => {
+      if (!managedLocationsSet.has(loc.location.toUpperCase())) {
+        return count + loc.items.length;
+      }
+      return count;
+    }, 0);
+  }, [locationGroups, managedLocationsSet]);
 
   // Filter locations by range (С and ПО)
   const filteredLocationList = useMemo(() => {
@@ -427,14 +437,14 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     setLocationList(locationList.filter(loc => loc !== location));
   };
 
-  // Filter locations based on active locations and TSKU/MAXQ filters
+  // Filter locations based on managed locations and TSKU/MAXQ filters
   const filteredLocations = useMemo(() => {
     // Start with all locations by default
     let filtered = locationGroups;
     
-    // Filter by active locations only if checkbox is enabled AND active locations exist
-    if (onlyActiveLocations && activeLocationsSet.size > 0) {
-      filtered = filtered.filter(loc => activeLocationsSet.has(loc.location.toUpperCase()));
+    // ALWAYS filter to only show managed locations (if any exist)
+    if (managedLocationsSet.size > 0) {
+      filtered = filtered.filter(loc => managedLocationsSet.has(loc.location.toUpperCase()));
     }
 
     // Filter by letters (if specified) - multi-select
@@ -506,7 +516,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       // Single letter or no letter filter - apply limit to total
       return filtered.slice(0, limit);
     }
-  }, [locationGroups, activeLocationsSet, onlyActiveLocations, letterFilter, tskuFilter, tskuOperator, maxqFilter, maxqOperator, limitFilter]);
+  }, [locationGroups, managedLocationsSet, letterFilter, tskuFilter, tskuOperator, maxqFilter, maxqOperator, limitFilter]);
 
   // Group locations by letter for column layout
   const locationsByLetter = useMemo(() => {
@@ -553,6 +563,18 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
 
   return (
     <div className="space-y-4">
+      {/* Warning for items in non-managed locations */}
+      {nonManagedItemsCount > 0 && (
+        <Alert variant="default" data-testid="alert-non-managed-locations">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Товары в неуправляемых локациях</AlertTitle>
+          <AlertDescription>
+            Найдено {nonManagedItemsCount} товар(ов) в локациях, которые не добавлены в список управляемых локаций.
+            {userRole === "admin" && " Добавьте эти локации в управление ниже, чтобы они отображались в таблице."}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Admin: Location Management */}
       {userRole === "admin" && (
         <>
@@ -866,25 +888,6 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
               </SelectContent>
             </Select>
           </div>
-          {userRole === "admin" && activeLocations.length > 0 && (
-            <div className="space-y-2">
-              <Label>Доп. фильтры</Label>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="only-active-locations"
-                  checked={onlyActiveLocations}
-                  onCheckedChange={(checked) => setOnlyActiveLocations(!!checked)}
-                  data-testid="checkbox-only-active-locations"
-                />
-                <Label 
-                  htmlFor="only-active-locations"
-                  className="text-sm font-normal cursor-pointer"
-                >
-                  Только активные ({activeLocations.length})
-                </Label>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
