@@ -41,6 +41,7 @@ This project is a comprehensive warehouse management system designed to streamli
   - **Location Search**: Added search field in admin location management to filter locations by name
   - **Mass Delete**: Added "Удалить найденные (N)" button to delete all locations matching search filter
   - **Duplicate Handling**: Fixed index tracking to correctly edit/delete duplicate locations using `{ loc, originalIdx }` pairing before filtering
+  - **Add Location Button Fix**: Fixed "Добавить локацию" button to create visible editable fields with "НОВАЯ" placeholder text
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.

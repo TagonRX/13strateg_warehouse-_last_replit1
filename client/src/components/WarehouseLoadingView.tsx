@@ -585,7 +585,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                         variant="outline"
                         onClick={() => {
                           const current = locationInput.trim();
-                          setLocationInput(current ? `${current}\n` : "");
+                          setLocationInput(current ? `${current}\nНОВАЯ` : "НОВАЯ");
                         }}
                         data-testid="button-add-location"
                       >
