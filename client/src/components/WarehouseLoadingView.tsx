@@ -238,7 +238,9 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   const [letterFilter, setLetterFilter] = useState<string[]>([]); // Multi-select letter filter
   const [limitFilter, setLimitFilter] = useState<string>("100");
   const [tskuFilter, setTskuFilter] = useState<string>("");
+  const [tskuOperator, setTskuOperator] = useState<string>("=");
   const [maxqFilter, setMaxqFilter] = useState<string>("");
+  const [maxqOperator, setMaxqOperator] = useState<string>("=");
 
   // Fetch active locations
   const { data: activeLocations = [] } = useQuery<ActiveLocation[]>({
@@ -384,19 +386,37 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       });
     }
 
-    // Filter by TSKU - exact value match
+    // Filter by TSKU with comparison operator
     if (tskuFilter) {
       const tskuValue = parseInt(tskuFilter);
       if (!isNaN(tskuValue)) {
-        filtered = filtered.filter(loc => loc.skuCount === tskuValue);
+        filtered = filtered.filter(loc => {
+          switch (tskuOperator) {
+            case ">": return loc.skuCount > tskuValue;
+            case ">=": return loc.skuCount >= tskuValue;
+            case "<": return loc.skuCount < tskuValue;
+            case "<=": return loc.skuCount <= tskuValue;
+            case "=": return loc.skuCount === tskuValue;
+            default: return true;
+          }
+        });
       }
     }
 
-    // Filter by MAXQ - exact value match
+    // Filter by MAXQ with comparison operator
     if (maxqFilter) {
       const maxqValue = parseInt(maxqFilter);
       if (!isNaN(maxqValue)) {
-        filtered = filtered.filter(loc => loc.totalQuantity === maxqValue);
+        filtered = filtered.filter(loc => {
+          switch (maxqOperator) {
+            case ">": return loc.totalQuantity > maxqValue;
+            case ">=": return loc.totalQuantity >= maxqValue;
+            case "<": return loc.totalQuantity < maxqValue;
+            case "<=": return loc.totalQuantity <= maxqValue;
+            case "=": return loc.totalQuantity === maxqValue;
+            default: return true;
+          }
+        });
       }
     }
 
@@ -427,7 +447,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       // Single letter or no letter filter - apply limit to total
       return filtered.slice(0, limit);
     }
-  }, [locationGroups, activeLocationsSet, letterFilter, tskuFilter, maxqFilter, limitFilter]);
+  }, [locationGroups, activeLocationsSet, letterFilter, tskuFilter, tskuOperator, maxqFilter, maxqOperator, limitFilter]);
 
   // Group locations by letter for column layout
   const locationsByLetter = useMemo(() => {
@@ -630,27 +650,57 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
               </PopoverContent>
             </Popover>
           </div>
-          <div className="space-y-2 w-48">
-            <Label htmlFor="tsku-filter">Фильтр по TSKU (точное значение)</Label>
-            <Input
-              id="tsku-filter"
-              type="number"
-              placeholder="Например: 2"
-              value={tskuFilter}
-              onChange={(e) => setTskuFilter(e.target.value)}
-              data-testid="input-tsku-filter"
-            />
+          <div className="space-y-2">
+            <Label>Фильтр по TSKU</Label>
+            <div className="flex gap-2">
+              <Select value={tskuOperator} onValueChange={setTskuOperator}>
+                <SelectTrigger className="w-20" data-testid="select-tsku-operator">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="=">=</SelectItem>
+                  <SelectItem value=">">&gt;</SelectItem>
+                  <SelectItem value=">=">&gt;=</SelectItem>
+                  <SelectItem value="<">&lt;</SelectItem>
+                  <SelectItem value="<=">&lt;=</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                id="tsku-filter"
+                type="number"
+                placeholder="Например: 2"
+                value={tskuFilter}
+                onChange={(e) => setTskuFilter(e.target.value)}
+                className="w-32"
+                data-testid="input-tsku-filter"
+              />
+            </div>
           </div>
-          <div className="space-y-2 w-48">
-            <Label htmlFor="maxq-filter">Фильтр по MAXQ (точное значение)</Label>
-            <Input
-              id="maxq-filter"
-              type="number"
-              placeholder="Например: 5"
-              value={maxqFilter}
-              onChange={(e) => setMaxqFilter(e.target.value)}
-              data-testid="input-maxq-filter"
-            />
+          <div className="space-y-2">
+            <Label>Фильтр по MAXQ</Label>
+            <div className="flex gap-2">
+              <Select value={maxqOperator} onValueChange={setMaxqOperator}>
+                <SelectTrigger className="w-20" data-testid="select-maxq-operator">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="=">=</SelectItem>
+                  <SelectItem value=">">&gt;</SelectItem>
+                  <SelectItem value=">=">&gt;=</SelectItem>
+                  <SelectItem value="<">&lt;</SelectItem>
+                  <SelectItem value="<=">&lt;=</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                id="maxq-filter"
+                type="number"
+                placeholder="Например: 5"
+                value={maxqFilter}
+                onChange={(e) => setMaxqFilter(e.target.value)}
+                className="w-32"
+                data-testid="input-maxq-filter"
+              />
+            </div>
           </div>
           <div className="space-y-2 w-40">
             <Label htmlFor="limit">Показать локаций</Label>
