@@ -689,13 +689,13 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                     id="new-location-name"
                     placeholder="Введите название локации..."
                     value={newLocationName}
-                    onChange={(e) => setNewLocationName(e.target.value.toUpperCase())}
+                    onChange={(e) => setNewLocationName(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         handleAddLocation();
                       }
                     }}
-                    className="font-mono"
+                    className="font-mono uppercase"
                     data-testid="input-new-location"
                   />
                 </div>
