@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Fragment } from "react";
+import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import {
   Table,
   TableBody,
@@ -34,6 +34,7 @@ interface InventoryItem {
   quantity: number;
   barcode?: string;
   barcodeMappings?: string; // JSON string
+  condition?: string | null; // New, Used, Exdisplay, Parts
   price?: number;
   length?: number;
   width?: number;
@@ -134,37 +135,6 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     queryKey: ['/api/tested-items'],
   });
 
-  // Helper function to get condition by barcode
-  const getConditionByBarcode = (barcode: string | undefined, barcodeMappings?: string): string | null => {
-    // Collect all barcodes to check
-    let barcodesToCheck: string[] = [];
-    
-    // Add simple barcode if exists
-    if (barcode) {
-      barcodesToCheck.push(barcode);
-    }
-    
-    // Add barcodes from mappings if exists
-    if (barcodeMappings) {
-      try {
-        const mappings: BarcodeMapping[] = JSON.parse(barcodeMappings);
-        barcodesToCheck.push(...mappings.map(m => m.code));
-      } catch (e) {
-        // If parsing fails, ignore mappings
-      }
-    }
-    
-    // If no barcodes to check, return null
-    if (barcodesToCheck.length === 0) return null;
-    
-    // Find tested item by any of the barcodes
-    const testedItem = testedItems.find((item) => {
-      return barcodesToCheck.some(bc => item.barcode === bc);
-    });
-    
-    return testedItem?.condition || null;
-  };
-
   // Helper function to get condition color classes
   const getConditionClasses = (condition: string | null): string => {
     if (!condition) return "";
@@ -251,6 +221,58 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       )
       .slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit));
   }, [sortedItems, search, pageLimit]);
+
+  // Cache parsed barcode mappings to avoid repeated JSON.parse on each render
+  const parsedMappingsCache = useMemo(() => {
+    const cache = new Map<string, BarcodeMapping[]>();
+    filteredItems.forEach(item => {
+      if (item.barcodeMappings) {
+        try {
+          const mappings = JSON.parse(item.barcodeMappings);
+          cache.set(item.id, mappings);
+        } catch (e) {
+          console.error(`Failed to parse barcodeMappings for item ${item.id}:`, e);
+        }
+      }
+    });
+    return cache;
+  }, [filteredItems]);
+
+  // Helper function to get condition (checks server-provided condition first, then ALL barcodes)
+  const getConditionForItem = useCallback((item: InventoryItem, overrideBarcode?: string, overrideMappings?: BarcodeMapping[]): string | null => {
+    // First priority: use server-provided condition (from barcode field LEFT JOIN match)
+    if (item.condition) {
+      return item.condition;
+    }
+    
+    // Second priority: check ALL barcodes (simple + mappings) against testedItems
+    let barcodesToCheck: string[] = [];
+    
+    // Add simple barcode (use override if provided, otherwise item's barcode)
+    const barcode = overrideBarcode !== undefined ? overrideBarcode : item.barcode;
+    if (barcode) {
+      barcodesToCheck.push(barcode);
+    }
+    
+    // Add barcodes from mappings (use override if provided, otherwise item's mappings, otherwise cache)
+    const mappingsToUse = overrideMappings !== undefined 
+      ? overrideMappings 
+      : parsedMappingsCache.get(item.id);
+    if (mappingsToUse) {
+      const mappings: BarcodeMapping[] = Array.isArray(mappingsToUse) ? mappingsToUse : [];
+      barcodesToCheck.push(...mappings.map(m => m.code));
+    }
+    
+    // If no barcodes to check, return null
+    if (barcodesToCheck.length === 0) return null;
+    
+    // Find tested item by any of the barcodes
+    const testedItem = testedItems.find((tested) => {
+      return barcodesToCheck.some(bc => tested.barcode === bc);
+    });
+    
+    return testedItem?.condition || null;
+  }, [parsedMappingsCache, testedItems]);
 
   // Group items by location (memoized)
   const groupedItems = useMemo(() => {
@@ -477,10 +499,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
           </TableCell>
           <TableCell style={{ width: `${columnWidths.condition}px`, minWidth: `${columnWidths.condition}px` }} className="text-xs">
             {(() => {
-              const barcodeMappingsJson = editingRow.barcodeMappings.length > 0 
-                ? JSON.stringify(editingRow.barcodeMappings)
-                : undefined;
-              const condition = getConditionByBarcode(editingRow.barcode, barcodeMappingsJson);
+              const condition = getConditionForItem(item, editingRow.barcode, editingRow.barcodeMappings);
               return condition ? (
                 <Badge variant="secondary" className={getConditionClasses(condition)} data-testid={`badge-condition-${item.id}`}>
                   {condition}
@@ -571,7 +590,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="font-mono text-xs">{displayBarcodes}</TableCell>
         <TableCell style={{ width: `${columnWidths.condition}px`, minWidth: `${columnWidths.condition}px` }} className="text-xs">
           {(() => {
-            const condition = getConditionByBarcode(item.barcode, item.barcodeMappings);
+            const condition = getConditionForItem(item);
             return condition ? (
               <Badge variant="secondary" className={getConditionClasses(condition)} data-testid={`badge-condition-${item.id}`}>
                 {condition}

@@ -40,7 +40,7 @@ import {
   type FaultyStock,
   type InsertFaultyStock
 } from "@shared/schema";
-import { eq, and, or, sql, inArray, ilike } from "drizzle-orm";
+import { eq, and, or, sql, inArray, ilike, getTableColumns } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -53,7 +53,7 @@ export interface IStorage {
   updateUserName(id: string, name: string): Promise<User>;
 
   // Inventory methods
-  getAllInventoryItems(): Promise<InventoryItem[]>;
+  getAllInventoryItems(): Promise<(InventoryItem & { condition?: string | null })[]>;
   getInventoryItemById(id: string): Promise<InventoryItem | undefined>;
   getInventoryItemByProductId(productId: string): Promise<InventoryItem | undefined>;
   createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem>;
@@ -192,8 +192,17 @@ export class DbStorage implements IStorage {
   }
 
   // Inventory methods
-  async getAllInventoryItems(): Promise<InventoryItem[]> {
-    return await db.select().from(inventoryItems).orderBy(inventoryItems.createdAt);
+  async getAllInventoryItems(): Promise<(InventoryItem & { condition?: string | null })[]> {
+    const items = await db
+      .select({
+        ...getTableColumns(inventoryItems),
+        condition: testedItems.condition,
+      })
+      .from(inventoryItems)
+      .leftJoin(testedItems, eq(inventoryItems.barcode, testedItems.barcode))
+      .orderBy(inventoryItems.createdAt);
+    
+    return items as (InventoryItem & { condition?: string | null })[];
   }
 
   async getInventoryItemByProductId(productId: string): Promise<InventoryItem | undefined> {
