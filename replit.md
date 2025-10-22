@@ -5,6 +5,20 @@ This project is a comprehensive warehouse management system designed to streamli
 
 ## Recent Changes
 
+### October 22, 2025 (Session 3)
+**Critical Bug Fixes:**
+- **Condition Update Timestamp Preservation**: Fixed analytics data corruption when editing item conditions:
+  - **Root Cause**: When items transitioned between states (Tested→Faulty→Parts), original `firstScanAt` timestamps were lost, causing working minutes to reset to 0
+  - **Schema Field Corrections**: Fixed field names in storage.ts to match schema (firstScanAt/firstScanBy/decisionAt/decisionBy instead of testedBy/testedAt)
+  - **Working Time Calculation**: Changed from fractional hours to integer minutes matching schema definition (`workingHours` stores minutes despite name)
+  - **Priority Chain Implementation**: All timestamp operations now use consistent priority chain: `pendingTests → testedItems → faultyStock → new Date()`
+  - **Impact**: Working minutes now preserved accurately across all condition transitions (New/Used/Exdisplay/Faulty/Parts)
+  - Verified by architect: No data loss, analytics integrity maintained across all transition paths
+- **Location Management Input Freeze**: Fixed UI hanging when typing new locations:
+  - Removed `.toUpperCase()` transformation from onChange handler
+  - Applied CSS class `uppercase` instead for visual display
+  - Eliminated parsing overhead causing input lag
+
 ### October 22, 2025 (Session 2)
 **Major Feature Enhancements:**
 - **Location Management Refactor**: Redesigned from text-based to table-based UI with array-based state for optimal performance:
