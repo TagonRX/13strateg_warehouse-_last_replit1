@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, X, Trash2 } from "lucide-react";
+import { Plus, X, Trash2, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 interface LocationGroup {
   location: string;
@@ -251,6 +252,10 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   const [maxqInput, setMaxqInput] = useState<string>("");
   const [maxqFilter, setMaxqFilter] = useState<string>("");
   const [maxqOperator, setMaxqOperator] = useState<string>("=");
+
+  // Collapsible state for admin sections
+  const [isLocationManagementOpen, setIsLocationManagementOpen] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
   // Fetch active locations
   const { data: activeLocations = [] } = useQuery<ActiveLocation[]>({
@@ -551,11 +556,24 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       {/* Admin: Location Management */}
       {userRole === "admin" && (
         <>
-          <Card className="w-fit">
-            <CardHeader>
-              <CardTitle>Управление локациями (Администратор)</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <Collapsible open={isLocationManagementOpen} onOpenChange={setIsLocationManagementOpen}>
+            <Card className="w-fit">
+              <CollapsibleTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  className="group w-full justify-start text-left p-6 h-auto rounded-none" 
+                  data-testid="header-location-management"
+                >
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <CardTitle>Управление локациями (Администратор)</CardTitle>
+                    <ChevronDown 
+                      className="transition-transform flex-shrink-0 group-data-[state=open]:rotate-180" 
+                    />
+                  </div>
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="space-y-4">
               {/* Range filter */}
               <div className="flex gap-4 items-end">
                 <div className="space-y-2">
@@ -671,22 +689,39 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                   Сохранить локации
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
-          <Card className="w-fit">
-            <CardHeader>
-              <CardTitle>Настройки TSKU/MAXQ для групп локаций</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <WarehouseSettingsPanel
-                settings={warehouseSettings}
-                onUpdate={(setting) => upsertSettingMutation.mutate(setting)}
-                onDelete={(locationPattern) => deleteSettingMutation.mutate(locationPattern)}
-                isDeleting={deleteSettingMutation.isPending}
-              />
-            </CardContent>
-          </Card>
+          <Collapsible open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+            <Card className="w-fit">
+              <CollapsibleTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  className="group w-full justify-start text-left p-6 h-auto rounded-none" 
+                  data-testid="header-settings"
+                >
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <CardTitle>Настройки TSKU/MAXQ для групп локаций</CardTitle>
+                    <ChevronDown 
+                      className="transition-transform flex-shrink-0 group-data-[state=open]:rotate-180" 
+                    />
+                  </div>
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  <WarehouseSettingsPanel
+                    settings={warehouseSettings}
+                    onUpdate={(setting) => upsertSettingMutation.mutate(setting)}
+                    onDelete={(locationPattern) => deleteSettingMutation.mutate(locationPattern)}
+                    isDeleting={deleteSettingMutation.isPending}
+                  />
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
         </>
       )}
 
