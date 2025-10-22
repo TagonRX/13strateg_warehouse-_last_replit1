@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -8,11 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { FileUp, List, Trash2, CheckCircle2, Circle, Download, Plus, X, ChevronDown } from "lucide-react";
+import { FileUp, List, Trash2, CheckCircle2, Circle, Download, Plus, X, ChevronDown, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import type { PickingList, PickingTask } from "@shared/schema";
+import type { PickingList, PickingTask, InventoryItem } from "@shared/schema";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { format } from "date-fns";
@@ -189,6 +189,12 @@ export default function DailyPickingView() {
 
   const { data: currentList } = useQuery<{ list: PickingList; tasks: PickingTask[] }>({
     queryKey: ["/api/picking/lists", selectedListId],
+    enabled: !!selectedListId,
+  });
+
+  // Fetch inventory to check current quantities
+  const { data: allInventory = [] } = useQuery<InventoryItem[]>({
+    queryKey: ["/api/inventory"],
     enabled: !!selectedListId,
   });
 
@@ -461,6 +467,35 @@ export default function DailyPickingView() {
     } finally {
       setIsLoadingUrl(false);
     }
+  };
+
+  // Calculate inventory quantities by SKU
+  const inventoryBySku = useMemo(() => {
+    const map = new Map<string, number>();
+    allInventory.forEach(item => {
+      const currentQty = map.get(item.sku) || 0;
+      map.set(item.sku, currentQty + item.quantity);
+    });
+    return map;
+  }, [allInventory]);
+
+  // Helper function to get final quantity and warning level
+  const getInventoryWarning = (task: PickingTask) => {
+    const remainingQuantity = task.requiredQuantity - (task.pickedQuantity || 0);
+    const currentQty = inventoryBySku.get(task.sku) || 0;
+    const finalQty = currentQty - remainingQuantity;
+    
+    // If fully picked, no warning
+    if (remainingQuantity <= 0) {
+      return { level: 'safe' as const, finalQty: currentQty, currentQty, remainingQuantity: 0 };
+    }
+    
+    if (finalQty < 0) {
+      return { level: 'critical' as const, finalQty, currentQty, remainingQuantity };
+    } else if (finalQty === 0) {
+      return { level: 'warning' as const, finalQty, currentQty, remainingQuantity };
+    }
+    return { level: 'safe' as const, finalQty, currentQty, remainingQuantity };
   };
 
   // Filter tasks
@@ -746,51 +781,80 @@ export default function DailyPickingView() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {filteredTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      data-testid={`task-${task.id}`}
-                      className={`flex items-center justify-between p-3 rounded-md border hover-elevate ${
-                        task.itemNameSource === 'inventory' ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 flex-1">
-                        {task.status === "COMPLETED" ? (
-                          <CheckCircle2 className="h-5 w-5 text-green-600" />
-                        ) : (
-                          <Circle className="h-5 w-5 text-muted-foreground" />
-                        )}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-base font-semibold">{task.sku}</span>
-                            <span className="text-xs text-muted-foreground" data-testid={`text-task-name-${task.id}`}>
-                              {task.itemName || '-'}
-                            </span>
-                          </div>
-                          <div className="text-sm font-medium text-blue-600 dark:text-blue-400" data-testid={`text-task-progress-${task.id}`}>
-                            {task.pickedQuantity} / {task.requiredQuantity} собрано
+                  {filteredTasks.map((task) => {
+                    const warning = getInventoryWarning(task);
+                    const rowBgClass = warning.level === 'critical' 
+                      ? 'bg-red-100 dark:bg-red-900/20 border-red-300 dark:border-red-800' 
+                      : warning.level === 'warning'
+                      ? 'bg-yellow-100 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-800'
+                      : task.itemNameSource === 'inventory' 
+                      ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900' 
+                      : '';
+                    
+                    return (
+                      <div
+                        key={task.id}
+                        data-testid={`task-${task.id}`}
+                        className={`flex items-center justify-between p-3 rounded-md border hover-elevate ${rowBgClass}`}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          {task.status === "COMPLETED" ? (
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          ) : (
+                            <Circle className="h-5 w-5 text-muted-foreground" />
+                          )}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-base font-semibold">{task.sku}</span>
+                              <span className="text-xs text-muted-foreground" data-testid={`text-task-name-${task.id}`}>
+                                {task.itemName || '-'}
+                              </span>
+                              {(warning.level === 'warning' || warning.level === 'critical') && (
+                                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <div className="text-sm font-medium text-blue-600 dark:text-blue-400" data-testid={`text-task-progress-${task.id}`}>
+                                {task.pickedQuantity} / {task.requiredQuantity} собрано
+                              </div>
+                              {warning.remainingQuantity > 0 && (
+                                <div className="text-xs text-muted-foreground">
+                                  Осталось: <span className="font-semibold">{warning.remainingQuantity}</span>
+                                </div>
+                              )}
+                              <div className="text-xs text-muted-foreground">
+                                Текущий запас: <span className="font-semibold">{warning.currentQty}</span>
+                              </div>
+                              <div className={`text-xs font-semibold ${
+                                warning.level === 'critical' ? 'text-red-600 dark:text-red-400' :
+                                warning.level === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                                'text-green-600 dark:text-green-400'
+                              }`} data-testid={`text-final-qty-${task.id}`}>
+                                После сбора: {warning.finalQty}
+                              </div>
+                            </div>
                           </div>
                         </div>
+                        <div className="flex items-center gap-2">
+                          {task.status !== "COMPLETED" && (
+                            <Button
+                              data-testid={`button-manual-collect-${task.id}`}
+                              size="sm"
+                              variant="outline"
+                              onClick={() => manualCollectMutation.mutate(task.id)}
+                              disabled={manualCollectMutation.isPending}
+                            >
+                              <CheckCircle2 className="h-4 w-4 mr-1" />
+                              Собрать
+                            </Button>
+                          )}
+                          <Badge variant={task.status === "COMPLETED" ? "default" : "secondary"}>
+                            {task.status}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {task.status !== "COMPLETED" && (
-                          <Button
-                            data-testid={`button-manual-collect-${task.id}`}
-                            size="sm"
-                            variant="outline"
-                            onClick={() => manualCollectMutation.mutate(task.id)}
-                            disabled={manualCollectMutation.isPending}
-                          >
-                            <CheckCircle2 className="h-4 w-4 mr-1" />
-                            Собрать
-                          </Button>
-                        )}
-                        <Badge variant={task.status === "COMPLETED" ? "default" : "secondary"}>
-                          {task.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
