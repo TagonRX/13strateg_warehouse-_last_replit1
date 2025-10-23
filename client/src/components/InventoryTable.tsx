@@ -517,6 +517,12 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
           condition: editingRow.condition,
         });
       }
+
+      // Show success notification
+      toast({
+        title: "Изменения сохранены",
+        description: "Данные товара успешно обновлены",
+      });
     } catch (error) {
       console.error("Error saving edit:", error);
       toast({
@@ -601,18 +607,18 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
           <TableCell style={{ width: `${columnWidths.condition}px`, minWidth: `${columnWidths.condition}px` }} className="text-xs">
             <Select value={editingRow.condition || "-"} onValueChange={handleConditionChange}>
               <SelectTrigger 
-                className={`h-8 w-full text-xs ${getConditionClasses(editingRow.condition)}`}
+                className={`h-9 md:h-8 w-full text-sm md:text-xs ${getConditionClasses(editingRow.condition)}`}
                 data-testid={`select-condition-${item.id}`}
               >
                 <SelectValue placeholder="-" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="-">-</SelectItem>
-                <SelectItem value="New">New</SelectItem>
-                <SelectItem value="Used">Used</SelectItem>
-                <SelectItem value="Exdisplay">Exdisplay</SelectItem>
-                <SelectItem value="Parts">Parts</SelectItem>
-                <SelectItem value="Faulty">Faulty</SelectItem>
+                <SelectItem value="-" className="text-sm md:text-xs">-</SelectItem>
+                <SelectItem value="New" className="text-sm md:text-xs">New</SelectItem>
+                <SelectItem value="Used" className="text-sm md:text-xs">Used</SelectItem>
+                <SelectItem value="Exdisplay" className="text-sm md:text-xs">Exdisplay</SelectItem>
+                <SelectItem value="Parts" className="text-sm md:text-xs">Parts</SelectItem>
+                <SelectItem value="Faulty" className="text-sm md:text-xs">Faulty</SelectItem>
               </SelectContent>
             </Select>
           </TableCell>
