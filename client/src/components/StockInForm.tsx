@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Package, Trash2, Usb, Smartphone, Wifi } from "lucide-react";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -16,6 +17,7 @@ interface StockInFormProps {
     location: string;
     quantity: number;
     barcode?: string;
+    condition?: string;
   }) => void;
 }
 
@@ -28,6 +30,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
   const [location, setLocation] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [barcode, setBarcode] = useState("");
+  const [condition, setCondition] = useState<string>("");
   const [scannerMode, setScannerMode] = useState<ScannerMode>("usb");
   
   // Bulk mode states
@@ -73,6 +76,76 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
     }
   }, [sku]);
 
+  // Автоподтягивание состояния при сканировании баркода (обычный режим)
+  useEffect(() => {
+    if (!barcode || isBulkMode) return;
+    
+    // Запомнить текущий баркод для предотвращения race condition
+    const currentBarcode = barcode;
+    
+    const fetchCondition = async () => {
+      try {
+        const response = await fetch(`/api/inventory/barcode/${encodeURIComponent(currentBarcode)}/condition`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          // Проверить что ответ соответствует текущему баркоду (предотвращает race condition)
+          if (currentBarcode === barcode) {
+            if (data.condition) {
+              setCondition(data.condition);
+            } else {
+              setCondition("");
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching condition:", error);
+      }
+    };
+    
+    fetchCondition();
+  }, [barcode, isBulkMode]);
+
+  // Автоподтягивание состояния для первого баркода в bulk режиме
+  useEffect(() => {
+    if (!isBulkMode || scannedBarcodes.length === 0) return;
+    
+    const firstBarcode = scannedBarcodes[0];
+    
+    const fetchCondition = async () => {
+      try {
+        const response = await fetch(`/api/inventory/barcode/${encodeURIComponent(firstBarcode)}/condition`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          // Проверить что первый баркод не изменился
+          if (scannedBarcodes.length > 0 && scannedBarcodes[0] === firstBarcode) {
+            if (data.condition) {
+              setCondition(data.condition);
+            } else {
+              setCondition("");
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching condition:", error);
+      }
+    };
+    
+    // Подтянуть condition только для первого отсканированного баркода
+    if (scannedBarcodes.length === 1) {
+      fetchCondition();
+    }
+  }, [scannedBarcodes, isBulkMode]);
+
   const handleRemoveBarcode = (index: number) => {
     setScannedBarcodes(scannedBarcodes.filter((_, i) => i !== index));
   };
@@ -110,6 +183,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         location,
         quantity: scannedBarcodes.length,
         barcode: scannedBarcodes[0] || undefined,
+        condition: condition || undefined,
       });
       
       // Очистка формы
@@ -118,6 +192,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       setSku("");
       setLocation("");
       setScannedBarcodes([]);
+      setCondition("");
     } else {
       // Обычный режим
       onSubmit({
@@ -127,6 +202,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         location,
         quantity,
         barcode: barcode || undefined,
+        condition: condition || undefined,
       });
       
       // Очистка формы
@@ -136,6 +212,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       setLocation("");
       setQuantity(1);
       setBarcode("");
+      setCondition("");
     }
   };
 
@@ -292,6 +369,23 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
               />
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="condition">Состояние</Label>
+            <Select value={condition || "-"} onValueChange={(val) => setCondition(val === "-" ? "" : val)}>
+              <SelectTrigger id="condition" data-testid="select-condition">
+                <SelectValue placeholder="Не указано" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="-">Не указано</SelectItem>
+                <SelectItem value="New">New</SelectItem>
+                <SelectItem value="Used">Used</SelectItem>
+                <SelectItem value="Exdisplay">Exdisplay</SelectItem>
+                <SelectItem value="Parts">Parts</SelectItem>
+                <SelectItem value="Faulty">Faulty</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           
           <Button 
             type="submit" 

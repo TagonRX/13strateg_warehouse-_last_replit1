@@ -62,6 +62,7 @@ export interface IStorage {
   deleteInventoryItem(id: string, userId: string): Promise<boolean>;
   bulkUpsertInventoryItems(items: InsertInventoryItem[]): Promise<{ success: number; updated: number; errors: number }>;
   updateItemCondition(itemId: string, condition: string, userId: string): Promise<void>;
+  getConditionByBarcode(barcode: string): Promise<string | null>;
   
   // Event log methods
   createEventLog(log: InsertEventLog): Promise<EventLog>;
@@ -927,6 +928,32 @@ export class DbStorage implements IStorage {
       // Remove from pendingTests if exists
       await db.delete(pendingTests).where(eq(pendingTests.barcode, primaryBarcode));
     }
+  }
+
+  async getConditionByBarcode(barcode: string): Promise<string | null> {
+    // Check tested_items first
+    const testedResult = await db
+      .select({ condition: testedItems.condition })
+      .from(testedItems)
+      .where(eq(testedItems.barcode, barcode))
+      .limit(1);
+    
+    if (testedResult.length > 0 && testedResult[0].condition) {
+      return testedResult[0].condition;
+    }
+
+    // Check faulty_stock
+    const faultyResult = await db
+      .select({ condition: faultyStock.condition })
+      .from(faultyStock)
+      .where(eq(faultyStock.barcode, barcode))
+      .limit(1);
+    
+    if (faultyResult.length > 0 && faultyResult[0].condition) {
+      return faultyResult[0].condition;
+    }
+
+    return null;
   }
 
   async deleteItemsByLocation(location: string, userId: string): Promise<number> {

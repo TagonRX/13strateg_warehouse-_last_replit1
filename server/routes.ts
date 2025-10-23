@@ -142,6 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           location,
           sku: validation.data.sku,
           barcode: validation.data.barcode,
+          condition: validation.data.condition,
         });
 
         // Log the event using authenticated user ID
@@ -334,6 +335,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ success: true });
     } catch (error: any) {
       console.error("Delete inventory item error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Get condition by barcode (GET /api/inventory/barcode/:barcode/condition)
+  app.get("/api/inventory/barcode/:barcode/condition", requireAuth, async (req, res) => {
+    try {
+      const { barcode } = req.params;
+      
+      const condition = await storage.getConditionByBarcode(barcode);
+      
+      return res.json({ condition });
+    } catch (error: any) {
+      console.error("Get condition by barcode error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });

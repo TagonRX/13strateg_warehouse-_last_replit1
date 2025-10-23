@@ -3,109 +3,6 @@
 ## Overview
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
-## Recent Changes
-
-### October 22, 2025 (Session 3)
-**Critical Bug Fixes:**
-- **Condition Update Timestamp Preservation**: Fixed analytics data corruption when editing item conditions:
-  - **Root Cause**: When items transitioned between states (Tested→Faulty→Parts), original `firstScanAt` timestamps were lost, causing working minutes to reset to 0
-  - **Schema Field Corrections**: Fixed field names in storage.ts to match schema (firstScanAt/firstScanBy/decisionAt/decisionBy instead of testedBy/testedAt)
-  - **Working Time Calculation**: Changed from fractional hours to integer minutes matching schema definition (`workingHours` stores minutes despite name)
-  - **Priority Chain Implementation**: All timestamp operations now use consistent priority chain: `pendingTests → testedItems → faultyStock → new Date()`
-  - **Impact**: Working minutes now preserved accurately across all condition transitions (New/Used/Exdisplay/Faulty/Parts)
-  - Verified by architect: No data loss, analytics integrity maintained across all transition paths
-- **Location Management Input Freeze**: Fixed UI hanging when typing new locations:
-  - Removed `.toUpperCase()` transformation from onChange handler
-  - Applied CSS class `uppercase` instead for visual display
-  - Eliminated parsing overhead causing input lag
-- **Inventory Edit White Screen**: Fixed crash when editing items in inventory table:
-  - **SelectItem Fix**: Changed empty condition value from `value=""` to `value="-"` (empty string breaks React Select)
-  - **Error Handling**: Added try-catch in saveEdit function to prevent UI crashes
-  - **Condition Conversion**: "-" automatically converts to empty string when saving
-- **Condition Support for Items Without Barcodes**: Extended condition tracking to all inventory items:
-  - **Schema Update**: Added `condition` field to `inventory_items` table for items without barcodes
-  - **Dual Storage**: Items with barcodes use tested_items/faulty_stock tables, items without use inventory_items.condition
-  - **UI Update**: Removed barcode requirement - condition Select now available for all items
-  - **Query Update**: getAllInventoryItems now uses COALESCE to check all three sources: `inventoryItems.condition → testedItems.condition → faultyStock.condition`
-  - **Backend Logic**: updateItemCondition detects barcode presence and routes to appropriate storage
-
-### October 22, 2025 (Session 2)
-**Major Feature Enhancements:**
-- **Location Management Refactor**: Redesigned from text-based to table-based UI with array-based state for optimal performance:
-  - Range filtering with "С...ПО..." inputs for efficient location selection
-  - Single-input add location field with immediate table updates
-  - Array-based state (`locationList: string[]`) eliminates parsing overhead
-  - Collapsible admin sections for Location Management and TSKU/MAXQ Settings
-  - Keyboard-accessible chevron rotation using `group data-[state=open]:rotate-180` pattern
-- **Warehouse Loading Validation**: Added location consistency checks:
-  - Only displays locations from the managed locations list
-  - Memoized `managedLocationsSet` for O(1) location lookups
-  - Warning alerts for items in unmanaged locations
-- **Daily Picking List Enhancements**: Inventory depletion warnings with color-coded rows:
-  - Three-tier warning system: critical (red), warning (yellow), safe (green)
-  - Accounts for already-picked quantities using `remainingQuantity = requiredQuantity - pickedQuantity`
-  - Real-time display of current inventory, remaining to pick, and final quantity after picking
-  - Fixed calculation bug to prevent false warnings for partially/fully picked items
-- **Inventory Condition Editing**: Full condition management in InventoryTable:
-  - Added editable Select dropdown in edit mode with options: New, Used, Exdisplay, Parts, Faulty
-  - Color-coded badges: Blue (New), Green (Exdisplay), Yellow (Used), Gray (Parts), Red (Faulty)
-  - AlertDialog confirmation for Faulty selection with Russian localization
-  - Backend API endpoint (PATCH /api/inventory/:id/condition) with database updates to tested_items/faulty_stock tables
-  - Intelligent data routing: tested_items for New/Used/Exdisplay, faulty_stock for Faulty, both for Parts
-- **Event Logs CSV Export**: Professional data export functionality:
-  - "Экспорт в CSV" button with Download icon
-  - Exports currently filtered logs with all active filters
-  - Semicolon delimiter for Russian Excel compatibility
-  - UTF-8 BOM for proper Cyrillic encoding
-  - Date format: DD.MM.YYYY HH:MM:SS
-  - Proper escaping for special characters (quotes, semicolons, newlines)
-  - Timestamped filenames: logs_YYYYMMDD_HHMMSS.csv
-  - Toast notifications showing export count
-- **Stock-In Form Layout Optimization**: Improved SKU/Location workflow:
-  - Reordered fields: ID товара → Название → SKU + Локация (side-by-side 50%/50%)
-  - Location field now disabled (gray, read-only) with auto-fill from SKU
-  - Removed required asterisk from Location label
-  - Simplified state management by removing manual edit tracking
-  - Visual clarity: Location clearly appears as auto-filled, non-editable field
-
-### October 22, 2025 (Session 1)
-**Performance & UX Improvements:**
-- **Warehouse Loading Filters**: Added 300ms debounce to TSKU/MAXQ filters in WarehouseLoadingView to eliminate input lag. Uses separate immediate UI state (tskuInput/maxqInput) and debounced filtering state (tskuFilter/maxqFilter) for optimal responsiveness.
-- **BarcodeEditor Complete Overhaul**: Replaced auto-save with explicit workflow:
-  - Auto-scan functionality: USB scans trigger on Enter, Camera/Phone scans auto-add to working list
-  - Each scan creates separate entry (even duplicates) with qty=1 for accurate tracking
-  - "Before/After" confirmation modal showing original vs. modified barcode mappings
-  - Explicit "Confirm"/"Cancel" buttons for all changes
-  - Capacity validation on all 5 ingestion paths (USB, Camera, WebSocket, Manual add, Quantity edit) using functional setState updates to prevent stale closures and negative unmappedQuantity values
-  - Real-time counters: Total / Mapped / Unmapped quantities with visual alerts when items remain unmapped
-- **USB Scanner Quantity Feature**: Added bulk barcode creation workflow:
-  - Quantity field allows workers to specify N units before scanning
-  - Single scan creates N separate barcode entries (each with qty=1) for accurate tracking
-  - Focus management: autoFocus on scanner input + onBlur refocus from quantity field
-  - UI guidance: "Укажите количество, затем сканируйте. Будет добавлено столько баркодов, сколько указано."
-  - **Critical Bug Fix**: Resolved stale closure issues in all barcode handlers (handleUsbScan, handleManualAdd, handleUpdateQuantity, handleRemoveBarcode):
-    - All functions now use functional setState updates: `setWorkingBarcodes(prev => ...)`
-    - Barcode values captured before callback: `const barcode = scannedCode;` to prevent stale references
-    - Capacity checks use fresh `currentMapped` computed inside update function
-    - Scanner input now clears correctly after each scan via `setScannedCode("")`
-    - Verified via end-to-end testing: multiple bulk additions work correctly
-- **Enhanced Confirmation Dialog**: Improved barcode change verification:
-  - Shows "Было X товаров / Стало Y товаров" comparison with large, prominent numbers
-  - Quantity mismatch alerts: "Превышение" (red) for overages, "Недостача" (yellow) for shortages
-  - Side-by-side barcode mapping comparison (original vs. modified)
-  - Three action buttons: "Подтвердить изменения" (saves), "Исправить" (returns to editing), "Отменить всё" (discards)
-- **Inventory Condition Display**: Fixed condition field visibility in inventory tables:
-  - Modified getAllInventoryItems() SQL query with dual LEFT JOIN to tested_items and faulty_stock
-  - Uses COALESCE(testedItems.condition, faultyStock.condition) for unified condition retrieval
-  - Condition now displays for all tested products regardless of final destination table
-- **Warehouse Loading View Improvements**: Enhanced location display and management:
-  - **Default Display Logic**: Changed from showing only active locations to showing ALL locations by default
-  - **Optional Active Filter**: Added checkbox "Только активные (N)" for admins to optionally filter by active locations only
-  - **Location Search**: Added search field in admin location management to filter locations by name
-  - **Mass Delete**: Added "Удалить найденные (N)" button to delete all locations matching search filter
-  - **Duplicate Handling**: Fixed index tracking to correctly edit/delete duplicate locations using `{ loc, originalIdx }` pairing before filtering
-  - **Add Location Button Fix**: Fixed "Добавить локацию" button to create visible editable fields with "НОВАЯ" placeholder text
-
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
@@ -118,14 +15,14 @@ The frontend uses React 18 with TypeScript and Vite. It leverages Radix UI primi
 The backend is built with Node.js and Express.js, using TypeScript and ES Modules. It exposes a RESTful JSON API with session-based and Bearer token authentication, featuring role-based middleware. Drizzle ORM manages PostgreSQL database interactions. The project follows a monorepo structure, sharing TypeScript types and utilizing Zod for schema validation. Real-time communication is handled via a WebSocket server for features like remote scanning and picking list synchronization. A unique auto-location extraction feature derives warehouse locations from SKUs.
 
 ### Feature Specifications
-*   **Inventory Management**: Supports bulk imports, real-time updates, location consistency checks, and comprehensive price tracking. An archiving system records all inventory changes.
+*   **Inventory Management**: Supports bulk imports, real-time updates, location consistency checks, and comprehensive price tracking. An archiving system records all inventory changes. Includes automatic condition transfer from testing to stock-in and inventory display, with support for items without barcodes.
 *   **Cost Analytics**: Tracks costs through event logs for stock-in/out operations and worker performance.
-*   **Picking Lists**: Manages daily picking lists with enhanced CSV/Excel/URL import capabilities, global credentials for multiple sources, and persistent selections. Manual collection is also supported.
-*   **Warehouse Loading View**: Provides dynamic filtering and configuration of warehouse settings for capacity analysis.
+*   **Picking Lists**: Manages daily picking lists with enhanced CSV/Excel/URL import capabilities, global credentials for multiple sources, persistent selections, and inventory depletion warnings. Manual collection is also supported.
+*   **Warehouse Loading View**: Provides dynamic filtering, configuration of warehouse settings for capacity analysis, and validation against managed locations.
 *   **User Management**: Includes basic user administration with robust deletion safeguards.
-*   **Event Logging**: A comprehensive audit trail captures all warehouse operations, including product testing, stock movements, and user actions, with full product information and cost traceability.
-*   **Worker Analytics**: Displays key metrics and cost totals for all users.
-*   **Barcode Scanner Workflow**: Supports dual-mode scanning (USB and Phone) with a "zero-leak" routing algorithm for USB scanners and WebSocket integration for mobile camera scanning via a dedicated "/scanner-mode" page.
+*   **Event Logging**: A comprehensive audit trail captures all warehouse operations, including product testing, stock movements, and user actions, with full product information and cost traceability. Supports CSV export.
+*   **Worker Analytics**: Displays key metrics and cost totals for all users, accurately preserving working minutes across condition transitions.
+*   **Barcode Scanner Workflow**: Supports dual-mode scanning (USB and Phone) with a "zero-leak" routing algorithm for USB scanners and WebSocket integration for mobile camera scanning via a dedicated "/scanner-mode" page. Features explicit confirmation modals, quantity-based bulk barcode creation, and capacity validation.
 *   **Product Testing Workflow**: A two-phase system for incoming products, tracking items from pending tests to final condition (Used/Exdisplay/New/Parts/Faulty) with working hours analytics for faulty items.
 
 ### System Design Choices
