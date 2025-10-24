@@ -21,6 +21,7 @@ import RemoteBarcodeScanner from "@/components/RemoteBarcodeScanner";
 import ProductTesting from "@/pages/ProductTesting";
 import FaultyStockPage from "@/pages/FaultyStock";
 import ScannerMode from "@/pages/ScannerMode";
+import Placement from "@/pages/Placement";
 import NotFound from "@/pages/not-found";
 import * as api from "@/lib/api";
 import type { InventoryItem } from "@shared/schema";
@@ -109,9 +110,10 @@ function AppContent() {
       api.createInventoryItem(data),
     onSuccess: () => {
       refetchInventory();
+      queryClient.invalidateQueries({ queryKey: ["/api/pending-placements"] });
       toast({
-        title: "Товар добавлен",
-        description: "Товар успешно добавлен в инвентарь",
+        title: "Товар принят",
+        description: "Товар ожидает размещения",
       });
     },
     onError: (error: Error) => {
@@ -447,6 +449,9 @@ function AppContent() {
         </Route>
         <Route path="/product-testing">
           <ProductTesting />
+        </Route>
+        <Route path="/placement">
+          <Placement />
         </Route>
         {user.role === "admin" && (
           <Route path="/faulty-stock">

@@ -192,6 +192,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Confirm placement (move from pending to inventory)
+  app.post("/api/placements/confirm", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { placementId, location } = req.body;
+
+      if (!placementId) {
+        return res.status(400).json({ error: "Требуется ID размещения" });
+      }
+
+      if (!location) {
+        return res.status(400).json({ error: "Требуется локация" });
+      }
+
+      const inventoryItem = await storage.confirmPlacement(placementId, location, userId);
+      return res.json(inventoryItem);
+    } catch (error: any) {
+      console.error("Confirm placement error:", error);
+      return res.status(500).json({ error: error.message || "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Update inventory item (PATCH)
   app.patch("/api/inventory/:id", requireAuth, async (req, res) => {
     try {

@@ -107,7 +107,8 @@ export default function AppLayout({
 
   const workerMenuItems = [
     { title: "Тестирование товара", url: "/product-testing", icon: TestTube2 },
-    { title: "Приёмка/размещение товара", url: "/stock-in", icon: PackagePlus },
+    { title: "Приёмка товара", url: "/stock-in", icon: PackagePlus },
+    { title: "Размещение товара", url: "/placement", icon: Warehouse },
     { title: "Сборка/Списание", url: "/stock-out", icon: PackageMinus },
     { title: "Picking List", url: "/picking", icon: ClipboardList },
     { title: "Инвентаризация", url: "/inventory", icon: Package },

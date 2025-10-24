@@ -166,6 +166,7 @@ export interface IStorage {
   getAllPendingPlacements(): Promise<PendingPlacement[]>;
   deletePendingPlacement(id: string): Promise<void>;
   getPendingPlacementByBarcode(barcode: string): Promise<PendingPlacement | undefined>;
+  confirmPlacement(placementId: string, location: string, userId: string): Promise<InventoryItem>;
 }
 
 export class DbStorage implements IStorage {
@@ -1640,6 +1641,130 @@ export class DbStorage implements IStorage {
   async getPendingPlacementByBarcode(barcode: string): Promise<PendingPlacement | undefined> {
     const result = await db.select().from(pendingPlacements).where(eq(pendingPlacements.barcode, barcode)).limit(1);
     return result[0];
+  }
+
+  async confirmPlacement(placementId: string, location: string, userId: string): Promise<InventoryItem> {
+    // Get the pending placement
+    const placement = await db.select().from(pendingPlacements).where(eq(pendingPlacements.id, placementId)).limit(1);
+    if (!placement || placement.length === 0) {
+      throw new Error("Placement not found");
+    }
+
+    const p = placement[0];
+
+    // Check if item with same productId already exists in inventory
+    let inventoryItem: InventoryItem;
+    
+    if (p.productId) {
+      const existing = await db.select().from(inventoryItems).where(eq(inventoryItems.productId, p.productId)).limit(1);
+      
+      if (existing && existing.length > 0) {
+        // Update existing item - add quantity
+        const updated = await db.update(inventoryItems)
+          .set({
+            quantity: existing[0].quantity + (p.quantity || 1),
+            location,
+            sku: p.sku,
+            barcode: p.barcode,
+            condition: p.condition,
+          })
+          .where(eq(inventoryItems.productId, p.productId))
+          .returning();
+        
+        inventoryItem = updated[0];
+
+        // Log stock-in update event
+        await db.insert(eventLogs).values({
+          userId,
+          action: "STOCK_IN_UPDATE",
+          details: `Updated ${p.name || p.productId} (${p.productId}): +${p.quantity || 1}`,
+          productId: p.productId,
+          itemName: p.name,
+          sku: p.sku,
+          location,
+          quantity: p.quantity || 1,
+          price: p.price,
+        });
+      } else {
+        // Create new inventory item
+        const created = await db.insert(inventoryItems).values({
+          productId: p.productId,
+          name: p.name,
+          sku: p.sku,
+          location,
+          quantity: p.quantity || 1,
+          barcode: p.barcode,
+          condition: p.condition,
+          price: p.price,
+          length: p.length,
+          width: p.width,
+          height: p.height,
+          volume: p.volume,
+          weight: p.weight,
+          createdBy: p.stockInBy,
+        }).returning();
+
+        inventoryItem = created[0];
+
+        // Log stock-in event
+        await db.insert(eventLogs).values({
+          userId,
+          action: "PLACEMENT",
+          details: `Размещено: ${p.name || p.productId} → ${location}`,
+          productId: p.productId,
+          itemName: p.name,
+          sku: p.sku,
+          location,
+          quantity: p.quantity || 1,
+          price: p.price,
+        });
+      }
+    } else {
+      // No productId - create new inventory item
+      const created = await db.insert(inventoryItems).values({
+        productId: p.barcode, // Use barcode as productId if no productId
+        name: p.name,
+        sku: p.sku,
+        location,
+        quantity: p.quantity || 1,
+        barcode: p.barcode,
+        condition: p.condition,
+        price: p.price,
+        length: p.length,
+        width: p.width,
+        height: p.height,
+        volume: p.volume,
+        weight: p.weight,
+        createdBy: p.stockInBy,
+      }).returning();
+
+      inventoryItem = created[0];
+
+      // Log stock-in event
+      await db.insert(eventLogs).values({
+        userId,
+        action: "PLACEMENT",
+        details: `Размещено: ${p.name || p.barcode} → ${location}`,
+        productId: p.barcode,
+        itemName: p.name,
+        sku: p.sku,
+        location,
+        quantity: p.quantity || 1,
+        price: p.price,
+      });
+    }
+
+    // Delete the pending placement
+    await db.delete(pendingPlacements).where(eq(pendingPlacements.id, placementId));
+
+    // Remove from tested items if exists
+    try {
+      await db.delete(testedItems).where(eq(testedItems.barcode, p.barcode));
+    } catch (error) {
+      // Silently ignore if not found
+    }
+
+    return inventoryItem;
   }
 }
 
