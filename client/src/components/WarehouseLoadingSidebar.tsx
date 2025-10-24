@@ -326,16 +326,11 @@ export default function WarehouseLoadingSidebar() {
                   className={`rounded border p-1 text-center ${getLocationColor(group)}`}
                   data-testid={`location-${group.location}`}
                 >
-                  <div className="font-mono font-semibold" style={{ fontSize: "10px" }}>
+                  <div className="font-mono font-semibold" style={{ fontSize: "11px" }}>
                     {group.location}
                   </div>
-                  <div className="text-xs">
-                    <div style={{ fontSize: "9px" }}>
-                      SKU: {group.skuCount}
-                    </div>
-                    <div style={{ fontSize: "9px" }}>
-                      Qty: {group.totalQuantity}
-                    </div>
+                  <div style={{ fontSize: "9px" }}>
+                    TSKU: {group.skuCount} | Qty: {group.totalQuantity}
                   </div>
                 </div>
               ))}
