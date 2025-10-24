@@ -756,6 +756,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/warehouse/active-locations/:location/barcode", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { location } = req.params;
+      const { barcode } = req.body;
+
+      const updated = await storage.updateLocationBarcode(location, barcode || null);
+      return res.json(updated);
+    } catch (error: any) {
+      console.error("Update location barcode error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   app.delete("/api/warehouse/active-locations", requireAuth, requireAdmin, async (req, res) => {
     try {
       await storage.clearActiveLocations();

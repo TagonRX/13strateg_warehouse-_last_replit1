@@ -114,7 +114,8 @@ export interface IStorage {
 
   // Active Locations
   getAllActiveLocations(): Promise<ActiveLocation[]>;
-  setActiveLocations(locations: string[]): Promise<void>;
+  setActiveLocations(locations: { location: string; barcode?: string }[]): Promise<void>;
+  updateLocationBarcode(location: string, barcode: string | null): Promise<ActiveLocation>;
   clearActiveLocations(): Promise<void>;
 
   // Picking List methods
@@ -1451,18 +1452,28 @@ export class DbStorage implements IStorage {
       .orderBy(activeLocations.location);
   }
 
-  async setActiveLocations(locations: string[]): Promise<void> {
+  async setActiveLocations(locations: { location: string; barcode?: string }[]): Promise<void> {
     // Clear all existing active locations
     await db.delete(activeLocations);
 
     // Insert new active locations
     if (locations.length > 0) {
       const values = locations.map(loc => ({
-        location: loc.toUpperCase(),
+        location: loc.location.toUpperCase(),
+        barcode: loc.barcode || null,
         isActive: true,
       }));
       await db.insert(activeLocations).values(values);
     }
+  }
+
+  async updateLocationBarcode(location: string, barcode: string | null): Promise<ActiveLocation> {
+    const result = await db
+      .update(activeLocations)
+      .set({ barcode, updatedAt: new Date() })
+      .where(eq(activeLocations.location, location.toUpperCase()))
+      .returning();
+    return result[0];
   }
 
   async clearActiveLocations(): Promise<void> {
