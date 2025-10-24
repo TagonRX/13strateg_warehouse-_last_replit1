@@ -30,8 +30,7 @@ interface StockInFormProps {
     sku: string;
     location: string;
     quantity: number;
-    barcode?: string;
-    condition?: string;
+    barcode: string;
   }) => void;
 }
 
@@ -227,8 +226,13 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
     e.preventDefault();
     
     if (isBulkMode) {
-      // В режиме массового добавления
+      // Массовый режим требует баркоды
       if (!sku || !location || scannedBarcodes.length === 0) {
+        toast({
+          title: "Ошибка",
+          description: "Заполните все обязательные поля",
+          variant: "destructive",
+        });
         return;
       }
       
@@ -238,8 +242,7 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         sku,
         location,
         quantity: scannedBarcodes.length,
-        barcode: scannedBarcodes[0] || undefined,
-        condition: condition || undefined,
+        barcode: scannedBarcodes[0],
       });
       
       // Очистка формы
@@ -250,15 +253,23 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
       setScannedBarcodes([]);
       setCondition("");
     } else {
-      // Обычный режим
+      // Обычный режим требует баркод
+      if (!sku || !barcode) {
+        toast({
+          title: "Ошибка",
+          description: "Требуется SKU и штрихкод товара",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       onSubmit({
         productId: productId || undefined,
         name: name || undefined,
         sku,
         location,
         quantity,
-        barcode: barcode || undefined,
-        condition: condition || undefined,
+        barcode,
       });
       
       // Очистка формы
