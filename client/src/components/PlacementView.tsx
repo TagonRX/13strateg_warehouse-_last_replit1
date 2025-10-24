@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Usb, Smartphone, Wifi, Check, X, Package } from "lucide-react";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -175,28 +176,51 @@ export default function PlacementView() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Scanner Mode Toggle */}
-              <div className="flex gap-2">
-                <Button
-                  variant={scannerMode === "usb" ? "default" : "outline"}
-                  onClick={() => setScannerMode("usb")}
-                  className="flex-1 gap-2"
-                  data-testid="button-scanner-usb"
-                >
-                  <Usb className="w-4 h-4" />
-                  USB Сканер
-                </Button>
-                <Button
-                  variant={scannerMode === "phone" ? "default" : "outline"}
-                  onClick={() => setScannerMode("phone")}
-                  className="flex-1 gap-2"
-                  data-testid="button-scanner-phone"
-                >
-                  <Smartphone className="w-4 h-4" />
-                  Телефон
-                  {scannerMode === "phone" && (
-                    <Wifi className={`w-4 h-4 ${isPhoneConnected ? "text-green-500" : "text-red-500"}`} />
-                  )}
-                </Button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={scannerMode === "usb" ? "default" : "outline"}
+                        onClick={() => setScannerMode("usb")}
+                        className="flex-1 gap-2"
+                        data-testid="button-scanner-usb"
+                      >
+                        <Usb className="w-4 h-4" />
+                        Сканер
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p data-testid="tooltip-scanner-mode-usb">USB сканер, Zebra TC57 и другие устройства с эмуляцией клавиатуры</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={scannerMode === "phone" ? "default" : "outline"}
+                        onClick={() => setScannerMode("phone")}
+                        className="flex-1 gap-2"
+                        data-testid="button-scanner-phone"
+                      >
+                        <Smartphone className="w-4 h-4" />
+                        Камера
+                        {scannerMode === "phone" && (
+                          <Wifi className={`w-4 h-4 ${isPhoneConnected ? "text-green-500" : "text-red-500"}`} />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p data-testid="tooltip-scanner-mode-phone">Сканирование через камеру смартфона (требуется WebSocket подключение)</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <p className="text-xs text-muted-foreground text-center" data-testid="text-scanner-mode-help">
+                  {scannerMode === "usb" 
+                    ? "Режим для USB сканеров, Zebra TC57 и других устройств с эмуляцией клавиатуры"
+                    : "Режим для сканирования камерой смартфона через WebSocket"
+                  }
+                </p>
               </div>
 
               {/* Step 1: Scan Item */}
@@ -216,7 +240,7 @@ export default function PlacementView() {
                       value={scannedBarcode}
                       onChange={(e) => setScannedBarcode(e.target.value)}
                       onKeyDown={handleBarcodeKeyDown}
-                      placeholder={scannerMode === "usb" ? "Отсканируйте или введите" : "Отсканируйте с телефона"}
+                      placeholder={scannerMode === "usb" ? "Отсканируйте сканером или введите вручную" : "Отсканируйте камерой телефона"}
                       className="font-mono"
                       readOnly={scannerMode === "phone"}
                       data-testid="input-item-barcode"
@@ -265,7 +289,7 @@ export default function PlacementView() {
                       value={scannedLocation}
                       onChange={(e) => setScannedLocation(e.target.value.toUpperCase())}
                       onKeyDown={handleLocationKeyDown}
-                      placeholder={scannerMode === "usb" ? "Отсканируйте или введите" : "Отсканируйте с телефона"}
+                      placeholder={scannerMode === "usb" ? "Отсканируйте сканером или введите вручную" : "Отсканируйте камерой телефона"}
                       className="font-mono"
                       readOnly={scannerMode === "phone"}
                       data-testid="input-location-barcode"
