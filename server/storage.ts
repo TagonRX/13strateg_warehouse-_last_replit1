@@ -13,6 +13,7 @@ import {
   pendingTests,
   testedItems,
   faultyStock,
+  pendingPlacements,
   type User, 
   type InsertUser,
   type InventoryItem,
@@ -38,7 +39,9 @@ import {
   type TestedItem,
   type InsertTestedItem,
   type FaultyStock,
-  type InsertFaultyStock
+  type InsertFaultyStock,
+  type PendingPlacement,
+  type InsertPendingPlacement
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ilike, getTableColumns } from "drizzle-orm";
 
@@ -157,6 +160,12 @@ export interface IStorage {
   getAllFaultyStock(): Promise<FaultyStock[]>;
   deleteFaultyStockItem(id: string): Promise<void>;
   deleteAllFaultyStock(condition: string): Promise<number>;
+  
+  // Pending Placements methods
+  createPendingPlacement(placement: InsertPendingPlacement): Promise<PendingPlacement>;
+  getAllPendingPlacements(): Promise<PendingPlacement[]>;
+  deletePendingPlacement(id: string): Promise<void>;
+  getPendingPlacementByBarcode(barcode: string): Promise<PendingPlacement | undefined>;
 }
 
 export class DbStorage implements IStorage {
@@ -1612,6 +1621,25 @@ export class DbStorage implements IStorage {
     }
     
     return count;
+  }
+
+  // Pending Placements methods
+  async createPendingPlacement(placement: InsertPendingPlacement): Promise<PendingPlacement> {
+    const result = await db.insert(pendingPlacements).values(placement).returning();
+    return result[0];
+  }
+
+  async getAllPendingPlacements(): Promise<PendingPlacement[]> {
+    return await db.select().from(pendingPlacements).orderBy(pendingPlacements.stockInAt);
+  }
+
+  async deletePendingPlacement(id: string): Promise<void> {
+    await db.delete(pendingPlacements).where(eq(pendingPlacements.id, id));
+  }
+
+  async getPendingPlacementByBarcode(barcode: string): Promise<PendingPlacement | undefined> {
+    const result = await db.select().from(pendingPlacements).where(eq(pendingPlacements.barcode, barcode)).limit(1);
+    return result[0];
   }
 }
 

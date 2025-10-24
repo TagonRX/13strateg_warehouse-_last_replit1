@@ -109,102 +109,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/inventory", requireAuth, async (req, res) => {
     try {
-      const userId = (req as any).userId; // From requireAuth middleware
+      const userId = (req as any).userId;
       
-      const validation = insertInventoryItemSchema.safeParse(req.body);
-      
-      if (!validation.success) {
-        const error = fromZodError(validation.error);
-        return res.status(400).json({ error: error.message });
+      const { barcode, sku, productId, name, quantity, price, length, width, height, weight } = req.body;
+
+      if (!barcode) {
+        return res.status(400).json({ error: "Требуется штрихкод" });
+      }
+
+      if (!sku) {
+        return res.status(400).json({ error: "Требуется SKU" });
       }
 
       // Check if item is still in pending tests
-      if (validation.data.barcode) {
-        const pendingTest = await storage.getPendingTestByBarcode(validation.data.barcode);
-        if (pendingTest) {
-          return res.status(400).json({ 
-            error: "Товар находится на тестировании. Завершите тестирование перед размещением." 
-          });
-        }
+      const pendingTest = await storage.getPendingTestByBarcode(barcode);
+      if (pendingTest) {
+        return res.status(400).json({ 
+          error: "Товар находится на тестировании. Завершите тестирование перед размещением." 
+        });
       }
 
-      // Check if item with same productId already exists
-      const existing = validation.data.productId 
-        ? await storage.getInventoryItemByProductId(validation.data.productId)
-        : undefined;
-      
-      if (existing && validation.data.productId) {
-        // Update existing item
-        const quantityToAdd = validation.data.quantity ?? 1;
-        const location = validation.data.location || extractLocationFromSKU(validation.data.sku);
-        const updated = await storage.updateInventoryItem(validation.data.productId, {
-          quantity: existing.quantity + quantityToAdd,
-          location,
-          sku: validation.data.sku,
-          barcode: validation.data.barcode,
-          condition: validation.data.condition,
+      // Get condition from tested items (automatically)
+      const condition = await storage.getConditionByBarcode(barcode);
+      if (!condition) {
+        return res.status(400).json({ 
+          error: "Состояние товара не найдено. Сначала протестируйте товар." 
         });
-
-        // Log the event using authenticated user ID
-        // Use price from request if provided, otherwise use existing item's price
-        await storage.createEventLog({
-          userId,
-          action: "STOCK_IN_UPDATE",
-          details: `Updated ${validation.data.name} (${validation.data.productId}): +${quantityToAdd}`,
-          productId: validation.data.productId || null,
-          itemName: validation.data.name || null,
-          sku: validation.data.sku,
-          location,
-          quantity: quantityToAdd,
-          price: validation.data.price !== undefined ? validation.data.price : existing.price,
-        });
-
-        // Remove from pending tests if barcode matches
-        if (validation.data.barcode) {
-          try {
-            await storage.removePendingTestByBarcode(validation.data.barcode);
-          } catch (error) {
-            // Silently ignore if not in pending tests
-          }
-        }
-
-        return res.json(updated);
-      } else {
-        // Create new item with authenticated user ID
-        // Extract location from SKU if not provided
-        const location = validation.data.location || extractLocationFromSKU(validation.data.sku);
-        const item = await storage.createInventoryItem({
-          ...validation.data,
-          location,
-          createdBy: userId,
-        });
-
-        // Log the event using authenticated user ID
-        await storage.createEventLog({
-          userId,
-          action: "STOCK_IN",
-          details: `Added ${validation.data.name} (${validation.data.productId}): ${validation.data.quantity}`,
-          productId: validation.data.productId || null,
-          itemName: validation.data.name || null,
-          sku: validation.data.sku,
-          location,
-          quantity: validation.data.quantity || null,
-          price: validation.data.price || null,
-        });
-
-        // Remove from pending tests if barcode matches
-        if (validation.data.barcode) {
-          try {
-            await storage.removePendingTestByBarcode(validation.data.barcode);
-          } catch (error) {
-            // Silently ignore if not in pending tests
-          }
-        }
-
-        return res.status(201).json(item);
       }
+
+      // Extract location from SKU
+      const location = extractLocationFromSKU(sku);
+
+      // Calculate volume
+      const volume = (length && width && height) ? length * width * height : null;
+
+      // Create pending placement
+      const placement = await storage.createPendingPlacement({
+        barcode,
+        sku,
+        location,
+        productId: productId || null,
+        name: name || null,
+        condition,
+        quantity: quantity || 1,
+        price: price || null,
+        length: length || null,
+        width: width || null,
+        height: height || null,
+        volume,
+        weight: weight || null,
+        stockInBy: userId,
+      });
+
+      // Log the event
+      await storage.createEventLog({
+        userId,
+        action: "STOCK_IN",
+        details: `Принято на склад: ${name || productId || barcode} (ожидает размещения)`,
+        productId: productId || null,
+        itemName: name || null,
+        sku,
+        location,
+        quantity: quantity || 1,
+        price: price || null,
+      });
+
+      return res.status(201).json(placement);
     } catch (error: any) {
-      console.error("Create inventory item error:", error);
+      console.error("Create pending placement error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Get pending placements
+  app.get("/api/pending-placements", requireAuth, async (req, res) => {
+    try {
+      const placements = await storage.getAllPendingPlacements();
+      return res.json(placements);
+    } catch (error: any) {
+      console.error("Get pending placements error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });

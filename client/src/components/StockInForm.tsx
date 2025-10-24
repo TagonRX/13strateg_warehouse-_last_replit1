@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,7 @@ import { Package, Trash2, Usb, Smartphone, Wifi, AlertTriangle } from "lucide-re
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToast } from "@/hooks/use-toast";
+import type { PendingPlacement } from "@shared/schema";
 
 interface StockInFormProps {
   onSubmit: (data: {
@@ -56,6 +58,11 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
 
   // WebSocket for phone mode
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
+
+  // Fetch pending placements
+  const { data: pendingPlacements = [], isLoading: loadingPlacements } = useQuery<PendingPlacement[]>({
+    queryKey: ["/api/pending-placements"],
+  });
 
   // Строгая маршрутизация: данные со сканера ТОЛЬКО в barcode поле
   // В USB режиме работает глобальная маршрутизация
@@ -587,6 +594,62 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    {/* Список товаров ожидающих размещения */}
+    {pendingPlacements.length > 0 && (
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-lg">
+            Товары ожидают размещения ({pendingPlacements.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="border rounded-md overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Штрихкод</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Название</TableHead>
+                  <TableHead>Состояние</TableHead>
+                  <TableHead>Кол-во</TableHead>
+                  <TableHead>Локация</TableHead>
+                  <TableHead>Принято</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loadingPlacements ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      Загрузка...
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  pendingPlacements.map((placement) => (
+                    <TableRow key={placement.id} data-testid={`row-pending-${placement.id}`}>
+                      <TableCell className="font-mono text-sm">{placement.barcode}</TableCell>
+                      <TableCell className="font-mono text-sm">{placement.sku}</TableCell>
+                      <TableCell className="text-sm">{placement.name || "-"}</TableCell>
+                      <TableCell className="text-sm">{placement.condition}</TableCell>
+                      <TableCell className="text-sm">{placement.quantity}</TableCell>
+                      <TableCell className="font-mono text-sm">{placement.location}</TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {new Date(placement.stockInAt).toLocaleString("ru-RU", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    )}
     </>
   );
 }
