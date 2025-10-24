@@ -1434,6 +1434,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create event log
+  app.post("/api/event-logs", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      
+      const validation = insertEventLogSchema.safeParse({
+        userId,
+        ...req.body,
+      });
+
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: "Неверные данные", 
+          details: fromZodError(validation.error).toString() 
+        });
+      }
+
+      const log = await storage.createEventLog(validation.data);
+      return res.status(201).json(log);
+    } catch (error: any) {
+      console.error("Create event log error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Worker analytics (admin only)
   app.get("/api/analytics", requireAuth, requireAdmin, async (req, res) => {
     try {

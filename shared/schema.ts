@@ -39,7 +39,7 @@ export const inventoryItems = pgTable("inventory_items", {
 export const eventLogs = pgTable("event_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id),
-  action: text("action").notNull(), // STOCK_IN, STOCK_OUT, CSV_UPLOAD, etc
+  action: text("action").notNull(), // STOCK_IN, STOCK_OUT, CSV_UPLOAD, CONDITION_OVERRIDE, etc
   details: text("details").notNull(),
   // Дополнительная информация о товаре для отслеживания истории
   productId: text("product_id"), // ID товара (для отслеживания одного товара с разными SKU)
@@ -48,6 +48,7 @@ export const eventLogs = pgTable("event_logs", {
   location: text("location"), // Локация на момент действия
   quantity: integer("quantity"), // Количество товара на момент действия
   price: integer("price"), // Цена товара на момент действия
+  isWarning: boolean("is_warning").notNull().default(false), // Критическое событие (подсветка красным для админа)
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

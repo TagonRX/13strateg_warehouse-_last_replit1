@@ -276,10 +276,29 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
     setShowConditionChangeDialog(false);
   };
 
-  const handleConditionChange = (newCondition: string) => {
+  const handleConditionChange = async (newCondition: string) => {
     // Изменить состояние и записать в лог
     setCondition(newCondition);
     setShowConditionChangeDialog(false);
+    
+    // Логировать изменение состояния (критическое событие)
+    try {
+      await fetch("/api/event-logs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          action: "CONDITION_OVERRIDE",
+          details: `Работник изменил состояние товара с "${detectedCondition}" на "${newCondition}" (баркод: ${barcode})`,
+          productId: productId || undefined,
+          isWarning: true, // Критическое событие - подсветка красным
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to log condition change:", error);
+    }
     
     toast({
       title: "Состояние изменено",

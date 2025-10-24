@@ -240,7 +240,11 @@ export default function EventLogsView({ users }: EventLogsViewProps) {
                 </TableRow>
               ) : (
                 logs.map((log) => (
-                  <TableRow key={log.id} data-testid={`row-log-${log.id}`}>
+                  <TableRow 
+                    key={log.id} 
+                    data-testid={`row-log-${log.id}`}
+                    className={log.isWarning ? "bg-destructive/10 hover:bg-destructive/15" : ""}
+                  >
                     <TableCell className="font-mono text-sm whitespace-nowrap">
                       {new Date(log.createdAt).toLocaleString("ru-RU")}
                     </TableCell>
@@ -248,7 +252,10 @@ export default function EventLogsView({ users }: EventLogsViewProps) {
                       {getUserName(log.userId)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getActionBadge(log.action)} data-testid={`badge-action-${log.id}`}>
+                      <Badge 
+                        variant={log.isWarning ? "destructive" : getActionBadge(log.action)} 
+                        data-testid={`badge-action-${log.id}`}
+                      >
                         {log.action}
                       </Badge>
                     </TableCell>
@@ -264,7 +271,7 @@ export default function EventLogsView({ users }: EventLogsViewProps) {
                     <TableCell className="font-mono text-sm" data-testid={`text-location-${log.id}`}>
                       {log.location || "-"}
                     </TableCell>
-                    <TableCell className="text-sm" data-testid={`text-details-${log.id}`}>
+                    <TableCell className={`text-sm ${log.isWarning ? "font-semibold text-destructive" : ""}`} data-testid={`text-details-${log.id}`}>
                       {log.details}
                     </TableCell>
                   </TableRow>
