@@ -178,6 +178,26 @@ export const faultyStock = pgTable("faulty_stock", {
   workingHours: integer("working_hours").notNull(), // Рабочие часы между первым и вторым сканированием (в минутах)
 });
 
+// Товары ожидающие размещения (после Stock-In, до Placement)
+export const pendingPlacements = pgTable("pending_placements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  barcode: text("barcode").notNull(),
+  sku: text("sku").notNull(), // Целевой SKU для размещения
+  location: text("location").notNull(), // Целевая локация (из SKU)
+  productId: text("product_id"),
+  name: text("name"),
+  condition: text("condition").notNull(), // Used, Exdisplay, New, Parts (автоматически из testedItems)
+  quantity: integer("quantity").notNull().default(1),
+  price: integer("price"),
+  length: integer("length"),
+  width: integer("width"),
+  height: integer("height"),
+  volume: integer("volume"),
+  weight: integer("weight"),
+  stockInAt: timestamp("stock_in_at").defaultNow().notNull(), // Когда принято на склад
+  stockInBy: varchar("stock_in_by").references(() => users.id).notNull(), // Кто принял
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -250,6 +270,11 @@ export const insertFaultyStockSchema = createInsertSchema(faultyStock).omit({
   decisionAt: true,
 });
 
+export const insertPendingPlacementSchema = createInsertSchema(pendingPlacements).omit({
+  id: true,
+  stockInAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -289,3 +314,6 @@ export type TestedItem = typeof testedItems.$inferSelect;
 
 export type InsertFaultyStock = z.infer<typeof insertFaultyStockSchema>;
 export type FaultyStock = typeof faultyStock.$inferSelect;
+
+export type InsertPendingPlacement = z.infer<typeof insertPendingPlacementSchema>;
+export type PendingPlacement = typeof pendingPlacements.$inferSelect;
