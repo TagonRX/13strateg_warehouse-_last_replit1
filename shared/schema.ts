@@ -114,6 +114,7 @@ export const warehouseSettings = pgTable("warehouse_settings", {
 export const activeLocations = pgTable("active_locations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   location: text("location").notNull().unique(), // Например: "A101", "B102"
+  barcode: text("barcode"), // Баркод локации для проверки при размещении
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
