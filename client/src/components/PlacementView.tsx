@@ -27,19 +27,9 @@ export default function PlacementView() {
   const { toast } = useToast();
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
 
-  // Filters for warehouse loading sidebar
-  const [filterLetter, setFilterLetter] = useState("");
-  const [filterSKU, setFilterSKU] = useState("");
-  const [filterMaxQ, setFilterMaxQ] = useState("");
-
   // Fetch pending placements
   const { data: pendingPlacements = [] } = useQuery<PendingPlacement[]>({
     queryKey: ["/api/pending-placements"],
-  });
-
-  // Fetch inventory for warehouse loading
-  const { data: inventory = [] } = useQuery<InventoryItem[]>({
-    queryKey: ["/api/inventory"],
   });
 
   // Global barcode input routing for USB mode
@@ -173,108 +163,8 @@ export default function PlacementView() {
     }
   };
 
-  // Filter warehouse loading
-  const filteredInventory = inventory.filter((item) => {
-    if (filterLetter && !item.location.startsWith(filterLetter.toUpperCase())) {
-      return false;
-    }
-    if (filterSKU && !item.sku.toLowerCase().includes(filterSKU.toLowerCase())) {
-      return false;
-    }
-    if (filterMaxQ && item.quantity > parseInt(filterMaxQ)) {
-      return false;
-    }
-    return true;
-  });
-
-  // Group by location for warehouse loading
-  const locationGroups = filteredInventory.reduce((acc, item) => {
-    const loc = item.location;
-    if (!acc[loc]) {
-      acc[loc] = { count: 0, totalQty: 0 };
-    }
-    acc[loc].count += 1;
-    acc[loc].totalQty += item.quantity;
-    return acc;
-  }, {} as Record<string, { count: number; totalQty: number }>);
-
   return (
-    <div className="flex h-full">
-      {/* Left Sidebar - Warehouse Loading */}
-      <div className="w-80 border-r bg-muted/50 flex flex-col">
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold">Загрузка склада</h2>
-        </div>
-        
-        <div className="p-4 space-y-3 border-b">
-          <div className="space-y-2">
-            <Label htmlFor="filter-letter" className="text-sm">Буква локации</Label>
-            <Input
-              id="filter-letter"
-              value={filterLetter}
-              onChange={(e) => setFilterLetter(e.target.value.toUpperCase())}
-              placeholder="A"
-              maxLength={1}
-              data-testid="input-filter-letter"
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="filter-sku" className="text-sm">SKU содержит</Label>
-            <Input
-              id="filter-sku"
-              value={filterSKU}
-              onChange={(e) => setFilterSKU(e.target.value)}
-              placeholder="Введите часть SKU"
-              data-testid="input-filter-sku"
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="filter-maxq" className="text-sm">Макс. кол-во</Label>
-            <Input
-              id="filter-maxq"
-              type="number"
-              value={filterMaxQ}
-              onChange={(e) => setFilterMaxQ(e.target.value)}
-              placeholder="10"
-              data-testid="input-filter-maxq"
-            />
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setFilterLetter("");
-              setFilterSKU("");
-              setFilterMaxQ("");
-            }}
-            className="w-full"
-            data-testid="button-reset-filters"
-          >
-            Сбросить фильтры
-          </Button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-2">
-            {Object.entries(locationGroups).map(([location, data]) => (
-              <Card key={location} className="p-3">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono font-semibold">{location}</span>
-                  <div className="text-sm text-muted-foreground">
-                    {data.count} товаров, {data.totalQty} шт.
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content - Placement Form */}
-      <div className="flex-1 p-6 overflow-y-auto">
+    <div className="p-6 overflow-y-auto">
         <div className="max-w-2xl mx-auto space-y-6">
           <Card>
             <CardHeader>
@@ -464,7 +354,6 @@ export default function PlacementView() {
             </Card>
           )}
         </div>
-      </div>
     </div>
   );
 }

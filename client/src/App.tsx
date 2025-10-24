@@ -9,6 +9,7 @@ import LoginForm from "@/components/LoginForm";
 import AppLayout from "@/components/AppLayout";
 import StockInForm from "@/components/StockInForm";
 import CSVUploader from "@/components/CSVUploader";
+import WarehouseLoadingSidebar from "@/components/WarehouseLoadingSidebar";
 import InventoryTable from "@/components/InventoryTable";
 import WarehouseLoadingView from "@/components/WarehouseLoadingView";
 import UserManagementPanel from "@/components/UserManagementPanel";
@@ -381,9 +382,17 @@ function AppContent() {
           </div>
         </Route>
         <Route path="/stock-in">
-          <div className="space-y-4">
-            <h1 className="text-3xl font-bold">Приход товара</h1>
-            <StockInForm onSubmit={handleStockIn} />
+          <div className="flex h-full">
+            {/* Right Sidebar - Warehouse Loading */}
+            <div className="flex-1 overflow-auto">
+              <div className="space-y-4 p-6">
+                <h1 className="text-3xl font-bold">Приход товара</h1>
+                <StockInForm onSubmit={handleStockIn} />
+              </div>
+            </div>
+            <div className="w-96 border-l bg-muted/50 flex flex-col overflow-auto">
+              <WarehouseLoadingSidebar />
+            </div>
           </div>
         </Route>
         <Route path="/bulk-upload">
