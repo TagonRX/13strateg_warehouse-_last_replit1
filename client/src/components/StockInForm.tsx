@@ -5,9 +5,20 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, Trash2, Usb, Smartphone, Wifi } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Package, Trash2, Usb, Smartphone, Wifi, AlertTriangle } from "lucide-react";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useToast } from "@/hooks/use-toast";
 
 interface StockInFormProps {
   onSubmit: (data: {
@@ -36,6 +47,12 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
   // Bulk mode states
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [scannedBarcodes, setScannedBarcodes] = useState<string[]>([]);
+  
+  // Condition check states
+  const [showFaultyWarning, setShowFaultyWarning] = useState(false);
+  const [showConditionChangeDialog, setShowConditionChangeDialog] = useState(false);
+  const [detectedCondition, setDetectedCondition] = useState<string>("");
+  const { toast } = useToast();
 
   // WebSocket for phone mode
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
@@ -94,12 +111,27 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         if (response.ok) {
           const data = await response.json();
           // Проверить что ответ соответствует текущему баркоду (предотвращает race condition)
-          if (currentBarcode === barcode) {
-            if (data.condition) {
+          if (currentBarcode === barcode && data.condition) {
+            setDetectedCondition(data.condition);
+            
+            // Проверка на Faulty - блокировать добавление
+            if (data.condition === "Faulty") {
+              setShowFaultyWarning(true);
+              setCondition("");
+              return;
+            }
+            
+            // Если товар с хорошим состоянием - предложить изменить
+            if (data.condition === "New" || data.condition === "Used" || 
+                data.condition === "Exdisplay" || data.condition === "Parts") {
+              setShowConditionChangeDialog(true);
               setCondition(data.condition);
             } else {
-              setCondition("");
+              setCondition(data.condition);
             }
+          } else if (currentBarcode === barcode) {
+            setCondition("");
+            setDetectedCondition("");
           }
         }
       } catch (error) {
@@ -127,12 +159,28 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         if (response.ok) {
           const data = await response.json();
           // Проверить что первый баркод не изменился
-          if (scannedBarcodes.length > 0 && scannedBarcodes[0] === firstBarcode) {
-            if (data.condition) {
+          if (scannedBarcodes.length > 0 && scannedBarcodes[0] === firstBarcode && data.condition) {
+            setDetectedCondition(data.condition);
+            
+            // Проверка на Faulty - очистить и предупредить
+            if (data.condition === "Faulty") {
+              setShowFaultyWarning(true);
+              setScannedBarcodes([]);
+              setCondition("");
+              return;
+            }
+            
+            // Если товар с хорошим состоянием - предложить изменить
+            if (data.condition === "New" || data.condition === "Used" || 
+                data.condition === "Exdisplay" || data.condition === "Parts") {
+              setShowConditionChangeDialog(true);
               setCondition(data.condition);
             } else {
-              setCondition("");
+              setCondition(data.condition);
             }
+          } else if (scannedBarcodes.length > 0 && scannedBarcodes[0] === firstBarcode) {
+            setCondition("");
+            setDetectedCondition("");
           }
         }
       } catch (error) {
@@ -216,7 +264,32 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
     }
   };
 
+  // Обработчики диалогов
+  const handleFaultyClose = () => {
+    setShowFaultyWarning(false);
+    setBarcode("");
+    setDetectedCondition("");
+  };
+
+  const handleConditionKeep = () => {
+    // Оставить текущее состояние и продолжить
+    setShowConditionChangeDialog(false);
+  };
+
+  const handleConditionChange = (newCondition: string) => {
+    // Изменить состояние и записать в лог
+    setCondition(newCondition);
+    setShowConditionChangeDialog(false);
+    
+    toast({
+      title: "Состояние изменено",
+      description: `Состояние изменено с "${detectedCondition}" на "${newCondition}"`,
+      variant: "default",
+    });
+  };
+
   return (
+    <>
     <Card>
       <CardHeader className="space-y-3 pb-3">
         <div className="flex flex-row items-center justify-between">
@@ -433,5 +506,68 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         )}
       </CardContent>
     </Card>
+
+    {/* Диалог предупреждения о Faulty товаре */}
+    <AlertDialog open={showFaultyWarning} onOpenChange={setShowFaultyWarning}>
+      <AlertDialogContent data-testid="dialog-faulty-warning" className="bg-destructive/10 border-destructive">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="w-5 h-5" />
+            Неисправный товар
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-base">
+            Отсканированный баркод принадлежит товару с состоянием <strong className="text-destructive">Faulty</strong>.
+            <br /><br />
+            Этот товар не может быть добавлен в инвентарь. Пожалуйста, отложите его в зону для неисправных товаров.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction onClick={handleFaultyClose} data-testid="button-close-faulty">
+            Понятно
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Диалог изменения состояния */}
+    <AlertDialog open={showConditionChangeDialog} onOpenChange={setShowConditionChangeDialog}>
+      <AlertDialogContent data-testid="dialog-condition-change">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Баркод уже зарегистрирован</AlertDialogTitle>
+          <AlertDialogDescription>
+            Этот баркод уже связан с товаром в состоянии <strong className="text-primary">{detectedCondition}</strong>.
+            <br /><br />
+            Вы можете:
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="grid gap-2 py-4">
+          <Button 
+            variant="outline" 
+            onClick={handleConditionKeep}
+            data-testid="button-keep-condition"
+          >
+            Оставить {detectedCondition}
+          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            {["New", "Used", "Exdisplay", "Parts"].filter(c => c !== detectedCondition).map(cond => (
+              <Button
+                key={cond}
+                variant="secondary"
+                onClick={() => handleConditionChange(cond)}
+                data-testid={`button-change-to-${cond}`}
+              >
+                Изменить на {cond}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="button-cancel-condition">
+            Отмена
+          </AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
