@@ -12,6 +12,9 @@ import { FileUp, List, Trash2, CheckCircle2, Circle, Download, Plus, X, ChevronD
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import type { PickingList, PickingTask, InventoryItem } from "@shared/schema";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -27,7 +30,7 @@ export default function DailyPickingView() {
   const [csvText, setCsvText] = useState("");
   const [listName, setListName] = useState(getTodayDate());
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
-  const [letterFilter, setLetterFilter] = useState<string>("all");
+  const [letterFilter, setLetterFilter] = useState<string[]>([]);
   const [pageLimit, setPageLimit] = useState<string>("50");
   const [lastResult, setLastResult] = useState<any>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
@@ -498,11 +501,19 @@ export default function DailyPickingView() {
     return { level: 'safe' as const, finalQty, currentQty, remainingQuantity };
   };
 
+  // Get available letters from current list
+  const availableLetters = useMemo(() => {
+    if (!currentList) return [];
+    const letters = new Set(currentList.tasks.map(t => t.sku.charAt(0).toUpperCase()));
+    return Array.from(letters).sort();
+  }, [currentList]);
+
   // Filter tasks
   const filteredTasks = currentList?.tasks
     .filter(task => {
-      if (letterFilter === "all") return true;
-      return task.sku.toUpperCase().startsWith(letterFilter);
+      if (letterFilter.length === 0) return true;
+      const firstLetter = task.sku.charAt(0).toUpperCase();
+      return letterFilter.includes(firstLetter);
     })
     .slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit)) || [];
 
@@ -750,20 +761,74 @@ export default function DailyPickingView() {
 
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
                   <CardTitle>Picking Tasks</CardTitle>
-                  <div className="flex gap-2">
-                    <Select value={letterFilter} onValueChange={setLetterFilter}>
-                      <SelectTrigger data-testid="select-letter-filter" className="w-24">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        {Array.from(new Set(currentList.tasks.map(t => t.sku.charAt(0).toUpperCase()))).sort().map(letter => (
-                          <SelectItem key={letter} value={letter}>{letter}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="flex gap-2 items-center">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          className="justify-start font-normal min-w-[120px]"
+                          data-testid="button-letter-filter"
+                        >
+                          {letterFilter.length === 0 ? (
+                            "Все буквы"
+                          ) : (
+                            <div className="flex gap-1 flex-wrap">
+                              {letterFilter.map(letter => (
+                                <Badge key={letter} variant="secondary" className="text-xs">
+                                  {letter}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64" align="end">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium text-sm">Выберите буквы</h4>
+                            {letterFilter.length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setLetterFilter([])}
+                                data-testid="button-clear-letters"
+                              >
+                                Очистить
+                              </Button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-4 gap-2">
+                            {availableLetters.map(letter => {
+                              const isChecked = letterFilter.includes(letter);
+                              return (
+                                <div key={letter} className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`letter-${letter}`}
+                                    checked={isChecked}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setLetterFilter([...letterFilter, letter]);
+                                      } else {
+                                        setLetterFilter(letterFilter.filter(l => l !== letter));
+                                      }
+                                    }}
+                                    data-testid={`checkbox-letter-${letter}`}
+                                  />
+                                  <Label 
+                                    htmlFor={`letter-${letter}`}
+                                    className="text-sm font-normal cursor-pointer"
+                                  >
+                                    {letter}
+                                  </Label>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                     <Select value={pageLimit} onValueChange={setPageLimit}>
                       <SelectTrigger data-testid="select-page-limit" className="w-24">
                         <SelectValue />
