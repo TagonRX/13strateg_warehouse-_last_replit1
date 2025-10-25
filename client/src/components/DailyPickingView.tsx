@@ -35,6 +35,7 @@ export default function DailyPickingView() {
   const [lastResult, setLastResult] = useState<any>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [savedListsOpen, setSavedListsOpen] = useState(false);
   
   // Load selected list from localStorage on mount
   useEffect(() => {
@@ -692,48 +693,67 @@ export default function DailyPickingView() {
       {/* Bottom: Two columns for Lists and Tasks */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* List Selection */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <List className="h-5 w-5" />
-              Saved Lists
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {lists.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No picking lists created yet</p>
-            ) : (
-              lists.map((list) => (
-                <div
-                  key={list.id}
-                  data-testid={`list-item-${list.id}`}
-                  className={`flex items-center justify-between px-2 py-1 rounded border ${
-                    selectedListId === list.id ? "bg-accent" : "hover-elevate"
-                  }`}
-                  onClick={() => handleListSelect(list.id)}
-                >
-                  <div className="flex-1 cursor-pointer min-w-0">
-                    <div className="text-sm font-medium truncate">{list.name}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {new Date(list.createdAt).toLocaleDateString()} {new Date(list.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </div>
+        <Collapsible open={savedListsOpen} onOpenChange={setSavedListsOpen}>
+          <Card>
+            <CollapsibleTrigger asChild>
+              <Button 
+                variant="ghost" 
+                className="group w-full justify-start text-left p-0 h-auto rounded-none" 
+                data-testid="header-saved-lists"
+              >
+                <CardHeader className="w-full p-3">
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <List className="h-4 w-4" />
+                      Saved Lists
+                    </CardTitle>
+                    <ChevronDown 
+                      className="transition-transform flex-shrink-0 group-data-[state=open]:rotate-180" 
+                    />
                   </div>
-                  <Button
-                    data-testid={`button-delete-list-${list.id}`}
-                    variant="ghost"
-                    className="h-6 w-6 p-0 flex-shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteList(list.id);
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3 text-destructive" />
-                  </Button>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                </CardHeader>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              {savedListsOpen && (
+                <CardContent className="space-y-1 pt-0">
+                  {lists.length === 0 ? (
+                    <p className="text-xs text-muted-foreground px-2 py-1">No picking lists created yet</p>
+                  ) : (
+                    lists.map((list) => (
+                      <div
+                        key={list.id}
+                        data-testid={`list-item-${list.id}`}
+                        className={`flex items-center justify-between px-2 py-1 rounded border ${
+                          selectedListId === list.id ? "bg-accent" : "hover-elevate"
+                        }`}
+                        onClick={() => handleListSelect(list.id)}
+                      >
+                        <div className="flex-1 cursor-pointer min-w-0">
+                          <div className="text-sm font-medium truncate">{list.name}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {new Date(list.createdAt).toLocaleDateString()} {new Date(list.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </div>
+                        </div>
+                        <Button
+                          data-testid={`button-delete-list-${list.id}`}
+                          variant="ghost"
+                          className="h-6 w-6 p-0 flex-shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteList(list.id);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              )}
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         {/* Picking Tasks */}
         <div className="space-y-4">
@@ -761,9 +781,13 @@ export default function DailyPickingView() {
 
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <CardTitle>Picking Tasks</CardTitle>
-                  <div className="flex gap-2 items-center">
+                <div className="space-y-2">
+                  <div className="text-[10px] text-muted-foreground">
+                    Список: {currentList.list.name}
+                  </div>
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <CardTitle>Picking Tasks</CardTitle>
+                    <div className="flex gap-2 items-center">
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button 
@@ -841,6 +865,7 @@ export default function DailyPickingView() {
                         <SelectItem value="all">All</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
                   </div>
                 </div>
               </CardHeader>
