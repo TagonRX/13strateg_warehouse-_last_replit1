@@ -3,6 +3,13 @@
 ## Overview
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
+## Quick Start
+**Автоматический запуск проекта:**
+```bash
+./start.sh
+```
+Скрипт автоматически установит зависимости, настроит окружение и запустит приложение. Подробности в `START_RU.txt`.
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
@@ -29,6 +36,27 @@ The backend is built with Node.js and Express.js, using TypeScript and ES Module
 
 ### System Design Choices
 The database schema, managed by Drizzle ORM, includes tables for users, inventory, event logs, worker analytics, picking lists, SKU errors, CSV sources, global settings, and a dedicated workflow for product testing (pending_tests, tested_items, faulty_stock). UUID primary keys and automatic timestamps are used, with foreign key relationships for data integrity. Product deduplication is achieved by `productId`, and upsert patterns handle bulk inventory updates.
+
+## Deployment and Startup
+
+### Local/Development Startup
+Use the automated startup script:
+```bash
+./start.sh                # Auto-detect mode
+./start.sh development    # Development mode (npm run dev)
+./start.sh production     # Production mode (PM2)
+```
+
+### Production Deployment
+Complete deployment package available in `deployment/` directory:
+- **setup.sh** - Automated installation for Kubuntu/Ubuntu server
+- **DEPLOYMENT_GUIDE.md** - Complete deployment instructions (Russian)
+- **QUICK_START_RU.md** - Quick start guide (Russian)
+- **ecosystem.config.js** - PM2 configuration (cluster mode)
+- **nginx.conf** - Nginx reverse proxy with WebSocket support
+- **backup.sh/restore.sh** - Database backup and restore scripts
+
+See `РАЗВЕРТЫВАНИЕ.txt` and `КАК_ЗАГРУЗИТЬ_НА_СЕРВЕР.md` for step-by-step deployment guide.
 
 ## External Dependencies
 
