@@ -797,20 +797,20 @@ export default function DailyPickingView() {
                         data-testid={`task-${task.id}`}
                         className={`flex items-center justify-between p-3 rounded-md border hover-elevate ${rowBgClass}`}
                       >
-                        <div className="flex items-center gap-3 flex-1">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
                           {task.status === "COMPLETED" ? (
-                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
                           ) : (
-                            <Circle className="h-5 w-5 text-muted-foreground" />
+                            <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                           )}
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-base font-semibold">{task.sku}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-base font-semibold flex-shrink-0 whitespace-nowrap">{task.sku}</span>
                               <span className="text-xs text-muted-foreground" data-testid={`text-task-name-${task.id}`}>
                                 {task.itemName || '-'}
                               </span>
                               {(warning.level === 'warning' || warning.level === 'critical') && (
-                                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
                               )}
                             </div>
                             <div className="flex items-center gap-3 flex-wrap">
@@ -835,20 +835,23 @@ export default function DailyPickingView() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
                           {task.status !== "COMPLETED" && (
                             <Button
                               data-testid={`button-manual-collect-${task.id}`}
-                              size="sm"
                               variant="outline"
+                              className="h-6 px-2 text-xs"
                               onClick={() => manualCollectMutation.mutate(task.id)}
                               disabled={manualCollectMutation.isPending}
                             >
-                              <CheckCircle2 className="h-4 w-4 mr-1" />
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
                               Собрать
                             </Button>
                           )}
-                          <Badge variant={task.status === "COMPLETED" ? "default" : "secondary"}>
+                          <Badge 
+                            variant={task.status === "COMPLETED" ? "default" : "secondary"}
+                            className="text-[10px] px-1.5 py-0"
+                          >
                             {task.status}
                           </Badge>
                         </div>
