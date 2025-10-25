@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Usb, Smartphone, Wifi, Check, X, Package } from "lucide-react";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToast } from "@/hooks/use-toast";
-import type { PendingPlacement, InventoryItem } from "@shared/schema";
+import type { PendingPlacement, InventoryItem, ActiveLocation } from "@shared/schema";
 
 type ScannerMode = "usb" | "phone";
 type PlacementStep = "scan_item" | "scan_location" | "success" | "error";
@@ -32,6 +32,22 @@ export default function PlacementView() {
   const { data: pendingPlacements = [] } = useQuery<PendingPlacement[]>({
     queryKey: ["/api/pending-placements"],
   });
+
+  // Fetch active locations with barcodes
+  const { data: activeLocations = [] } = useQuery<ActiveLocation[]>({
+    queryKey: ["/api/warehouse/active-locations"],
+  });
+
+  // Create barcode-to-location mapping
+  const barcodeToLocationMap = useMemo(() => {
+    const map = new Map<string, string>();
+    activeLocations.forEach(loc => {
+      if (loc.barcode) {
+        map.set(loc.barcode.toUpperCase(), loc.location.toUpperCase());
+      }
+    });
+    return map;
+  }, [activeLocations]);
 
   // Global barcode input routing for USB mode
   const { inputRef: barcodeInputRef } = useGlobalBarcodeInput(
@@ -55,10 +71,12 @@ export default function PlacementView() {
   }, [lastMessage, scannerMode, step]);
 
   const handleBarcodeScanned = async (barcode: string) => {
-    setScannedBarcode(barcode);
+    // Trim whitespace from scanner input
+    const cleanBarcode = barcode.trim();
+    setScannedBarcode(cleanBarcode);
     
     // Find placement with this barcode
-    const placement = pendingPlacements.find(p => p.barcode === barcode);
+    const placement = pendingPlacements.find(p => p.barcode === cleanBarcode);
     
     if (!placement) {
       toast({
@@ -74,13 +92,27 @@ export default function PlacementView() {
     setStep("scan_location");
   };
 
-  const handleLocationScanned = async (location: string) => {
-    setScannedLocation(location);
+  const handleLocationScanned = async (scannedCode: string) => {
+    // Trim whitespace from scanner input
+    const cleanCode = scannedCode.trim();
+    setScannedLocation(cleanCode);
 
     if (!currentPlacement) return;
 
-    // Check if scanned location matches target location
-    if (location.toUpperCase() === targetLocation.toUpperCase()) {
+    // Determine actual location from scanned code
+    // First, check direct match (location name)
+    let actualLocation = cleanCode.toUpperCase();
+    
+    // If not a direct match, check if it's a location barcode
+    if (cleanCode.toUpperCase() !== targetLocation.toUpperCase()) {
+      const locationFromBarcode = barcodeToLocationMap.get(cleanCode.toUpperCase());
+      if (locationFromBarcode) {
+        actualLocation = locationFromBarcode;
+      }
+    }
+
+    // Check if actual location matches target location
+    if (actualLocation === targetLocation.toUpperCase()) {
       // Success! Move to inventory
       try {
         const response = await fetch("/api/placements/confirm", {
@@ -91,7 +123,7 @@ export default function PlacementView() {
           },
           body: JSON.stringify({
             placementId: currentPlacement.id,
-            location: location.toUpperCase(),
+            location: targetLocation.toUpperCase(),
           }),
         });
 
@@ -106,9 +138,13 @@ export default function PlacementView() {
         queryClient.invalidateQueries({ queryKey: ["/api/pending-placements"] });
         queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
 
+        const verificationMethod = barcodeToLocationMap.has(cleanCode.toUpperCase()) 
+          ? "баркод локации" 
+          : "название локации";
+        
         toast({
-          title: "Успешно размещено!",
-          description: `${currentPlacement.name || currentPlacement.barcode} → ${location.toUpperCase()}`,
+          title: "✅ Правильная локация!",
+          description: `${currentPlacement.name || currentPlacement.barcode} → ${targetLocation.toUpperCase()} (проверено: ${verificationMethod})`,
         });
 
         // Reset after 2 seconds
@@ -128,9 +164,13 @@ export default function PlacementView() {
       setFeedback("error");
       setStep("error");
 
+      const scannedInfo = barcodeToLocationMap.has(cleanCode.toUpperCase())
+        ? `баркод локации ${actualLocation}`
+        : `локация ${actualLocation}`;
+
       toast({
-        title: "Неправильная локация!",
-        description: `Ожидалось: ${targetLocation}, отсканировано: ${location}`,
+        title: "❌ Неправильная локация!",
+        description: `Ожидалось: ${targetLocation}, отсканировано: ${scannedInfo}`,
         variant: "destructive",
       });
 
