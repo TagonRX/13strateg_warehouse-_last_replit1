@@ -4,11 +4,23 @@
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
 ## Quick Start
-**Автоматический запуск проекта:**
+
+### Локальная разработка
 ```bash
 ./start.sh
 ```
 Скрипт автоматически установит зависимости, настроит окружение и запустит приложение. Подробности в `START_RU.txt`.
+
+### Установка на Kubuntu 25.10 сервер (в 5 кликов)
+Запустите скрипты по очереди прямо из корня проекта:
+```bash
+./1-install-node.sh        # Установка Node.js 20
+./2-install-postgres.sh    # Установка PostgreSQL
+./3-setup-database.sh      # Создание базы данных
+./4-install-app.sh         # Установка приложения
+./5-run-server.sh          # Запуск сервера (постоянно)
+```
+Каждый скрипт автоматически выполнит свою часть установки. См. `УСТАНОВКА_KUBUNTU.txt` и `БЫСТРАЯ_УСТАНОВКА.txt`.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -47,16 +59,31 @@ Use the automated startup script:
 ./start.sh production     # Production mode (PM2)
 ```
 
-### Production Deployment
+### Production Deployment - Kubuntu 25.10 (5-click installation)
+Simple installation scripts in project root (just click them in order):
+1. **1-install-node.sh** - Installs Node.js 20 LTS
+2. **2-install-postgres.sh** - Installs PostgreSQL
+3. **3-setup-database.sh** - Creates database, user, and .env file
+4. **4-install-app.sh** - npm install, build, PM2 setup
+5. **5-run-server.sh** - Starts server (runs permanently with auto-restart)
+
+Each script shows next steps. Total time: ~15-20 minutes.
+
+### Alternative: Advanced Deployment
 Complete deployment package available in `deployment/` directory:
-- **setup.sh** - Automated installation for Kubuntu/Ubuntu server
+- **setup.sh** - One-script automated installation for Kubuntu/Ubuntu
 - **DEPLOYMENT_GUIDE.md** - Complete deployment instructions (Russian)
 - **QUICK_START_RU.md** - Quick start guide (Russian)
 - **ecosystem.config.js** - PM2 configuration (cluster mode)
 - **nginx.conf** - Nginx reverse proxy with WebSocket support
 - **backup.sh/restore.sh** - Database backup and restore scripts
 
-See `РАЗВЕРТЫВАНИЕ.txt` and `КАК_ЗАГРУЗИТЬ_НА_СЕРВЕР.md` for step-by-step deployment guide.
+### Documentation
+- **0-НАЧНИТЕ_ЗДЕСЬ.txt** - Main entry point (START HERE!)
+- **УСТАНОВКА_KUBUNTU.txt** - Kubuntu installation guide
+- **БЫСТРАЯ_УСТАНОВКА.txt** - Detailed installation with troubleshooting
+- **РАЗВЕРТЫВАНИЕ.txt** - Deployment overview
+- **КАК_ЗАГРУЗИТЬ_НА_СЕРВЕР.md** - Step-by-step server upload guide
 
 ## External Dependencies
 
