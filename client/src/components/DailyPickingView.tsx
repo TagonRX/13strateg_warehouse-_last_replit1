@@ -36,6 +36,7 @@ export default function DailyPickingView() {
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [savedListsOpen, setSavedListsOpen] = useState(false);
+  const [createListOpen, setCreateListOpen] = useState(false);
   
   // Load selected list from localStorage on mount
   useEffect(() => {
@@ -525,14 +526,30 @@ export default function DailyPickingView() {
   return (
     <div className="flex flex-col gap-6 p-6 h-full overflow-auto">
       {/* Create Picking List - Full Width */}
-      <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileUp className="h-5 w-5" />
-              Create Picking List
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <Collapsible open={createListOpen} onOpenChange={setCreateListOpen}>
+        <Card className="w-full">
+          <CollapsibleTrigger asChild>
+            <Button 
+              variant="ghost" 
+              className="group w-full justify-start text-left p-0 h-auto rounded-none" 
+              data-testid="header-create-list"
+            >
+              <CardHeader className="w-full p-3">
+                <div className="flex items-center justify-between gap-4 w-full">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <FileUp className="h-4 w-4" />
+                    Create Picking List
+                  </CardTitle>
+                  <ChevronDown 
+                    className="transition-transform flex-shrink-0 group-data-[state=open]:rotate-180" 
+                  />
+                </div>
+              </CardHeader>
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {createListOpen && (
+              <CardContent className="space-y-4 pt-0">
             <div className="space-y-2">
               <label className="text-sm font-medium">List Name</label>
               <Input
@@ -687,8 +704,11 @@ export default function DailyPickingView() {
               <FileUp className="h-4 w-4 mr-2" />
               {createListMutation.isPending ? "Creating..." : "Create Picking List"}
             </Button>
-          </CardContent>
+              </CardContent>
+            )}
+          </CollapsibleContent>
         </Card>
+      </Collapsible>
 
       {/* Bottom: Two columns for Lists and Tasks */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
