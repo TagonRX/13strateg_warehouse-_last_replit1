@@ -12,7 +12,7 @@ echo "════════════════════════�
 echo ""
 
 echo "→ Установка зависимостей..."
-npm install --production
+npm install
 
 echo ""
 echo "→ Сборка приложения..."

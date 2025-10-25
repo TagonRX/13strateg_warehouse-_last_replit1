@@ -111,9 +111,15 @@ PostgreSQL не запускается:
   Проверьте что PostgreSQL запущен
   Затем снова: ./3-setup-database.sh
 
-Приложение не собирается:
+Приложение не собирается (vite: not found):
   Проверьте что Node.js установлен: node -v
+  Убедитесь что используете обновлённый скрипт 4-install-app.sh
   Затем снова: ./4-install-app.sh
+  
+Ошибка "vite: not found":
+  Это означает что не установлены devDependencies
+  Запустите вручную: npm install
+  Затем: npm run build
 
 Сервер не запускается:
   pm2 logs warehouse
