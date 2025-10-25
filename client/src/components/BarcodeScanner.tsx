@@ -168,41 +168,41 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
 
   return (
     <Card>
-      <CardHeader className="pb-4">
-        <CardTitle className="text-lg">{label}</CardTitle>
-        <CardDescription>Выберите способ сканирования</CardDescription>
+      <CardHeader className="pb-2 p-3">
+        <CardTitle className="text-sm">{label}</CardTitle>
+        <CardDescription className="text-xs">Выберите способ сканирования</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-3 pt-0">
         <Tabs value={mode} onValueChange={(v) => setMode(v as "usb" | "mobile" | "remote")}>
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="usb" data-testid="tab-usb-scanner">
-              <Usb className="w-4 h-4 mr-2" />
+          <TabsList className="grid w-full grid-cols-3 h-8">
+            <TabsTrigger value="usb" data-testid="tab-usb-scanner" className="text-xs py-1">
+              <Usb className="w-3 h-3 mr-1" />
               USB
             </TabsTrigger>
-            <TabsTrigger value="mobile" data-testid="tab-mobile-scanner">
-              <Smartphone className="w-4 h-4 mr-2" />
+            <TabsTrigger value="mobile" data-testid="tab-mobile-scanner" className="text-xs py-1">
+              <Smartphone className="w-3 h-3 mr-1" />
               Камера
             </TabsTrigger>
-            <TabsTrigger value="remote" data-testid="tab-remote-scanner">
-              <Wifi className="w-4 h-4 mr-2" />
+            <TabsTrigger value="remote" data-testid="tab-remote-scanner" className="text-xs py-1">
+              <Wifi className="w-3 h-3 mr-1" />
               Телефон
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="usb" className="mt-4">
-            <div className="space-y-4">
+          <TabsContent value="usb" className="mt-2">
+            <div className="space-y-2">
               {isConnected && (
-                <Alert>
-                  <Wifi className="h-4 w-4" />
-                  <AlertDescription>
+                <Alert className="py-2">
+                  <Wifi className="h-3 w-3" />
+                  <AlertDescription className="text-xs">
                     <span className="text-green-600 dark:text-green-400">
                       🟢 Принимает сканы с телефона
                     </span>
                   </AlertDescription>
                 </Alert>
               )}
-              <div className="space-y-2">
-                <Label htmlFor="usb-barcode">Отсканируйте или введите штрихкод</Label>
+              <div className="space-y-1">
+                <Label htmlFor="usb-barcode" className="text-xs">Отсканируйте или введите штрихкод</Label>
                 <Input
                   id="usb-barcode"
                   ref={inputRef}
@@ -211,47 +211,47 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
                   onChange={(e) => setBarcode(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Наведите сканер..."
-                  className="font-mono"
+                  className="font-mono h-8 text-xs"
                   autoComplete="off"
                   data-testid="input-usb-barcode"
                 />
               </div>
-              <Button type="button" onClick={handleUSBScan} className="w-full" data-testid="button-submit-barcode">
+              <Button type="button" onClick={handleUSBScan} className="w-full h-8 text-xs" data-testid="button-submit-barcode">
                 Подтвердить
               </Button>
             </div>
           </TabsContent>
           
-          <TabsContent value="mobile" className="mt-4">
-            <div className="space-y-4">
+          <TabsContent value="mobile" className="mt-2">
+            <div className="space-y-2">
               {!isCameraActive ? (
                 <>
                   <Button
                     type="button"
                     onClick={handleMobileScan}
-                    className="w-full"
+                    className="w-full h-8 text-xs"
                     data-testid="button-start-camera"
                   >
-                    <Camera className="w-4 h-4 mr-2" />
+                    <Camera className="w-3 h-3 mr-1" />
                     Включить камеру
                   </Button>
                   {cameraError && (
-                    <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+                    <div className="bg-destructive/10 text-destructive text-xs p-2 rounded-md">
                       {cameraError}
                     </div>
                   )}
                 </>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-2">
                   <div id="qr-reader-mobile" className="w-full rounded-md overflow-hidden"></div>
                   <Button
                     type="button"
                     onClick={stopCamera}
                     variant="outline"
-                    className="w-full"
+                    className="w-full h-8 text-xs"
                     data-testid="button-stop-camera"
                   >
-                    <X className="w-4 h-4 mr-2" />
+                    <X className="w-3 h-3 mr-1" />
                     Остановить камеру
                   </Button>
                 </div>
@@ -259,11 +259,11 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
             </div>
           </TabsContent>
 
-          <TabsContent value="remote" className="mt-4">
-            <div className="space-y-4">
-              <Alert>
-                <Wifi className="h-4 w-4" />
-                <AlertDescription>
+          <TabsContent value="remote" className="mt-2">
+            <div className="space-y-2">
+              <Alert className="py-2">
+                <Wifi className="h-3 w-3" />
+                <AlertDescription className="text-xs">
                   {isConnected ? (
                     <span className="text-green-600 dark:text-green-400">
                       🟢 Подключено - готово к удаленному сканированию
@@ -277,34 +277,34 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
               </Alert>
 
               {!isCameraActive ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
                     Используйте телефон как беспроводной сканер для компьютера
                   </p>
                   <Button
                     type="button"
                     onClick={handleMobileScan}
-                    className="w-full"
+                    className="w-full h-8 text-xs"
                     disabled={!isConnected}
                     data-testid="button-start-remote-scanner"
                   >
-                    <Camera className="w-4 h-4 mr-2" />
+                    <Camera className="w-3 h-3 mr-1" />
                     Включить камеру телефона
                   </Button>
                   {cameraError && (
-                    <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+                    <div className="bg-destructive/10 text-destructive text-xs p-2 rounded-md">
                       {cameraError}
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-2">
                   <div id="qr-reader-remote" className="w-full rounded-md overflow-hidden"></div>
                   
                   {lastScanned && (
-                    <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-3 rounded-md">
-                      <p className="text-xs text-muted-foreground mb-1">Отсканировано:</p>
-                      <p className="font-mono font-bold text-green-700 dark:text-green-400">{lastScanned}</p>
+                    <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-2 rounded-md">
+                      <p className="text-[10px] text-muted-foreground mb-1">Отсканировано:</p>
+                      <p className="font-mono text-xs font-bold text-green-700 dark:text-green-400">{lastScanned}</p>
                     </div>
                   )}
 
@@ -312,10 +312,10 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
                     type="button"
                     onClick={handleRemoteSend}
                     disabled={!lastScanned || !isConnected || isSending}
-                    className="w-full h-14 text-lg"
+                    className="w-full h-10 text-sm"
                     data-testid="button-send-to-computer"
                   >
-                    <Wifi className="w-5 h-5 mr-2" />
+                    <Wifi className="w-4 h-4 mr-1" />
                     {isSending ? "Отправлено ✓" : "Отправить на компьютер"}
                   </Button>
 
@@ -323,10 +323,10 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
                     type="button"
                     onClick={stopCamera}
                     variant="outline"
-                    className="w-full"
+                    className="w-full h-8 text-xs"
                     data-testid="button-stop-remote-camera"
                   >
-                    <X className="w-4 h-4 mr-2" />
+                    <X className="w-3 h-3 mr-1" />
                     Остановить камеру
                   </Button>
                 </div>

@@ -710,94 +710,97 @@ export default function DailyPickingView() {
         </Card>
       </Collapsible>
 
-      {/* Bottom: Two columns for Lists and Tasks */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* List Selection */}
-        <Collapsible open={savedListsOpen} onOpenChange={setSavedListsOpen}>
-          <Card>
-            <CollapsibleTrigger asChild>
-              <Button 
-                variant="ghost" 
-                className="group w-full justify-start text-left p-0 h-auto rounded-none" 
-                data-testid="header-saved-lists"
-              >
-                <CardHeader className="w-full p-3">
-                  <div className="flex items-center justify-between gap-4 w-full">
-                    <CardTitle className="flex items-center gap-2 text-sm">
-                      <List className="h-4 w-4" />
-                      Saved Lists
-                    </CardTitle>
-                    <ChevronDown 
-                      className="transition-transform flex-shrink-0 group-data-[state=open]:rotate-180" 
-                    />
-                  </div>
-                </CardHeader>
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              {savedListsOpen && (
-                <CardContent className="space-y-1 pt-0">
-                  {lists.length === 0 ? (
-                    <p className="text-xs text-muted-foreground px-2 py-1">No picking lists created yet</p>
-                  ) : (
-                    lists.map((list) => (
-                      <div
-                        key={list.id}
-                        data-testid={`list-item-${list.id}`}
-                        className={`flex items-center justify-between px-2 py-1 rounded border ${
-                          selectedListId === list.id ? "bg-accent" : "hover-elevate"
-                        }`}
-                        onClick={() => handleListSelect(list.id)}
-                      >
-                        <div className="flex-1 cursor-pointer min-w-0">
-                          <div className="text-sm font-medium truncate">{list.name}</div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {new Date(list.createdAt).toLocaleDateString()} {new Date(list.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                          </div>
-                        </div>
-                        <Button
-                          data-testid={`button-delete-list-${list.id}`}
-                          variant="ghost"
-                          className="h-6 w-6 p-0 flex-shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteList(list.id);
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3 text-destructive" />
-                        </Button>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              )}
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-
-        {/* Picking Tasks */}
-        <div className="space-y-4">
-        {selectedListId && currentList ? (
-          <>
-            <BarcodeScanner onScan={handleScan} />
-
-            <Card>
-              <CardContent className="pt-6 space-y-4">
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span>Progress</span>
-                    <span>{completedCount} / {totalCount}</span>
-                  </div>
-                  <Progress value={progressPercent} className="h-2" />
+      {/* Saved Lists */}
+      <Collapsible open={savedListsOpen} onOpenChange={setSavedListsOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <Button 
+              variant="ghost" 
+              className="group w-full justify-start text-left p-0 h-auto rounded-none" 
+              data-testid="header-saved-lists"
+            >
+              <CardHeader className="w-full p-3">
+                <div className="flex items-center justify-between gap-4 w-full">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <List className="h-4 w-4" />
+                    Saved Lists
+                  </CardTitle>
+                  <ChevronDown 
+                    className="transition-transform flex-shrink-0 group-data-[state=open]:rotate-180" 
+                  />
                 </div>
-
-                {lastResult && (
-                  <Alert className={lastResult.success ? "border-green-500 bg-green-50 dark:bg-green-950" : ""}>
-                    <AlertDescription>{lastResult.message}</AlertDescription>
-                  </Alert>
+              </CardHeader>
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {savedListsOpen && (
+              <CardContent className="space-y-1 pt-0">
+                {lists.length === 0 ? (
+                  <p className="text-xs text-muted-foreground px-2 py-1">No picking lists created yet</p>
+                ) : (
+                  lists.map((list) => (
+                    <div
+                      key={list.id}
+                      data-testid={`list-item-${list.id}`}
+                      className={`flex items-center justify-between px-2 py-1 rounded border ${
+                        selectedListId === list.id ? "bg-accent" : "hover-elevate"
+                      }`}
+                      onClick={() => handleListSelect(list.id)}
+                    >
+                      <div className="flex-1 cursor-pointer min-w-0">
+                        <div className="text-sm font-medium truncate">{list.name}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {new Date(list.createdAt).toLocaleDateString()} {new Date(list.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                      </div>
+                      <Button
+                        data-testid={`button-delete-list-${list.id}`}
+                        variant="ghost"
+                        className="h-6 w-6 p-0 flex-shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteList(list.id);
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    </div>
+                  ))
                 )}
               </CardContent>
-            </Card>
+            )}
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* Barcode Scanner and Progress - показываем только если список выбран */}
+      {selectedListId && currentList && (
+        <>
+          <BarcodeScanner onScan={handleScan} />
+
+          <Card>
+            <CardContent className="pt-4 space-y-3">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span>Progress</span>
+                  <span>{completedCount} / {totalCount}</span>
+                </div>
+                <Progress value={progressPercent} className="h-2" />
+              </div>
+
+              {lastResult && (
+                <Alert className={lastResult.success ? "border-green-500 bg-green-50 dark:bg-green-950" : ""}>
+                  <AlertDescription className="text-xs">{lastResult.message}</AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* Picking Tasks */}
+      {selectedListId && currentList ? (
+        <div className="space-y-4">
 
             <Card>
               <CardHeader>
@@ -971,16 +974,14 @@ export default function DailyPickingView() {
                 </div>
               </CardContent>
             </Card>
-          </>
-        ) : (
-          <Card>
-            <CardContent className="flex items-center justify-center h-64">
-              <p className="text-muted-foreground">Select or create a picking list to begin</p>
-            </CardContent>
-          </Card>
-        )}
         </div>
-      </div>
+      ) : (
+        <Card>
+          <CardContent className="flex items-center justify-center h-64">
+            <p className="text-muted-foreground">Select or create a picking list to begin</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
