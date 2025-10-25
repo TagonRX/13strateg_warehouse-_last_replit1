@@ -707,27 +707,27 @@ export default function DailyPickingView() {
                 <div
                   key={list.id}
                   data-testid={`list-item-${list.id}`}
-                  className={`flex items-center justify-between p-3 rounded-md border ${
+                  className={`flex items-center justify-between px-2 py-1 rounded border ${
                     selectedListId === list.id ? "bg-accent" : "hover-elevate"
                   }`}
                   onClick={() => handleListSelect(list.id)}
                 >
-                  <div className="flex-1 cursor-pointer">
-                    <div className="font-medium">{list.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(list.createdAt).toLocaleString()}
+                  <div className="flex-1 cursor-pointer min-w-0">
+                    <div className="text-sm font-medium truncate">{list.name}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {new Date(list.createdAt).toLocaleDateString()} {new Date(list.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </div>
                   </div>
                   <Button
                     data-testid={`button-delete-list-${list.id}`}
-                    size="icon"
                     variant="ghost"
+                    className="h-6 w-6 p-0 flex-shrink-0"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDeleteList(list.id);
                     }}
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-3 w-3 text-destructive" />
                   </Button>
                 </div>
               ))
