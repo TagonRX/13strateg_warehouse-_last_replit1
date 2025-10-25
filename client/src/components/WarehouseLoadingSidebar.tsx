@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { InventoryItem, PendingPlacement } from "@shared/schema";
+import type { InventoryItem, PendingPlacement, ActiveLocation } from "@shared/schema";
 
 interface LocationGroup {
   location: string;
@@ -52,15 +52,31 @@ export default function WarehouseLoadingSidebar() {
     queryKey: ["/api/warehouse-settings"],
   });
 
+  // Fetch active (managed) locations
+  const { data: activeLocations = [] } = useQuery<ActiveLocation[]>({
+    queryKey: ["/api/warehouse/active-locations"],
+  });
+
   // Get last pending placement for "Info about item"
   const lastPendingPlacement = pendingPlacements.length > 0 ? pendingPlacements[pendingPlacements.length - 1] : null;
 
-  // Group inventory by location
+  // Create set of managed locations for filtering
+  const managedLocationsSet = useMemo(() => {
+    return new Set(activeLocations.map(loc => loc.location.toUpperCase()));
+  }, [activeLocations]);
+
+  // Group inventory by location (filtered by managed locations only)
   const locationGroups = useMemo(() => {
     const groups = new Map<string, LocationGroup>();
 
     inventory.forEach((item) => {
       const loc = item.location;
+      
+      // Filter: only include items in managed locations
+      if (managedLocationsSet.size > 0 && !managedLocationsSet.has(loc.toUpperCase())) {
+        return;
+      }
+
       if (!groups.has(loc)) {
         groups.set(loc, {
           location: loc,
@@ -84,7 +100,7 @@ export default function WarehouseLoadingSidebar() {
     return Array.from(groups.values()).sort((a, b) => 
       a.location.localeCompare(b.location)
     );
-  }, [inventory]);
+  }, [inventory, managedLocationsSet]);
 
   // Apply filters
   const filteredLocations = useMemo(() => {
