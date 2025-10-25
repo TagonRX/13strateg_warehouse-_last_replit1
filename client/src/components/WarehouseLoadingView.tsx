@@ -39,6 +39,7 @@ interface WarehouseSetting {
 interface ActiveLocation {
   id: string;
   location: string;
+  barcode: string | null;
   isActive: boolean;
 }
 
@@ -237,10 +238,12 @@ function WarehouseSettingsPanel({
 
 export default function WarehouseLoadingView({ locationGroups, userRole }: WarehouseLoadingViewProps) {
   const { toast } = useToast();
-  const [locationList, setLocationList] = useState<string[]>([]);
+  const [locationList, setLocationList] = useState<{ location: string; barcode: string | null }[]>([]);
   const [locationRangeFrom, setLocationRangeFrom] = useState<string>("");
   const [locationRangeTo, setLocationRangeTo] = useState<string>("");
   const [newLocationName, setNewLocationName] = useState<string>("");
+  const [newLocationBarcode, setNewLocationBarcode] = useState<string>("");
+  const [editingBarcode, setEditingBarcode] = useState<{ location: string; value: string } | null>(null);
   const [letterFilter, setLetterFilter] = useState<string[]>([]); // Multi-select letter filter
   const [limitFilter, setLimitFilter] = useState<string>("100");
   
@@ -269,7 +272,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
 
   // Set active locations mutation
   const setLocationsMutation = useMutation({
-    mutationFn: async (locations: string[]) => {
+    mutationFn: async (locations: { location: string; barcode?: string }[]) => {
       const res = await apiRequest("POST", "/api/warehouse/active-locations", { locations });
       return res.json();
     },
@@ -326,7 +329,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   // Initialize location list from active locations
   useEffect(() => {
     if (activeLocations.length > 0 && locationList.length === 0) {
-      setLocationList(activeLocations.map(loc => loc.location));
+      setLocationList(activeLocations.map(loc => ({ location: loc.location, barcode: loc.barcode })));
     }
   }, [activeLocations]);
 
@@ -348,7 +351,11 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
 
   // Save locations
   const handleSaveLocations = () => {
-    setLocationsMutation.mutate(locationList);
+    const locationsToSave = locationList.map(loc => ({
+      location: loc.location,
+      barcode: loc.barcode || undefined,
+    }));
+    setLocationsMutation.mutate(locationsToSave);
   };
 
   // Get all unique letters from locations
@@ -382,7 +389,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
 
   // Managed locations set for filtering (memoized)
   const managedLocationsSet = useMemo(() => {
-    return new Set(locationList.map(loc => loc.toUpperCase()));
+    return new Set(locationList.map(loc => loc.location.toUpperCase()));
   }, [locationList]);
 
   // Count items in non-managed locations
@@ -401,7 +408,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       return locationList;
     }
     return locationList.filter(loc => {
-      const upperLoc = loc.toUpperCase();
+      const upperLoc = loc.location.toUpperCase();
       const from = locationRangeFrom.toUpperCase();
       const to = locationRangeTo.toUpperCase();
       
@@ -419,8 +426,9 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   // Handler to add new location
   const handleAddLocation = () => {
     const trimmedName = newLocationName.trim().toUpperCase();
+    const trimmedBarcode = newLocationBarcode.trim();
     if (!trimmedName) return;
-    if (locationList.includes(trimmedName)) {
+    if (locationList.some(loc => loc.location === trimmedName)) {
       toast({
         title: "Локация существует",
         description: "Эта локация уже добавлена",
@@ -428,13 +436,22 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       });
       return;
     }
-    setLocationList([...locationList, trimmedName]);
+    setLocationList([...locationList, { location: trimmedName, barcode: trimmedBarcode || null }]);
     setNewLocationName("");
+    setNewLocationBarcode("");
   };
 
   // Handler to delete location
   const handleDeleteLocation = (location: string) => {
-    setLocationList(locationList.filter(loc => loc !== location));
+    setLocationList(locationList.filter(loc => loc.location !== location));
+  };
+
+  // Handler to update barcode
+  const handleUpdateBarcode = (location: string, barcode: string) => {
+    setLocationList(locationList.map(loc => 
+      loc.location === location ? { ...loc, barcode: barcode || null } : loc
+    ));
+    setEditingBarcode(null);
   };
 
   // Filter locations based on managed locations and TSKU/MAXQ filters
@@ -643,27 +660,67 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-32">Локация</TableHead>
+                        <TableHead className="flex-1">Баркод локации</TableHead>
                         <TableHead className="w-20 text-right">Действия</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredLocationList.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={2} className="text-center text-muted-foreground">
+                          <TableCell colSpan={3} className="text-center text-muted-foreground">
                             Нет локаций
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredLocationList.map((location, index) => (
+                        filteredLocationList.map((loc, index) => (
                           <TableRow key={index} data-testid={`row-location-${index}`}>
                             <TableCell className="font-mono font-semibold">
-                              {location}
+                              {loc.location}
+                            </TableCell>
+                            <TableCell>
+                              {editingBarcode?.location === loc.location ? (
+                                <div className="flex gap-1">
+                                  <Input
+                                    value={editingBarcode.value}
+                                    onChange={(e) => setEditingBarcode({ location: loc.location, value: e.target.value })}
+                                    className="h-8 font-mono"
+                                    placeholder="Баркод локации"
+                                    data-testid={`input-barcode-${index}`}
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    onClick={() => handleUpdateBarcode(loc.location, editingBarcode.value)}
+                                    data-testid={`button-save-barcode-${index}`}
+                                    className="text-xs px-2"
+                                  >
+                                    OK
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setEditingBarcode(null)}
+                                    data-testid={`button-cancel-barcode-${index}`}
+                                    className="text-xs px-2"
+                                  >
+                                    ✕
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div 
+                                  className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded font-mono text-sm"
+                                  onClick={() => setEditingBarcode({ location: loc.location, value: loc.barcode || "" })}
+                                  data-testid={`text-barcode-${index}`}
+                                >
+                                  {loc.barcode || <span className="text-muted-foreground italic">Нет баркода (нажмите для добавления)</span>}
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell className="text-right">
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => handleDeleteLocation(location)}
+                                onClick={() => handleDeleteLocation(loc.location)}
                                 data-testid={`button-delete-location-${index}`}
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -691,12 +748,28 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                     value={newLocationName}
                     onChange={(e) => setNewLocationName(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
+                      if (e.key === "Enter" && !e.shiftKey) {
                         handleAddLocation();
                       }
                     }}
                     className="font-mono uppercase"
                     data-testid="input-new-location"
+                  />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="new-location-barcode">Баркод локации (опционально)</Label>
+                  <Input
+                    id="new-location-barcode"
+                    placeholder="Баркод локации..."
+                    value={newLocationBarcode}
+                    onChange={(e) => setNewLocationBarcode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        handleAddLocation();
+                      }
+                    }}
+                    className="font-mono"
+                    data-testid="input-new-location-barcode"
                   />
                 </div>
                 <Button onClick={handleAddLocation} data-testid="button-add-location">
