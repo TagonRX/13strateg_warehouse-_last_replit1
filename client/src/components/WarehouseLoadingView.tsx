@@ -612,6 +612,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent>
+                {isLocationManagementOpen && (
                 <CardContent className="space-y-4">
               {/* Range filter */}
               <div className="flex gap-4 items-end">
@@ -785,6 +786,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                 </Button>
               </div>
                 </CardContent>
+                )}
               </CollapsibleContent>
             </Card>
           </Collapsible>
@@ -806,14 +808,16 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent>
-                  <WarehouseSettingsPanel
-                    settings={warehouseSettings}
-                    onUpdate={(setting) => upsertSettingMutation.mutate(setting)}
-                    onDelete={(locationPattern) => deleteSettingMutation.mutate(locationPattern)}
-                    isDeleting={deleteSettingMutation.isPending}
-                  />
-                </CardContent>
+                {isSettingsOpen && (
+                  <CardContent>
+                    <WarehouseSettingsPanel
+                      settings={warehouseSettings}
+                      onUpdate={(setting) => upsertSettingMutation.mutate(setting)}
+                      onDelete={(locationPattern) => deleteSettingMutation.mutate(locationPattern)}
+                      isDeleting={deleteSettingMutation.isPending}
+                    />
+                  </CardContent>
+                )}
               </CollapsibleContent>
             </Card>
           </Collapsible>
