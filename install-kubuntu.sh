@@ -167,6 +167,10 @@ echo "→ Синхронизация базы данных..."
 npm run db:push || npm run db:push -- --force
 
 echo ""
+echo "→ Создание admin пользователя..."
+npx tsx server/create-admin.ts
+
+echo ""
 echo "→ Установка PM2 (Process Manager)..."
 sudo npm install -g pm2
 
