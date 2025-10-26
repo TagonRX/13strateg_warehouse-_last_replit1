@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, memo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, X, Trash2, ChevronDown, AlertCircle, Upload } from "lucide-react";
+import { Plus, X, Trash2, ChevronDown, AlertCircle, Upload, Download } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -246,7 +246,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   const [editingBarcode, setEditingBarcode] = useState<{ location: string; value: string } | null>(null);
   const [csvUploadStats, setCsvUploadStats] = useState<{ added: number; updated: number; errors: string[] } | null>(null);
   const [letterFilter, setLetterFilter] = useState<string[]>([]); // Multi-select letter filter
-  const [limitFilter, setLimitFilter] = useState<string>("100");
+  const [limitFilter, setLimitFilter] = useState<string>("200"); // Увеличен лимит до 200 для лучшей производительности
   
   // Separate input state (immediate) and filter state (debounced)
   const [tskuInput, setTskuInput] = useState<string>("");
@@ -453,6 +453,31 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       loc.location === location ? { ...loc, barcode: barcode || null } : loc
     ));
     setEditingBarcode(null);
+  };
+
+  // Handler for downloading CSV template
+  const handleDownloadTemplate = () => {
+    const template = `Location,Barcode
+A100,BC001
+A101,BC002
+A102,BC003
+B200,BC204
+B201,BC205`;
+    
+    const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'locations_template.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({
+      title: "Шаблон скачан",
+      description: "Откройте файл locations_template.csv и заполните данные",
+    });
   };
 
   // Handler for CSV upload
@@ -815,7 +840,15 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
               {/* CSV Upload */}
               <div className="space-y-2">
                 <Label>Массовая загрузка через CSV</Label>
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-2 items-center flex-wrap">
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadTemplate}
+                    data-testid="button-download-template"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Скачать шаблон
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={() => document.getElementById('csv-upload-input')?.click()}
@@ -833,7 +866,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                     data-testid="input-csv-upload"
                   />
                   <span className="text-sm text-muted-foreground">
-                    Формат: Location,Barcode (по одной локации на строку)
+                    1. Скачайте шаблон → 2. Заполните данные → 3. Загрузите обратно
                   </span>
                 </div>
                 {csvUploadStats && csvUploadStats.errors.length > 0 && (
