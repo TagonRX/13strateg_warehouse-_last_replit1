@@ -150,7 +150,8 @@ export default function RemoteBarcodeScanner() {
       );
     } catch (err) {
       console.error("Camera start error:", err);
-      setCameraError("Не удалось запустить камеру. Проверьте разрешения.");
+      const errorMessage = err instanceof Error ? err.message : "Не удалось запустить камеру. Проверьте разрешения.";
+      setCameraError(errorMessage);
       await cleanupCamera();
       setIsCameraActive(false);
     }
