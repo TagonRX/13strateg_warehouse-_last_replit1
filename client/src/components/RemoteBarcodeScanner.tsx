@@ -108,6 +108,16 @@ export default function RemoteBarcodeScanner() {
 
   const startCamera = async () => {
     try {
+      // КРИТИЧЕСКАЯ ПРОВЕРКА: Камера работает только через HTTPS или localhost
+      const isSecure = window.location.protocol === 'https:' || 
+                       window.location.hostname === 'localhost' || 
+                       window.location.hostname === '127.0.0.1';
+      
+      if (!isSecure) {
+        const serverIP = window.location.hostname;
+        throw new Error(`⚠️ КАМЕРА НЕ РАБОТАЕТ ЧЕРЕЗ HTTP!\n\nВаш сервер: ${serverIP}\n\nДля работы камеры нужен HTTPS.\n\nИспользуйте USB сканер или настройте HTTPS.`);
+      }
+
       // Wait for DOM element to be available
       await new Promise(resolve => setTimeout(resolve, 100));
       

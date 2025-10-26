@@ -47,6 +47,24 @@ export default function ScannerMode() {
       return;
     }
 
+    // КРИТИЧЕСКАЯ ПРОВЕРКА: Камера работает только через HTTPS или localhost
+    const isSecure = window.location.protocol === 'https:' || 
+                     window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1';
+    
+    if (!isSecure) {
+      const serverIP = window.location.hostname;
+      const errorMsg = `⚠️ Камера не работает через HTTP!\n\nВаш сервер: ${serverIP}\n\nДля работы камеры нужен HTTPS или localhost.\n\nРЕШЕНИЕ:\n1. Используйте USB сканер вместо камеры\n2. Или настройте HTTPS на сервере\n3. Или откройте через localhost (если сервер локальный)`;
+      setCameraError(errorMsg);
+      toast({
+        variant: "destructive",
+        title: "Требуется HTTPS",
+        description: "Камера работает только через защищенное соединение",
+        duration: 10000,
+      });
+      return;
+    }
+
     try {
       const scanner = new Html5Qrcode("qr-reader");
       setHtml5QrCode(scanner);
