@@ -173,7 +173,7 @@ pm2 start warehouse
 ## Дополнительная помощь
 
 📖 **Полная документация:** `deployment/DEPLOYMENT_GUIDE.md`  
-🔧 **Конфигурация PM2:** `deployment/ecosystem.config.js`  
+🔧 **Конфигурация PM2:** `deployment/ecosystem.config.cjs`  
 🌐 **Конфигурация Nginx:** `deployment/nginx.conf`  
 💾 **Резервное копирование:** `deployment/backup.sh`  
 

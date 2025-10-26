@@ -13,7 +13,7 @@
 
 **Начните с этого файла!**
 
-### ⚙️ ecosystem.config.js
+### ⚙️ ecosystem.config.cjs
 Конфигурация PM2 (Process Manager) для production.
 - Кластерный режим для всех CPU
 - Автоматический перезапуск
@@ -22,7 +22,7 @@
 
 **Использование:**
 ```bash
-pm2 start ecosystem.config.js --env production
+pm2 start ecosystem.config.cjs --env production
 ```
 
 ### 🌐 nginx.conf
@@ -140,7 +140,7 @@ chmod +x deployment/setup.sh
 ├── node_modules/        # NPM зависимости
 ├── .env                 # Production переменные окружения
 ├── package.json         # NPM конфигурация
-└── ecosystem.config.js  # Симлинк на deployment/ecosystem.config.js
+└── ecosystem.config.cjs  # Симлинк на deployment/ecosystem.config.cjs
 ```
 
 ---

@@ -197,7 +197,7 @@ else
 fi
 
 print_info "Запуск приложения через PM2..."
-pm2 start deployment/ecosystem.config.js --env production
+pm2 start deployment/ecosystem.config.cjs --env production
 
 print_info "Настройка автозапуска..."
 sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u $USER --hp $HOME

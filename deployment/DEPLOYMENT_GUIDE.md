@@ -238,7 +238,7 @@ sudo npm install -g pm2
 
 # Запустить приложение через PM2
 cd /var/www/warehouse
-pm2 start ecosystem.config.js --env production
+pm2 start ecosystem.config.cjs --env production
 
 # Настроить автозапуск при перезагрузке
 pm2 startup systemd

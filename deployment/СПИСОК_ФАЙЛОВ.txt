@@ -43,11 +43,11 @@
 
 ┌─ КОНФИГУРАЦИЯ ────────────────────────────────────────────────────────────┐
 │                                                                            │
-│  ⚙️  ecosystem.config.js         PM2 Process Manager                       │
+│  ⚙️  ecosystem.config.cjs         PM2 Process Manager                       │
 │     • Кластерный режим (все CPU)                                          │
 │     • Автоперезапуск при падении                                          │
 │     • Логирование                                                         │
-│     pm2 start ecosystem.config.js --env production                        │
+│     pm2 start ecosystem.config.cjs --env production                        │
 │                                                                            │
 │  🌐 nginx.conf                   Nginx Reverse Proxy                       │
 │     • WebSocket для barcode scanner                                       │
@@ -179,7 +179,7 @@
 📖 Полная документация:    deployment/DEPLOYMENT_GUIDE.md
 ⚡ Быстрая инструкция:      deployment/QUICK_START_RU.md
 📁 Описание файлов:         deployment/README.md
-🔧 Конфигурация PM2:        deployment/ecosystem.config.js
+🔧 Конфигурация PM2:        deployment/ecosystem.config.cjs
 🌐 Конфигурация Nginx:      deployment/nginx.conf
 
 🆘 Если что-то не работает - читайте DEPLOYMENT_GUIDE.md раздел "Решение проблем"

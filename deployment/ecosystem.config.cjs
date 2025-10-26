@@ -2,8 +2,8 @@
  * PM2 Production Configuration for Warehouse Management System
  * 
  * Usage:
- *   pm2 start ecosystem.config.js --env production
- *   pm2 reload ecosystem.config.js --env production
+ *   pm2 start ecosystem.config.cjs --env production
+ *   pm2 reload ecosystem.config.cjs --env production
  */
 
 module.exports = {
@@ -75,7 +75,7 @@ module.exports = {
       path: '/var/www/warehouse',
       
       // Post-deployment commands
-      'post-deploy': 'npm install --production && npm run build && npm run db:push && pm2 reload ecosystem.config.js --env production',
+      'post-deploy': 'npm install && npm run build && npm run db:push && pm2 reload ecosystem.config.cjs --env production',
       
       // Pre-deployment setup
       'pre-deploy-local': 'echo "Deploying to production..."',
