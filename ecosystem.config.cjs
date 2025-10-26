@@ -4,15 +4,14 @@ module.exports = {
     script: 'dist/index.js',
     instances: 1,
     exec_mode: 'fork',
+    // Переменные окружения из .env файла
+    env_file: '.env',
+    // Дополнительные переменные
     env: {
       NODE_ENV: 'production',
       PORT: 5000,
       HOST: '0.0.0.0'
     },
-    // PM2 автоматически загрузит переменные из .env
-    env_file: '.env',
-    // Альтернативный способ - загрузить .env явно
-    node_args: '-r dotenv/config',
     // Автоматический перезапуск
     autorestart: true,
     watch: false,
