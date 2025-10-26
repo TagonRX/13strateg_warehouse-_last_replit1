@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, X, Trash2, ChevronDown, AlertCircle } from "lucide-react";
+import { Plus, X, Trash2, ChevronDown, AlertCircle, Upload } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -244,6 +244,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   const [newLocationName, setNewLocationName] = useState<string>("");
   const [newLocationBarcode, setNewLocationBarcode] = useState<string>("");
   const [editingBarcode, setEditingBarcode] = useState<{ location: string; value: string } | null>(null);
+  const [csvUploadStats, setCsvUploadStats] = useState<{ added: number; updated: number; errors: string[] } | null>(null);
   const [letterFilter, setLetterFilter] = useState<string[]>([]); // Multi-select letter filter
   const [limitFilter, setLimitFilter] = useState<string>("100");
   
@@ -452,6 +453,78 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       loc.location === location ? { ...loc, barcode: barcode || null } : loc
     ));
     setEditingBarcode(null);
+  };
+
+  // Handler for CSV upload
+  const handleCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+        
+        // Skip header if it contains "Location" or "Локация"
+        const startIndex = lines[0]?.toLowerCase().includes('location') || lines[0]?.toLowerCase().includes('локация') ? 1 : 0;
+        
+        const stats = { added: 0, updated: 0, errors: [] as string[] };
+        const newList = [...locationList];
+        
+        for (let i = startIndex; i < lines.length; i++) {
+          const line = lines[i];
+          // Support both comma and semicolon separators
+          const parts = line.includes(';') ? line.split(';') : line.split(',');
+          
+          if (parts.length < 1) {
+            stats.errors.push(`Строка ${i + 1}: недостаточно данных`);
+            continue;
+          }
+          
+          const location = parts[0]?.trim().toUpperCase();
+          const barcode = parts[1]?.trim() || null;
+          
+          if (!location) {
+            stats.errors.push(`Строка ${i + 1}: пустая локация`);
+            continue;
+          }
+          
+          // Check if location already exists
+          const existingIndex = newList.findIndex(loc => loc.location === location);
+          if (existingIndex >= 0) {
+            // Update existing - only update barcode if provided in CSV
+            newList[existingIndex] = { 
+              location, 
+              barcode: barcode || newList[existingIndex].barcode // Keep existing barcode if CSV has no value
+            };
+            stats.updated++;
+          } else {
+            // Add new
+            newList.push({ location, barcode });
+            stats.added++;
+          }
+        }
+        
+        setLocationList(newList);
+        setCsvUploadStats(stats);
+        
+        toast({
+          title: "CSV загружен",
+          description: `Добавлено: ${stats.added}, обновлено: ${stats.updated}${stats.errors.length > 0 ? `, ошибок: ${stats.errors.length}` : ''}`,
+        });
+      } catch (error) {
+        toast({
+          title: "Ошибка загрузки CSV",
+          description: error instanceof Error ? error.message : "Не удалось обработать файл",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    reader.readAsText(file);
+    // Reset input so same file can be uploaded again
+    event.target.value = '';
   };
 
   // Filter locations based on managed locations and TSKU/MAXQ filters
@@ -737,6 +810,48 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
                   {locationList.length} локаций введено
                   {(locationRangeFrom || locationRangeTo) && ` (показано: ${filteredLocationList.length})`}
                 </p>
+              </div>
+
+              {/* CSV Upload */}
+              <div className="space-y-2">
+                <Label>Массовая загрузка через CSV</Label>
+                <div className="flex gap-2 items-center">
+                  <Button
+                    variant="outline"
+                    onClick={() => document.getElementById('csv-upload-input')?.click()}
+                    data-testid="button-upload-csv"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Загрузить CSV файл
+                  </Button>
+                  <input
+                    id="csv-upload-input"
+                    type="file"
+                    accept=".csv,.txt"
+                    onChange={handleCsvUpload}
+                    className="hidden"
+                    data-testid="input-csv-upload"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    Формат: Location,Barcode (по одной локации на строку)
+                  </span>
+                </div>
+                {csvUploadStats && csvUploadStats.errors.length > 0 && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Ошибки при загрузке CSV</AlertTitle>
+                    <AlertDescription>
+                      <div className="max-h-32 overflow-y-auto space-y-1 text-xs">
+                        {csvUploadStats.errors.slice(0, 10).map((error, idx) => (
+                          <div key={idx}>{error}</div>
+                        ))}
+                        {csvUploadStats.errors.length > 10 && (
+                          <div className="font-semibold">...и ещё {csvUploadStats.errors.length - 10} ошибок</div>
+                        )}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
 
               {/* Add new location */}
