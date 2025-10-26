@@ -29,14 +29,10 @@ echo "→ Остановка старого процесса (если запу�
 pm2 delete warehouse 2>/dev/null || true
 
 echo ""
-echo "→ Запуск сервера через PM2..."
+echo "→ Запуск сервера через PM2 с ecosystem.config.cjs..."
 
-# Запуск через PM2
-pm2 start dist/index.js \
-    --name warehouse \
-    --instances max \
-    --max-memory-restart 500M \
-    --env production
+# Запуск через ecosystem.config.cjs (правильно загружает .env)
+pm2 start ecosystem.config.cjs
 
 # Сохранение для автозапуска
 pm2 save

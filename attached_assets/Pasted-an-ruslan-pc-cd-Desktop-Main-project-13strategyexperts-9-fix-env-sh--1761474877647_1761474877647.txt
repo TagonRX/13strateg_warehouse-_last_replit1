@@ -1,0 +1,172 @@
+an@ruslan-pc:~$ cd ~/Desktop/Main-project-13strategyexperts
+./9-fix-env.sh
+════════════════════════════════════════════════════════════
+  ШАГ 9: ИСПРАВЛЕНИЕ .ENV И ПЕРЕЗАПУСК
+════════════════════════════════════════════════════════════
+
+→ Текущая папка проекта: /home/ruslan/Desktop/Main-project-13strategyexperts
+
+→ Файл .env найден, проверяем содержимое...
+  ✓ DATABASE_URL присутствует в .env
+
+→ Проверка содержимого .env:
+────────────────────────────────────────────────────────────
+# Database
+DATABASE_URL=postgresql://warehouse_user:1234q@localhost:5432/warehouse_db
+
+# Session
+NODE_ENV=production
+  SESSION_SECRET=****** (скрыт)
+  PGPASSWORD=****** (скрыт)
+────────────────────────────────────────────────────────────
+
+→ Остановка PM2...
+[PM2] Applying action deleteProcessId on app [warehouse](ids: [ 0 ])
+[PM2] [warehouse](0) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+
+→ Запуск PM2 с правильным путём...
+  ⚠ ecosystem.config.cjs не найден, запускаем напрямую
+[PM2] Starting /usr/bin/npm in fork_mode (1 instance)
+[PM2] Done.
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ warehouse          │ fork     │ 0    │ online    │ 0%       │ 18.6mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+[PM2] Saving current process list...
+[PM2] Successfully saved in /home/ruslan/.pm2/dump.pm2
+[PM2] Init System found: systemd
+[PM2] To setup the Startup Script, copy/paste the following command:
+sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u ruslan --hp /home/ruslan
+
+→ Ожидание запуска приложения (5 секунд)...
+
+→ Проверка статуса PM2:
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ warehouse          │ fork     │ 8    │ online    │ 0%       │ 60.2mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+
+→ Проверка последних логов:
+[TAILING] Tailing last 10 lines for [warehouse] process (change the value with --lines option)
+/home/ruslan/.pm2/logs/warehouse-out.log last 10 lines:
+0|warehous | > NODE_ENV=production node dist/index.js
+0|warehous | 
+0|warehous | 
+0|warehous | > rest-express@1.0.0 start
+0|warehous | > NODE_ENV=production node dist/index.js
+0|warehous | 
+0|warehous | 
+0|warehous | > rest-express@1.0.0 start
+0|warehous | > NODE_ENV=production node dist/index.js
+0|warehous | 
+
+/home/ruslan/.pm2/logs/warehouse-error.log last 10 lines:
+0|warehous |   throw new Error("DATABASE_URL must be set. Ensure the database is provisioned.");
+0|warehous |         ^
+0|warehous | 
+0|warehous | Error: DATABASE_URL must be set. Ensure the database is provisioned.
+0|warehous |     at file:///home/ruslan/Desktop/Main-project-13strategyexperts/dist/index.js:172:9
+0|warehous |     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+0|warehous |     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+0|warehous |     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+0|warehous | 
+0|warehous | Node.js v20.19.5
+
+
+→ Проверка порта 5000:
+[sudo: authenticate] Password: 
+  ✗ Порт 5000 не слушается
+
+  Показываю последние 20 строк логов для диагностики:
+[TAILING] Tailing last 20 lines for [warehouse] process (change the value with --lines option)
+/home/ruslan/.pm2/logs/warehouse-out.log last 20 lines:
+0|warehous | 
+0|warehous | > rest-express@1.0.0 start
+0|warehous | > NODE_ENV=production node dist/index.js
+0|warehous | 
+0|warehous | 
+0|warehous | > rest-express@1.0.0 start
+0|warehous | > NODE_ENV=production node dist/index.js
+0|warehous | 
+0|warehous | 
+0|warehous | > rest-express@1.0.0 start
+0|warehous | > NODE_ENV=production node dist/index.js
+0|warehous | 
+0|warehous | 
+0|warehous | > rest-express@1.0.0 start
+0|warehous | > NODE_ENV=production node dist/index.js
+0|warehous | 
+0|warehous | 
+0|warehous | > rest-express@1.0.0 start
+0|warehous | > NODE_ENV=production node dist/index.js
+0|warehous | 
+
+/home/ruslan/.pm2/logs/warehouse-error.log last 20 lines:
+0|warehous |         ^
+0|warehous | 
+0|warehous | Error: DATABASE_URL must be set. Ensure the database is provisioned.
+0|warehous |     at file:///home/ruslan/Desktop/Main-project-13strategyexperts/dist/index.js:172:9
+0|warehous |     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+0|warehous |     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+0|warehous |     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+0|warehous | 
+0|warehous | Node.js v20.19.5
+0|warehous | file:///home/ruslan/Desktop/Main-project-13strategyexperts/dist/index.js:172
+0|warehous |   throw new Error("DATABASE_URL must be set. Ensure the database is provisioned.");
+0|warehous |         ^
+0|warehous | 
+0|warehous | Error: DATABASE_URL must be set. Ensure the database is provisioned.
+0|warehous |     at file:///home/ruslan/Desktop/Main-project-13strategyexperts/dist/index.js:172:9
+0|warehous |     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+0|warehous |     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+0|warehous |     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+0|warehous | 
+0|warehous | Node.js v20.19.5
+
+
+════════════════════════════════════════════════════════════
+✓ Исправление завершено
+
+Текущий статус:
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ warehouse          │ fork     │ 15   │ errored   │ 0%       │ 0b       │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+
+════════════════════════════════════════════════════════════
+
+📱 ДОСТУП К ПРИЛОЖЕНИЮ:
+
+  🌐 Через Nginx:
+     http://192.168.0.168
+
+  🔧 Прямой доступ:
+     http://192.168.0.168:5000
+
+  👤 Данные для входа:
+     Логин:  admin
+     Пароль: admin123
+
+════════════════════════════════════════════════════════════
+
+💡 ЕСЛИ ПРОБЛЕМА ОСТАЁТСЯ:
+
+  1. Проверьте логи подробно:
+     pm2 logs warehouse
+
+  2. Проверьте .env файл:
+     cat .env
+
+  3. Проверьте базу данных:
+     sudo -u postgres psql -c "\l" | grep warehouse
+
+  4. Запустите финальную проверку:
+     ./8-final-check.sh
+
+ruslan@ruslan-pc:~/Desktop/Main-project-13strategyexperts$ 

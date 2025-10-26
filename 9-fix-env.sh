@@ -86,13 +86,9 @@ echo ""
 echo "→ Запуск PM2 с правильным путём..."
 cd "$SCRIPT_DIR"
 
-# Запускаем PM2 из папки проекта
-if [ -f "ecosystem.config.cjs" ]; then
-    pm2 start ecosystem.config.cjs
-else
-    echo "  ⚠ ecosystem.config.cjs не найден, запускаем напрямую"
-    pm2 start npm --name warehouse -- start
-fi
+# Запускаем PM2 через ecosystem.config.cjs (правильно загружает .env)
+echo "  ✓ Использую ecosystem.config.cjs для правильной загрузки .env"
+pm2 start ecosystem.config.cjs
 
 # Настройка автозапуска
 pm2 save
