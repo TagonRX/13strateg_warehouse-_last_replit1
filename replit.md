@@ -110,6 +110,8 @@ Complete deployment package available in `deployment/` directory:
 - **backup.sh/restore.sh** - Database backup and restore scripts
 
 ### Documentation
+- **БЫСТРАЯ_УСТАНОВКА_HTTPS.txt** - Quick HTTPS setup guide (3 minutes!) - NEW!
+- **НАСТРОЙКА_HTTPS.txt** - Complete HTTPS configuration guide - NEW!
 - **ФИНАЛЬНАЯ_ВЕРСИЯ.txt** - Complete deployment guide and file inventory (FINAL VERSION!)
 - **0-НАЧНИТЕ_ЗДЕСЬ.txt** - Main entry point (START HERE!)
 - **БЫСТРАЯ_УСТАНОВКА_8_ШАГОВ.txt** - Complete installation guide
@@ -123,6 +125,7 @@ Complete deployment package available in `deployment/` directory:
 
 ### Installation Files
 - **install-kubuntu.sh** - Complete one-file automated installation for Kubuntu 25.10
+- **setup-https.sh** - Automatic HTTPS setup script (enables phone camera scanning) - NEW!
 - **launch.sh** - Server startup script (PM2)
 - **create-admin-user.sh** - Manual admin user creation if needed
 - **server/create-admin.ts** - Admin creation script with bcrypt hashing
