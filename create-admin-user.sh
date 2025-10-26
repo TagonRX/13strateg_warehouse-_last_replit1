@@ -20,7 +20,9 @@ if [ ! -f ".env" ]; then
 fi
 
 # Читаем .env и экспортируем переменные
-export $(cat .env | grep -v '^#' | xargs)
+set -a
+source .env
+set +a
 
 # Запускаем скрипт создания admin
 npx tsx server/create-admin.ts

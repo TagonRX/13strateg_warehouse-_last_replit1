@@ -32,7 +32,9 @@ pm2 delete warehouse 2>/dev/null || true
 
 # Читаем .env и экспортируем переменные для PM2
 echo "→ Загрузка переменных из .env..."
-export $(cat .env | grep -v '^#' | xargs)
+set -a
+source .env
+set +a
 
 # Запускаем PM2
 echo "→ Запуск сервера через PM2..."

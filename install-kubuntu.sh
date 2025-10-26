@@ -104,17 +104,22 @@ DB_PASSWORD="1234q"
 
 echo "→ Создание пользователя и базы данных..."
 sudo -u postgres psql << EOF
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_user WHERE usename = '$DB_USER') THEN
-        CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';
-    END IF;
-    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = '$DB_NAME') THEN
-        CREATE DATABASE $DB_NAME OWNER $DB_USER;
-    END IF;
-END
-\$\$;
+-- Удаляем старого пользователя если есть
+DROP DATABASE IF EXISTS $DB_NAME;
+DROP USER IF EXISTS $DB_USER;
+
+-- Создаём нового
+CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';
+CREATE DATABASE $DB_NAME OWNER $DB_USER;
 GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;
+
+-- Даём права на схему public
+\c $DB_NAME
+GRANT ALL ON SCHEMA public TO $DB_USER;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO $DB_USER;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO $DB_USER;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $DB_USER;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO $DB_USER;
 EOF
 
 echo ""
@@ -168,6 +173,8 @@ npm run db:push || npm run db:push -- --force
 
 echo ""
 echo "→ Создание admin пользователя..."
+# Экспортируем DATABASE_URL перед запуском
+export DATABASE_URL="postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME"
 npx tsx server/create-admin.ts
 
 echo ""
@@ -193,7 +200,9 @@ pm2 delete warehouse 2>/dev/null || true
 
 # Читаем .env и экспортируем переменные для PM2
 if [ -f ".env" ]; then
-    export $(cat .env | grep -v '^#' | xargs)
+    set -a
+    source .env
+    set +a
 fi
 
 echo "→ Запуск сервера через PM2..."
