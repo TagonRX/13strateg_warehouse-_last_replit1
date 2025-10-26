@@ -35,32 +35,32 @@ export default function ScannerMode() {
   const startScanning = async () => {
     setCameraError("");
     
-    // Проверка поддержки камеры браузером
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      const errorMsg = "Ваш браузер не поддерживает доступ к камере. Используйте Chrome, Firefox или Safari.";
-      setCameraError(errorMsg);
-      toast({
-        variant: "destructive",
-        title: "Браузер не поддерживается",
-        description: errorMsg,
-      });
-      return;
-    }
-
-    // КРИТИЧЕСКАЯ ПРОВЕРКА: Камера работает только через HTTPS или localhost
+    // КРИТИЧЕСКАЯ ПРОВЕРКА #1: Камера работает только через HTTPS или localhost
     const isSecure = window.location.protocol === 'https:' || 
                      window.location.hostname === 'localhost' || 
                      window.location.hostname === '127.0.0.1';
     
     if (!isSecure) {
       const serverIP = window.location.hostname;
-      const errorMsg = `⚠️ Камера не работает через HTTP!\n\nВаш сервер: ${serverIP}\n\nДля работы камеры нужен HTTPS или localhost.\n\nРЕШЕНИЕ:\n1. Используйте USB сканер вместо камеры\n2. Или настройте HTTPS на сервере\n3. Или откройте через localhost (если сервер локальный)`;
+      const errorMsg = `⚠️ КАМЕРА НЕ РАБОТАЕТ ЧЕРЕЗ HTTP!\n\nВаш сервер: ${serverIP}\n\nКамера работает только через HTTPS или localhost.\n\nРЕШЕНИЕ:\n✓ Используйте USB сканер (работает всегда)\n✓ Или настройте HTTPS на сервере`;
       setCameraError(errorMsg);
       toast({
         variant: "destructive",
-        title: "Требуется HTTPS",
-        description: "Камера работает только через защищенное соединение",
+        title: "⚠️ Требуется HTTPS",
+        description: "Камера заблокирована браузером из-за HTTP. Используйте USB сканер или настройте HTTPS.",
         duration: 10000,
+      });
+      return;
+    }
+
+    // Проверка #2: Поддержка камеры браузером (после проверки HTTPS!)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const errorMsg = "Ваш браузер не поддерживает доступ к камере. Используйте современный браузер (Chrome, Firefox, Safari, Brave).";
+      setCameraError(errorMsg);
+      toast({
+        variant: "destructive",
+        title: "Браузер не поддерживается",
+        description: errorMsg,
       });
       return;
     }
