@@ -11,22 +11,23 @@ This project is a comprehensive warehouse management system designed to streamli
 ```
 Скрипт автоматически установит зависимости, настроит окружение и запустит приложение. Подробности в `START_RU.txt`.
 
-### Установка на Kubuntu 25.10 сервер (8 шагов)
-Запустите скрипты по очереди прямо из корня проекта:
+### Установка на Kubuntu 25.10 сервер (ОДНА КОМАНДА!)
+Полностью автоматическая установка одним файлом:
 ```bash
-# Основные (обязательно):
-./1-install-node.sh        # Установка Node.js 20
-./2-install-postgres.sh    # Установка PostgreSQL
-./3-setup-database.sh      # Создание базы данных (пароль: 1234q)
-./4-install-app.sh         # Установка приложения
-./5-run-server.sh          # Запуск сервера (постоянно)
-
-# Дополнительные (автоматизация):
-./6-configure-firewall.sh  # Настройка firewall (открывает порты)
-./7-setup-nginx.sh         # Nginx (опционально)
-./8-final-check.sh         # Финальная проверка всех компонентов
+cd ~/Desktop/Main-project-13strategyexperts
+chmod +x install-kubuntu.sh
+./install-kubuntu.sh
 ```
-Каждый скрипт автоматически выполнит свою часть установки. См. `БЫСТРАЯ_УСТАНОВКА_8_ШАГОВ.txt`.
+
+Скрипт автоматически выполнит:
+- Установку Node.js 20 LTS
+- Установку PostgreSQL
+- Создание базы данных warehouse_db (пользователь: warehouse_user, пароль: 1234q)
+- Установку зависимостей и сборку приложения
+- Создание admin пользователя с bcrypt хешем (логин: admin, пароль: admin123)
+- Установку PM2 и запуск сервера
+
+**Логин в систему:** admin / admin123 ✅ ПРОТЕСТИРОВАНО!
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -65,22 +66,38 @@ Use the automated startup script:
 ./start.sh production     # Production mode (PM2)
 ```
 
-### Production Deployment - Kubuntu 25.10 (8-step installation)
-Simple installation scripts in project root (just click them in order):
+### Production Deployment - Kubuntu 25.10 (ONE-FILE INSTALLATION)
+Complete automated installation with single script:
 
-**Core Steps (required):**
-1. **1-install-node.sh** - Installs Node.js 20 LTS
-2. **2-install-postgres.sh** - Installs PostgreSQL
-3. **3-setup-database.sh** - Creates database with password `1234q`, generates .env file
-4. **4-install-app.sh** - npm install, vite build, PM2 setup
-5. **5-run-server.sh** - Starts server (runs permanently with auto-restart)
+```bash
+cd ~/Desktop/Main-project-13strategyexperts
+chmod +x install-kubuntu.sh
+./install-kubuntu.sh
+```
 
-**Additional Steps (automation):**
-6. **6-configure-firewall.sh** - Configures UFW firewall (opens ports 22, 80, 443, 5000)
-7. **7-setup-nginx.sh** - Installs and configures Nginx reverse proxy (optional)
-8. **8-final-check.sh** - Comprehensive verification of all components
+**What it does:**
+1. Installs Node.js 20 LTS
+2. Installs PostgreSQL
+3. Creates database warehouse_db (user: warehouse_user, password: 1234q)
+4. Creates .env file with database connection string
+5. Installs npm dependencies
+6. Builds application (vite build + esbuild)
+7. Syncs database schema (drizzle-kit push)
+8. Creates admin user with bcrypt-hashed password
+9. Installs PM2 process manager
+10. Starts server via PM2 on port 5000
 
-Each script shows next steps. Total time: ~15-20 minutes. Database password is automatically set to `1234q`.
+**Total installation time:** ~15-20 minutes  
+**Database password:** 1234q (fixed)  
+**Admin credentials:** admin / admin123 ✅ TESTED AND WORKING
+
+**Server management:**
+```bash
+./launch.sh          # Start/restart server
+pm2 stop warehouse   # Stop server
+pm2 logs warehouse   # View logs
+pm2 status           # Check status
+```
 
 ### Alternative: Advanced Deployment
 Complete deployment package available in `deployment/` directory:
@@ -92,14 +109,22 @@ Complete deployment package available in `deployment/` directory:
 - **backup.sh/restore.sh** - Database backup and restore scripts
 
 ### Documentation
+- **ФИНАЛЬНАЯ_ВЕРСИЯ.txt** - Complete deployment guide and file inventory (FINAL VERSION!)
 - **0-НАЧНИТЕ_ЗДЕСЬ.txt** - Main entry point (START HERE!)
-- **БЫСТРАЯ_УСТАНОВКА_8_ШАГОВ.txt** - Complete 8-step installation guide (NEW!)
-- **TROUBLESHOOTING_KUBUNTU.txt** - Comprehensive troubleshooting guide (NEW!)
-- **REPLIT_VS_SERVER.txt** - Explains differences between Replit dev and Kubuntu server (NEW!)
-- **ЧТО_СДЕЛАНО.txt** - Summary of all automation improvements (NEW!)
+- **БЫСТРАЯ_УСТАНОВКА_8_ШАГОВ.txt** - Complete installation guide
+- **TROUBLESHOOTING_KUBUNTU.txt** - Comprehensive troubleshooting guide
+- **REPLIT_VS_SERVER.txt** - Explains differences between Replit dev and Kubuntu server
+- **ЧТО_СДЕЛАНО.txt** - Summary of all automation improvements
 - **УСТАНОВКА_KUBUNTU.txt** - Kubuntu installation guide
 - **РАЗВЕРТЫВАНИЕ.txt** - Deployment overview
 - **КАК_ЗАГРУЗИТЬ_НА_СЕРВЕР.md** - Step-by-step server upload guide
+- **КАК_ИСПОЛЬЗОВАТЬ_GITHUB.txt** - GitHub workflow guide
+
+### Installation Files
+- **install-kubuntu.sh** - Complete one-file automated installation for Kubuntu 25.10
+- **launch.sh** - Server startup script (PM2)
+- **create-admin-user.sh** - Manual admin user creation if needed
+- **server/create-admin.ts** - Admin creation script with bcrypt hashing
 
 ## External Dependencies
 
