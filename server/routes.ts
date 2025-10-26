@@ -1393,6 +1393,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/users/:id/login", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = (req as any).userId;
+      
+      // Validate request body with Zod
+      const updateLoginSchema = z.object({
+        login: z.string().min(1, "Логин не может быть пустым").trim()
+      });
+
+      const validation = updateLoginSchema.safeParse(req.body);
+      if (!validation.success) {
+        const error = fromZodError(validation.error);
+        return res.status(400).json({ error: error.message });
+      }
+
+      // Validate UUID format
+      const uuidSchema = z.string().uuid("Неверный формат ID пользователя");
+      const idValidation = uuidSchema.safeParse(id);
+      if (!idValidation.success) {
+        return res.status(400).json({ error: "Неверный формат ID пользователя" });
+      }
+
+      // Get user before update for logging
+      const userBefore = await storage.getUser(id);
+      if (!userBefore) {
+        return res.status(404).json({ error: "Пользователь не найден" });
+      }
+
+      // Check if new login already exists
+      const existingUser = await storage.getUserByLogin(validation.data.login);
+      if (existingUser && existingUser.id !== id) {
+        return res.status(400).json({ error: "Этот логин уже используется" });
+      }
+
+      const updatedUser = await storage.updateUserLogin(id, validation.data.login);
+      if (!updatedUser) {
+        return res.status(404).json({ error: "Пользователь не найден" });
+      }
+
+      // Log the login change
+      await storage.createEventLog({
+        userId: currentUserId,
+        action: "USER_LOGIN_UPDATED",
+        details: `Изменён логин пользователя: "${userBefore.login}" → "${validation.data.login}" (${userBefore.name})`,
+      });
+
+      const { password, ...safeUser } = updatedUser;
+      
+      return res.json(safeUser);
+    } catch (error: any) {
+      console.error("Update user login error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // SKU Errors (admin only)
   app.get("/api/sku-errors", requireAuth, requireAdmin, async (req, res) => {
     try {

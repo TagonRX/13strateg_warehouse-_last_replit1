@@ -273,6 +273,21 @@ export async function updateUserName(id: string, name: string): Promise<Omit<Use
   return response.json();
 }
 
+export async function updateUserLogin(id: string, login: string): Promise<Omit<User, "password">> {
+  const response = await fetch(`/api/users/${id}/login`, {
+    method: "PATCH",
+    headers: getHeaders(),
+    body: JSON.stringify({ login }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to update user login");
+  }
+
+  return response.json();
+}
+
 export async function logout(): Promise<void> {
   const response = await fetch("/api/auth/logout", {
     method: "POST",

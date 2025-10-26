@@ -301,6 +301,25 @@ function AppContent() {
     },
   });
 
+  const updateLoginMutation = useMutation({
+    mutationFn: ({ userId, login }: { userId: string; login: string }) =>
+      api.updateUserLogin(userId, login),
+    onSuccess: () => {
+      refetchUsers();
+      toast({
+        title: "Логин изменен",
+        description: "Логин пользователя успешно обновлен",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleLogin = (login: string, password: string) => {
     loginMutation.mutate({ login, password });
   };
@@ -337,6 +356,10 @@ function AppContent() {
 
   const handleUpdateName = (userId: string, name: string) => {
     updateNameMutation.mutate({ userId, name });
+  };
+
+  const handleUpdateLogin = (userId: string, login: string) => {
+    updateLoginMutation.mutate({ userId, login });
   };
 
   if (isCheckingAuth) {
@@ -429,8 +452,10 @@ function AppContent() {
                 onDeleteUser={handleDeleteUser}
                 onUpdatePassword={handleUpdatePassword}
                 onUpdateName={handleUpdateName}
+                onUpdateLogin={handleUpdateLogin}
                 isUpdatingPassword={updatePasswordMutation.isPending}
                 isUpdatingName={updateNameMutation.isPending}
+                isUpdatingLogin={updateLoginMutation.isPending}
               />
             </div>
           </Route>

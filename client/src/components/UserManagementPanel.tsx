@@ -43,11 +43,13 @@ interface UserManagementPanelProps {
   onDeleteUser: (userId: string) => void;
   onUpdatePassword: (userId: string, password: string) => void;
   onUpdateName: (userId: string, name: string) => void;
+  onUpdateLogin: (userId: string, login: string) => void;
   isUpdatingPassword?: boolean;
   isUpdatingName?: boolean;
+  isUpdatingLogin?: boolean;
 }
 
-export default function UserManagementPanel({ users, onCreateUser, onDeleteUser, onUpdatePassword, onUpdateName, isUpdatingPassword = false, isUpdatingName = false }: UserManagementPanelProps) {
+export default function UserManagementPanel({ users, onCreateUser, onDeleteUser, onUpdatePassword, onUpdateName, onUpdateLogin, isUpdatingPassword = false, isUpdatingName = false, isUpdatingLogin = false }: UserManagementPanelProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [login, setLogin] = useState("");
@@ -62,6 +64,9 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
 
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
   const [editingName, setEditingName] = useState("");
+
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [editingLogin, setEditingLogin] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,6 +107,22 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
     setSelectedUserId(userId);
     setEditingName(currentName);
     setNameDialogOpen(true);
+  };
+
+  const handleLoginChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedUserId && editingLogin.trim()) {
+      onUpdateLogin(selectedUserId, editingLogin.trim());
+      setEditingLogin("");
+      setSelectedUserId(null);
+      setLoginDialogOpen(false);
+    }
+  };
+
+  const openLoginDialog = (userId: string, currentLogin: string) => {
+    setSelectedUserId(userId);
+    setEditingLogin(currentLogin);
+    setLoginDialogOpen(true);
   };
 
   return (
@@ -205,7 +226,7 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
                 <TableHead>Имя</TableHead>
                 <TableHead>Логин</TableHead>
                 <TableHead>Роль</TableHead>
-                <TableHead className="w-[150px]"></TableHead>
+                <TableHead className="w-[200px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -226,6 +247,15 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
                         onClick={() => openNameDialog(user.id, user.name)}
                         data-testid={`button-edit-name-${user.id}`}
                         title="Редактировать имя"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openLoginDialog(user.id, user.login)}
+                        data-testid={`button-edit-login-${user.id}`}
+                        title="Редактировать логин"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
@@ -330,6 +360,38 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
             <DialogFooter>
               <Button type="submit" data-testid="button-save-name" disabled={isUpdatingName}>
                 {isUpdatingName ? "Сохранение..." : "Сохранить"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleLoginChange}>
+            <DialogHeader>
+              <DialogTitle>Редактировать логин</DialogTitle>
+              <DialogDescription>
+                Введите новый логин для пользователя
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-login">Логин</Label>
+                <Input
+                  id="edit-login"
+                  type="text"
+                  value={editingLogin}
+                  onChange={(e) => setEditingLogin(e.target.value)}
+                  placeholder="ivan.petrov"
+                  required
+                  data-testid="input-edit-login"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" data-testid="button-save-login" disabled={isUpdatingLogin}>
+                {isUpdatingLogin ? "Сохранение..." : "Сохранить"}
               </Button>
             </DialogFooter>
           </form>
