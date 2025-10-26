@@ -187,19 +187,23 @@ if [ "$MODE" = "production" ] || [ "$MODE" = "prod" ]; then
     print_success "База данных синхронизирована"
     
     # Запуск через PM2
-    if [ -f "deployment/ecosystem.config.js" ]; then
-        print_info "Запуск через PM2..."
-        
-        # Остановка старого процесса
-        pm2 delete warehouse 2>/dev/null || true
-        
-        # Запуск нового
-        pm2 start deployment/ecosystem.config.js --env production
-        
-        # Сохранение для автозапуска
-        pm2 save
-        
-        print_success "Приложение запущено через PM2"
+    print_info "Запуск через PM2..."
+    
+    # Остановка старого процесса
+    pm2 delete warehouse 2>/dev/null || true
+    
+    # Запуск через PM2 с параметрами
+    pm2 start dist/index.js \
+        --name warehouse \
+        --instances max \
+        --max-memory-restart 500M \
+        --env production
+    
+    # Сохранение для автозапуска
+    pm2 save
+    pm2 startup | grep 'sudo' | bash || true
+    
+    print_success "Приложение запущено через PM2"
         
         echo ""
         print_info "Управление приложением:"
@@ -227,11 +231,6 @@ if [ "$MODE" = "production" ] || [ "$MODE" = "prod" ]; then
         print_info "Логин: admin / Пароль: admin123"
         echo ""
         
-    else
-        print_error "Файл ecosystem.config.js не найден!"
-        print_info "Запуск через node..."
-        NODE_ENV=production node dist/index.js
-    fi
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════
