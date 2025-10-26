@@ -130,7 +130,7 @@ export default function AppLayout({
   } as React.CSSProperties;
 
   return (
-    <SidebarProvider style={sidebarStyle}>
+    <SidebarProvider defaultOpen={true} style={sidebarStyle}>
       <div className="flex h-screen w-full">
         <Sidebar>
           <SidebarContent>
