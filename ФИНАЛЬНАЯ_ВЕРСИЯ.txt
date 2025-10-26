@@ -24,6 +24,10 @@
    1. server/db.ts           - УНИВЕРСАЛЬНЫЙ драйвер БД (Replit + Kubuntu)
    2. server/create-admin.ts - Создание admin БЕЗ WebSocket
    
+   ✨ НОВЫЕ ФУНКЦИИ (26.10.2025):
+   
+   3. client/src/components/WarehouseLoadingView.tsx - Массовая загрузка локаций через CSV
+   
    Основные файлы установки:
 
    3. install-kubuntu.sh     - Полная автоматическая установка

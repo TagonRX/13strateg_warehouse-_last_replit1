@@ -44,6 +44,7 @@ The backend is built with Node.js and Express.js, using TypeScript and ES Module
 
 ### Feature Specifications
 *   **Inventory Management**: Supports bulk imports, real-time updates, location consistency checks, and comprehensive price tracking. An archiving system records all inventory changes. Includes automatic condition transfer from testing to stock-in and inventory display, with support for items without barcodes.
+*   **Location Management**: Administrators can mass-upload locations and barcodes via CSV files in the Warehouse Loading view. Supports both comma and semicolon delimiters, automatic header detection, and preserves existing barcodes when CSV values are empty. Shows upload statistics (added, updated, errors).
 *   **Cost Analytics**: Tracks costs through event logs for stock-in/out operations and worker performance.
 *   **Picking Lists**: Manages daily picking lists with enhanced CSV/Excel/URL import capabilities, global credentials for multiple sources, persistent selections, and inventory depletion warnings. Manual collection is also supported.
 *   **Warehouse Loading View**: Provides dynamic filtering, configuration of warehouse settings for capacity analysis, and validation against managed locations.
