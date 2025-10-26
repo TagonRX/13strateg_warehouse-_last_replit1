@@ -14,7 +14,7 @@ echo ""
 # Параметры БД (можно изменить)
 DB_NAME="warehouse_db"
 DB_USER="warehouse_user"
-DB_PASS="warehouse_pass_$(date +%s)"
+DB_PASS="1234q"
 
 echo "→ Создание пользователя и базы данных..."
 

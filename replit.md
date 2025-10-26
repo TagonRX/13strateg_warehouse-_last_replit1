@@ -11,16 +11,22 @@ This project is a comprehensive warehouse management system designed to streamli
 ```
 Скрипт автоматически установит зависимости, настроит окружение и запустит приложение. Подробности в `START_RU.txt`.
 
-### Установка на Kubuntu 25.10 сервер (в 5 кликов)
+### Установка на Kubuntu 25.10 сервер (8 шагов)
 Запустите скрипты по очереди прямо из корня проекта:
 ```bash
+# Основные (обязательно):
 ./1-install-node.sh        # Установка Node.js 20
 ./2-install-postgres.sh    # Установка PostgreSQL
-./3-setup-database.sh      # Создание базы данных
+./3-setup-database.sh      # Создание базы данных (пароль: 1234q)
 ./4-install-app.sh         # Установка приложения
 ./5-run-server.sh          # Запуск сервера (постоянно)
+
+# Дополнительные (автоматизация):
+./6-configure-firewall.sh  # Настройка firewall (открывает порты)
+./7-setup-nginx.sh         # Nginx (опционально)
+./8-final-check.sh         # Финальная проверка всех компонентов
 ```
-Каждый скрипт автоматически выполнит свою часть установки. См. `УСТАНОВКА_KUBUNTU.txt` и `БЫСТРАЯ_УСТАНОВКА.txt`.
+Каждый скрипт автоматически выполнит свою часть установки. См. `БЫСТРАЯ_УСТАНОВКА_8_ШАГОВ.txt`.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -59,15 +65,22 @@ Use the automated startup script:
 ./start.sh production     # Production mode (PM2)
 ```
 
-### Production Deployment - Kubuntu 25.10 (5-click installation)
+### Production Deployment - Kubuntu 25.10 (8-step installation)
 Simple installation scripts in project root (just click them in order):
+
+**Core Steps (required):**
 1. **1-install-node.sh** - Installs Node.js 20 LTS
 2. **2-install-postgres.sh** - Installs PostgreSQL
-3. **3-setup-database.sh** - Creates database, user, and .env file
-4. **4-install-app.sh** - npm install, build, PM2 setup
+3. **3-setup-database.sh** - Creates database with password `1234q`, generates .env file
+4. **4-install-app.sh** - npm install, vite build, PM2 setup
 5. **5-run-server.sh** - Starts server (runs permanently with auto-restart)
 
-Each script shows next steps. Total time: ~15-20 minutes.
+**Additional Steps (automation):**
+6. **6-configure-firewall.sh** - Configures UFW firewall (opens ports 22, 80, 443, 5000)
+7. **7-setup-nginx.sh** - Installs and configures Nginx reverse proxy (optional)
+8. **8-final-check.sh** - Comprehensive verification of all components
+
+Each script shows next steps. Total time: ~15-20 minutes. Database password is automatically set to `1234q`.
 
 ### Alternative: Advanced Deployment
 Complete deployment package available in `deployment/` directory:
@@ -80,8 +93,11 @@ Complete deployment package available in `deployment/` directory:
 
 ### Documentation
 - **0-НАЧНИТЕ_ЗДЕСЬ.txt** - Main entry point (START HERE!)
+- **БЫСТРАЯ_УСТАНОВКА_8_ШАГОВ.txt** - Complete 8-step installation guide (NEW!)
+- **TROUBLESHOOTING_KUBUNTU.txt** - Comprehensive troubleshooting guide (NEW!)
+- **REPLIT_VS_SERVER.txt** - Explains differences between Replit dev and Kubuntu server (NEW!)
+- **ЧТО_СДЕЛАНО.txt** - Summary of all automation improvements (NEW!)
 - **УСТАНОВКА_KUBUNTU.txt** - Kubuntu installation guide
-- **БЫСТРАЯ_УСТАНОВКА.txt** - Detailed installation with troubleshooting
 - **РАЗВЕРТЫВАНИЕ.txt** - Deployment overview
 - **КАК_ЗАГРУЗИТЬ_НА_СЕРВЕР.md** - Step-by-step server upload guide
 
