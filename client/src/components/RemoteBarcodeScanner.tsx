@@ -134,6 +134,7 @@ export default function RemoteBarcodeScanner() {
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
+          // Html5Qrcode автоматически поддерживает все форматы: QR, CODE_128, EAN, UPC и другие
         },
         (decodedText) => {
           // Save scanned code, don't send automatically

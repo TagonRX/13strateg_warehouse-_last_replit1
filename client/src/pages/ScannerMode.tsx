@@ -73,6 +73,7 @@ export default function ScannerMode() {
         fps: 10,
         qrbox: { width: 350, height: 350 }, // Увеличен размер для лучшего зума
         aspectRatio: 1.0,
+        // Html5Qrcode автоматически поддерживает все форматы: QR, CODE_128, EAN, UPC и другие
       };
 
       // Html5Qrcode сам запросит разрешение на камеру
@@ -89,7 +90,7 @@ export default function ScannerMode() {
       setCameraError("");
       toast({
         title: "Камера запущена",
-        description: "Наведите камеру на штрихкод",
+        description: "Наведите камеру на штрихкод или QR код",
       });
     } catch (error: any) {
       console.error("Camera start error:", error);
@@ -182,7 +183,7 @@ export default function ScannerMode() {
 
     toast({
       title: "✓ Отправлено",
-      description: `Штрихкод: ${pendingBarcode}, Кол-во: ${qty}`,
+      description: `Код: ${pendingBarcode}, Кол-во: ${qty}`,
     });
 
     // Очищаем и возобновляем сканирование
@@ -210,7 +211,7 @@ export default function ScannerMode() {
             <div>
               <CardTitle className="text-2xl">Режим сканера</CardTitle>
               <CardDescription>
-                {currentUser?.name || "Пользователь"}
+                {currentUser?.name || "Пользователь"} • Штрихкоды и QR коды
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -290,7 +291,7 @@ export default function ScannerMode() {
           <div className="space-y-3">
             {scanning && !pendingBarcode && (
               <div className="text-center text-sm text-muted-foreground">
-                Наведите камеру на штрихкод
+                Наведите камеру на штрихкод или QR код
               </div>
             )}
             
@@ -311,7 +312,7 @@ export default function ScannerMode() {
                   <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
                     <div className="text-center space-y-4">
                       <div className="text-lg font-semibold text-foreground">
-                        Найден штрихкод
+                        Найден код
                       </div>
                       
                       <div className="p-4 bg-muted rounded-md">

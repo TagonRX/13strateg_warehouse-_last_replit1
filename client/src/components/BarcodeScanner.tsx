@@ -15,7 +15,7 @@ interface BarcodeScannerProps {
   label?: string;
 }
 
-export default function BarcodeScanner({ onScan, label = "Штрихкод" }: BarcodeScannerProps) {
+export default function BarcodeScanner({ onScan, label = "Штрихкод / QR код" }: BarcodeScannerProps) {
   const [mode, setMode] = useState<"usb" | "mobile" | "remote">("usb");
   const { isConnected, lastMessage, sendMessage } = useWebSocket();
   const [barcode, setBarcode] = useState("");
@@ -76,6 +76,7 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
+          // Html5Qrcode автоматически поддерживает все форматы: QR, CODE_128, EAN, UPC и другие
         },
         (decodedText) => {
           // Success callback
@@ -170,7 +171,7 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
     <Card>
       <CardHeader className="pb-2 p-3">
         <CardTitle className="text-sm">{label}</CardTitle>
-        <CardDescription className="text-xs">Выберите способ сканирования</CardDescription>
+        <CardDescription className="text-xs">Поддержка штрихкодов и QR кодов</CardDescription>
       </CardHeader>
       <CardContent className="p-3 pt-0">
         <Tabs value={mode} onValueChange={(v) => setMode(v as "usb" | "mobile" | "remote")}>
@@ -180,7 +181,7 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод" }: B
               USB
             </TabsTrigger>
             <TabsTrigger value="mobile" data-testid="tab-mobile-scanner" className="text-xs py-1">
-              <Smartphone className="w-3 h-3 mr-1" />
+              <Camera className="w-3 h-3 mr-1" />
               Камера
             </TabsTrigger>
             <TabsTrigger value="remote" data-testid="tab-remote-scanner" className="text-xs py-1">
