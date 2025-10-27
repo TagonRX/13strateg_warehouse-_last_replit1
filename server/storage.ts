@@ -3,6 +3,7 @@ import {
   users, 
   inventoryItems, 
   eventLogs,
+  workerAnalytics,
   pickingLists,
   pickingTasks,
   skuErrors,
@@ -20,6 +21,7 @@ import {
   type InsertInventoryItem,
   type InsertEventLog,
   type EventLog,
+  type WorkerAnalytics,
   type PickingList,
   type InsertPickingList,
   type PickingTask,
@@ -194,6 +196,42 @@ export class DbStorage implements IStorage {
   }
 
   async deleteUser(id: string): Promise<void> {
+    // Delete all related records first to avoid foreign key constraint violations
+    // 1. Delete event logs
+    await db.delete(eventLogs).where(eq(eventLogs.userId, id));
+    
+    // 2. Delete worker analytics
+    await db.delete(workerAnalytics).where(eq(workerAnalytics.userId, id));
+    
+    // 3. Set createdBy to null in inventory items
+    await db.update(inventoryItems).set({ createdBy: null }).where(eq(inventoryItems.createdBy, id));
+    
+    // 4. Set createdBy to null in picking lists
+    await db.update(pickingLists).set({ createdBy: null }).where(eq(pickingLists.createdBy, id));
+    
+    // 5. Delete pending tests where user is firstScanBy
+    await db.delete(pendingTests).where(eq(pendingTests.firstScanBy, id));
+    
+    // 6. Delete tested items where user is firstScanBy or decisionBy
+    await db.delete(testedItems).where(
+      or(
+        eq(testedItems.firstScanBy, id),
+        eq(testedItems.decisionBy, id)
+      )
+    );
+    
+    // 7. Delete faulty stock where user is firstScanBy or decisionBy
+    await db.delete(faultyStock).where(
+      or(
+        eq(faultyStock.firstScanBy, id),
+        eq(faultyStock.decisionBy, id)
+      )
+    );
+    
+    // 8. Delete pending placements where user is stockInBy
+    await db.delete(pendingPlacements).where(eq(pendingPlacements.stockInBy, id));
+    
+    // 9. Finally, delete the user
     await db.delete(users).where(eq(users.id, id));
   }
 
