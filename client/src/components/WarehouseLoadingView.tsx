@@ -613,10 +613,15 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   // Mutation for updating single location barcode
   const updateBarcodeMutation = useMutation({
     mutationFn: async ({ location, barcode }: { location: string; barcode: string }) => {
+      console.log('[WarehouseLoadingView] updateBarcodeMutation called with:', { location, barcode });
       const res = await apiRequest("PATCH", `/api/warehouse/active-locations/${encodeURIComponent(location)}/barcode`, { barcode });
+      console.log('[WarehouseLoadingView] PATCH response:', res.status);
       return res.json();
     },
     onSuccess: (data, variables) => {
+      console.log('[WarehouseLoadingView] updateBarcodeMutation success:', { data, variables });
+      // Clear editing state after successful save
+      setEditingBarcode(null);
       // Update local state
       setLocationList(prev => prev.map(loc => 
         loc.location === variables.location ? { ...loc, barcode: variables.barcode || null } : loc
@@ -629,6 +634,9 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       });
     },
     onError: (error: any) => {
+      console.error('[WarehouseLoadingView] updateBarcodeMutation error:', error);
+      // Clear editing state even on error
+      setEditingBarcode(null);
       toast({
         title: "Ошибка",
         description: error.message || "Не удалось обновить баркод",
@@ -643,10 +651,11 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   }, []);
 
   const handleUpdateBarcode = useCallback((location: string, barcode: string) => {
+    console.log('[WarehouseLoadingView] handleUpdateBarcode called with:', { location, barcode });
     // Immediately save to database
     updateBarcodeMutation.mutate({ location, barcode });
-    setEditingBarcode(null);
-  }, []);
+    // Don't clear editing state here - wait for onSuccess/onError
+  }, [updateBarcodeMutation]);
 
   const handleCancelEditBarcode = useCallback(() => {
     setEditingBarcode(null);
