@@ -34,11 +34,12 @@ interface StockInFormProps {
   }) => void;
   onSkuChange?: (sku: string) => void;
   externalSku?: string;
+  externalLocation?: string;
 }
 
 type ScannerMode = "usb" | "phone";
 
-export default function StockInForm({ onSubmit, onSkuChange, externalSku }: StockInFormProps) {
+export default function StockInForm({ onSubmit, onSkuChange, externalSku, externalLocation }: StockInFormProps) {
   const [productId, setProductId] = useState("");
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
@@ -65,12 +66,18 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku }: Stoc
   // WebSocket for phone mode
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
 
-  // Update SKU when externalSku prop changes (from location click)
+  // Update SKU and Location when external props change (from location click)
   useEffect(() => {
     if (externalSku) {
       setSku(externalSku);
     }
   }, [externalSku]);
+
+  useEffect(() => {
+    if (externalLocation) {
+      setLocation(externalLocation);
+    }
+  }, [externalLocation]);
 
   // Fetch pending placements
   const { data: pendingPlacements = [], isLoading: loadingPlacements } = useQuery<PendingPlacement[]>({

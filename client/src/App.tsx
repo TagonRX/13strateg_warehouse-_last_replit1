@@ -121,9 +121,10 @@ function AppContent() {
       });
     },
     onError: (error: Error) => {
+      console.error("Stock-in error:", error);
       toast({
-        title: "Ошибка",
-        description: error.message,
+        title: "Ошибка приёма товара",
+        description: error.message || "Не удалось принять товар. Проверьте заполнение всех полей.",
         variant: "destructive",
       });
     },
@@ -416,6 +417,7 @@ function AppContent() {
                 <StockInForm 
                   onSubmit={handleStockIn} 
                   externalSku={clickedLocation ? `${clickedLocation}-` : undefined}
+                  externalLocation={clickedLocation || undefined}
                 />
               </div>
             </div>
