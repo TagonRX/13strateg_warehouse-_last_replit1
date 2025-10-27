@@ -3,6 +3,11 @@
 ## Overview
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
+## Recent Updates (October 27, 2025)
+- ✅ **QR Code Support**: Added full QR code scanning support across all barcode scanning components (BarcodeScanner, RemoteBarcodeScanner, ScannerMode, PlacementView). Html5-qrcode library now auto-detects both barcodes and QR codes.
+- ✅ **Case-Insensitive Login**: Login system now accepts credentials regardless of case (e.g., "oleg", "Oleg", "OLEG" all work). Fixed PostgreSQL query to use `LOWER()` function for case-insensitive comparison.
+- ✅ **User Management**: Implemented login editing with uniqueness validation, database cleanup (removed test users), LSP error fixes in BarcodeScanner component.
+
 ## Quick Start
 
 ### Локальная разработка

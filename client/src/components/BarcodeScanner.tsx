@@ -27,7 +27,7 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод / QR 
   const lastProcessedMessageRef = useRef<any>(null);
 
   // Глобальный автофокус на поле баркода (работает на всех страницах)
-  const { inputRef } = useGlobalBarcodeInput(mode === "usb");
+  const { inputRef, refObject } = useGlobalBarcodeInput(mode === "usb");
 
   // Handle incoming WebSocket messages (for receiving scans from phone)
   useEffect(() => {
@@ -111,14 +111,14 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод / QR 
   const handleUSBScan = (e: React.FormEvent) => {
     e.preventDefault();
     // Get value directly from input to ensure we catch fast scanner input
-    const inputValue = inputRef.current?.value || barcode;
+    const inputValue = refObject.current?.value || barcode;
     if (inputValue.trim()) {
       onScan(inputValue.trim());
       setBarcode("");
-      if (inputRef.current) {
-        inputRef.current.value = "";
+      if (refObject.current) {
+        refObject.current.value = "";
       }
-      inputRef.current?.focus();
+      refObject.current?.focus();
     }
   };
 
@@ -127,14 +127,14 @@ export default function BarcodeScanner({ onScan, label = "Штрихкод / QR 
     if (e.key === 'Enter') {
       e.preventDefault(); // Предотвращает default поведение (submit формы)
       e.stopPropagation(); // Останавливает всплытие события к родителям
-      const inputValue = inputRef.current?.value || barcode;
+      const inputValue = refObject.current?.value || barcode;
       if (inputValue.trim()) {
         onScan(inputValue.trim());
         setBarcode("");
-        if (inputRef.current) {
-          inputRef.current.value = "";
+        if (refObject.current) {
+          refObject.current.value = "";
         }
-        inputRef.current?.focus();
+        refObject.current?.focus();
       }
     }
   };
