@@ -162,6 +162,7 @@ export interface IStorage {
   
   // Faulty Stock methods
   getAllFaultyStock(): Promise<FaultyStock[]>;
+  getFaultyStockByBarcode(barcode: string): Promise<FaultyStock | undefined>;
   deleteFaultyStockItem(id: string): Promise<void>;
   deleteAllFaultyStock(condition: string): Promise<number>;
   
@@ -1663,6 +1664,11 @@ export class DbStorage implements IStorage {
   // Faulty Stock methods
   async getAllFaultyStock(): Promise<FaultyStock[]> {
     return await db.select().from(faultyStock).orderBy(faultyStock.decisionAt);
+  }
+
+  async getFaultyStockByBarcode(barcode: string): Promise<FaultyStock | undefined> {
+    const result = await db.select().from(faultyStock).where(eq(faultyStock.barcode, barcode)).limit(1);
+    return result[0];
   }
 
   async deleteFaultyStockItem(id: string): Promise<void> {

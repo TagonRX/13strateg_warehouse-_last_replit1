@@ -129,6 +129,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Check if item is in faulty stock (CRITICAL: Faulty items cannot be added to inventory)
+      const faultyItem = await storage.getFaultyStockByBarcode(barcode);
+      if (faultyItem) {
+        return res.status(400).json({ 
+          error: "ЗАПРЕЩЕНО! Товар отмечен как неисправный (Faulty/Parts) и НЕ МОЖЕТ быть добавлен на склад. Проверьте баркод или состояние товара.",
+          isFaulty: true
+        });
+      }
+
       // Get condition from tested items (automatically)
       const condition = await storage.getConditionByBarcode(barcode);
       if (!condition) {
