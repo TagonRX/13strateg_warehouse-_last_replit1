@@ -32,6 +32,9 @@ function AppContent() {
   const [, setLocation] = useLocation();
   const [user, setUser] = useState<{ id: string; name: string; role: "admin" | "worker" } | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  
+  // State for location click from WarehouseLoadingSidebar to StockInForm
+  const [clickedLocation, setClickedLocation] = useState<string>("");
 
   // Check for existing token on mount
   useEffect(() => {
@@ -410,11 +413,16 @@ function AppContent() {
             <div className="flex-1 overflow-auto">
               <div className="space-y-4 p-6">
                 <h1 className="text-3xl font-bold">Приход товара</h1>
-                <StockInForm onSubmit={handleStockIn} />
+                <StockInForm 
+                  onSubmit={handleStockIn} 
+                  externalSku={clickedLocation ? `${clickedLocation}-` : undefined}
+                />
               </div>
             </div>
             <div className="w-96 border-l bg-muted/50 flex flex-col overflow-auto">
-              <WarehouseLoadingSidebar />
+              <WarehouseLoadingSidebar 
+                onLocationClick={(location) => setClickedLocation(location)}
+              />
             </div>
           </div>
         </Route>

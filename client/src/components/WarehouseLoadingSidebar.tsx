@@ -29,7 +29,11 @@ interface WarehouseSetting {
 
 type ComparisonOperator = "lt" | "gt" | "eq";
 
-export default function WarehouseLoadingSidebar() {
+interface WarehouseLoadingSidebarProps {
+  onLocationClick?: (location: string) => void;
+}
+
+export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLoadingSidebarProps = {}) {
   // Filters
   const [filterLetter, setFilterLetter] = useState("");
   const [tskuOperator, setTskuOperator] = useState<ComparisonOperator>("lt");
@@ -339,8 +343,10 @@ export default function WarehouseLoadingSidebar() {
               {column.map((group) => (
                 <div
                   key={group.location}
-                  className={`rounded border p-1 text-center ${getLocationColor(group)}`}
+                  className={`rounded border p-1 text-center cursor-pointer hover-elevate active-elevate-2 ${getLocationColor(group)}`}
                   data-testid={`location-${group.location}`}
+                  onClick={() => onLocationClick?.(group.location)}
+                  title="Нажмите, чтобы вставить локацию в SKU"
                 >
                   <div className="font-mono font-semibold" style={{ fontSize: "11px" }}>
                     {group.location}

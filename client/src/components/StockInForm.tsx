@@ -32,11 +32,13 @@ interface StockInFormProps {
     quantity: number;
     barcode: string;
   }) => void;
+  onSkuChange?: (sku: string) => void;
+  externalSku?: string;
 }
 
 type ScannerMode = "usb" | "phone";
 
-export default function StockInForm({ onSubmit }: StockInFormProps) {
+export default function StockInForm({ onSubmit, onSkuChange, externalSku }: StockInFormProps) {
   const [productId, setProductId] = useState("");
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
@@ -54,10 +56,21 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
   const [showFaultyWarning, setShowFaultyWarning] = useState(false);
   const [showConditionChangeDialog, setShowConditionChangeDialog] = useState(false);
   const [detectedCondition, setDetectedCondition] = useState<string>("");
+  
+  // SKU format validation dialog
+  const [showSkuFormatError, setShowSkuFormatError] = useState(false);
+  
   const { toast } = useToast();
 
   // WebSocket for phone mode
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
+
+  // Update SKU when externalSku prop changes (from location click)
+  useEffect(() => {
+    if (externalSku) {
+      setSku(externalSku);
+    }
+  }, [externalSku]);
 
   // Fetch pending placements
   const { data: pendingPlacements = [], isLoading: loadingPlacements } = useQuery<PendingPlacement[]>({
@@ -236,6 +249,13 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         return;
       }
       
+      // Валидация формата SKU: должен заканчиваться на "-БУКВА" (например A11-RS-N)
+      const skuFormatRegex = /^.+-[A-ZА-Я]$/;
+      if (!skuFormatRegex.test(sku)) {
+        setShowSkuFormatError(true);
+        return;
+      }
+      
       onSubmit({
         productId: productId || undefined,
         name: name || undefined,
@@ -260,6 +280,13 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
           description: "Требуется SKU и штрихкод товара",
           variant: "destructive",
         });
+        return;
+      }
+      
+      // Валидация формата SKU: должен заканчиваться на "-БУКВА" (например A11-RS-N)
+      const skuFormatRegex = /^.+-[A-ZА-Я]$/;
+      if (!skuFormatRegex.test(sku)) {
+        setShowSkuFormatError(true);
         return;
       }
       
@@ -403,11 +430,15 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
           
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="sku">SKU *</Label>
+              <Label htmlFor="sku">SKU * (формат: локация-буква)</Label>
               <Input
                 id="sku"
                 value={sku}
-                onChange={(e) => setSku(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  const newSku = e.target.value.toUpperCase();
+                  setSku(newSku);
+                  onSkuChange?.(newSku);
+                }}
                 placeholder="A101-J"
                 required
                 data-testid="input-sku"
@@ -562,6 +593,37 @@ export default function StockInForm({ onSubmit }: StockInFormProps) {
         <AlertDialogFooter>
           <AlertDialogAction onClick={handleFaultyClose} data-testid="button-close-faulty">
             Понятно
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Диалог ошибки формата SKU */}
+    <AlertDialog open={showSkuFormatError} onOpenChange={setShowSkuFormatError}>
+      <AlertDialogContent data-testid="dialog-sku-format-error" className="bg-destructive/10 border-destructive">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="w-5 h-5" />
+            Неправильный формат SKU
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-base">
+            SKU должен быть в формате: <strong>локация-буква</strong>
+            <br /><br />
+            Примеры правильного формата:
+            <ul className="list-disc list-inside mt-2">
+              <li><strong>A11-RS-N</strong> (латиница)</li>
+              <li><strong>К11-РС-А</strong> (кириллица)</li>
+              <li><strong>B200-J</strong></li>
+            </ul>
+            <br />
+            Текущий SKU: <strong className="text-destructive">{sku}</strong>
+            <br /><br />
+            Пожалуйста, добавьте букву после последнего дефиса "-" и повторите попытку.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction onClick={() => setShowSkuFormatError(false)} data-testid="button-close-sku-error">
+            Исправить
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
