@@ -359,11 +359,12 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     setLocationsMutation.mutate(locationsToSave);
   };
 
-  // Get all unique letters from locations
+  // Get all unique letters from locations (supports both Latin and Cyrillic)
   const availableLetters = useMemo(() => {
     const letters = new Set<string>();
     locationGroups.forEach(loc => {
-      const letter = loc.location.match(/^([A-Z]+)/)?.[1];
+      // Match Latin (A-Z) and Cyrillic (А-Я) uppercase letters at the start
+      const letter = loc.location.match(/^([A-ZА-Я]+)/)?.[1];
       if (letter) letters.add(letter);
     });
     return Array.from(letters).sort();
@@ -562,10 +563,11 @@ B201,BC205`;
       filtered = filtered.filter(loc => managedLocationsSet.has(loc.location.toUpperCase()));
     }
 
-    // Filter by letters (if specified) - multi-select
+    // Filter by letters (if specified) - multi-select (supports both Latin and Cyrillic)
     if (letterFilter.length > 0) {
       filtered = filtered.filter(loc => {
-        const letter = loc.location.match(/^([A-Z]+)/)?.[1];
+        // Match Latin (A-Z) and Cyrillic (А-Я) uppercase letters at the start
+        const letter = loc.location.match(/^([A-ZА-Я]+)/)?.[1];
         return letter && letterFilter.includes(letter);
       });
     }
