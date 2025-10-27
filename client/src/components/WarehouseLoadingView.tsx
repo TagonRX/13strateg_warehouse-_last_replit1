@@ -610,15 +610,41 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   };
 
   // Handler to update barcode
+  // Mutation for updating single location barcode
+  const updateBarcodeMutation = useMutation({
+    mutationFn: async ({ location, barcode }: { location: string; barcode: string }) => {
+      const res = await apiRequest("PATCH", `/api/warehouse/active-locations/${encodeURIComponent(location)}/barcode`, { barcode });
+      return res.json();
+    },
+    onSuccess: (data, variables) => {
+      // Update local state
+      setLocationList(prev => prev.map(loc => 
+        loc.location === variables.location ? { ...loc, barcode: variables.barcode || null } : loc
+      ));
+      // Invalidate queries so PlacementView gets updated data
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/active-locations"] });
+      toast({
+        title: "Баркод обновлен",
+        description: `Баркод локации ${variables.location} сохранен`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось обновить баркод",
+        variant: "destructive",
+      });
+    }
+  });
+
   // Оптимизированные обработчики для таблицы управления локациями
   const handleEditBarcode = useCallback((location: string, value: string) => {
     setEditingBarcode({ location, value });
   }, []);
 
   const handleUpdateBarcode = useCallback((location: string, barcode: string) => {
-    setLocationList(prev => prev.map(loc => 
-      loc.location === location ? { ...loc, barcode: barcode || null } : loc
-    ));
+    // Immediately save to database
+    updateBarcodeMutation.mutate({ location, barcode });
     setEditingBarcode(null);
   }, []);
 
