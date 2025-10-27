@@ -372,8 +372,8 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
 
   // Get setting for location pattern (e.g., "A1" from "A101")
   const getSettingForLocation = (location: string): WarehouseSetting | undefined => {
-    // Extract letter and full number from location
-    const match = location.match(/^([A-Z]+)(\d+)/);
+    // Extract letter and full number from location (supports Latin A-Z and Cyrillic А-Я)
+    const match = location.match(/^([A-ZА-Я]+)(\d+)/);
     if (!match) return undefined;
     
     const letter = match[1];
@@ -612,10 +612,10 @@ B201,BC205`;
     // If showing all letters (no filter) or multiple letters selected, apply limit PER LETTER
     // Otherwise (single letter selected), apply limit to total
     if (letterFilter.length === 0 || letterFilter.length > 1) {
-      // Group by letter first
+      // Group by letter first (supports Latin A-Z and Cyrillic А-Я)
       const byLetter = new Map<string, LocationGroup[]>();
       filtered.forEach(loc => {
-        const letter = loc.location.match(/^([A-Z]+)/)?.[1] || "OTHER";
+        const letter = loc.location.match(/^([A-ZА-Я]+)/)?.[1] || "OTHER";
         if (!byLetter.has(letter)) {
           byLetter.set(letter, []);
         }
@@ -640,7 +640,8 @@ B201,BC205`;
     const groups = new Map<string, LocationGroup[]>();
     
     filteredLocations.forEach(loc => {
-      const letter = loc.location.match(/^([A-Z]+)/)?.[1] || "OTHER";
+      // Match Latin (A-Z) and Cyrillic (А-Я) uppercase letters at the start
+      const letter = loc.location.match(/^([A-ZА-Я]+)/)?.[1] || "OTHER";
       if (!groups.has(letter)) {
         groups.set(letter, []);
       }
