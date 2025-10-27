@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, X, Check, Wifi, WifiOff, AlertCircle } from "lucide-react";
+import { Camera, X, Check, Wifi, WifiOff, AlertCircle, ZoomIn, ZoomOut } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Slider } from "@/components/ui/slider";
 
 export default function ScannerMode() {
   const { toast } = useToast();
@@ -19,6 +20,9 @@ export default function ScannerMode() {
   const [lastBarcode, setLastBarcode] = useState<string>("");
   const [cameraError, setCameraError] = useState<string>("");
   const [pendingBarcode, setPendingBarcode] = useState<string>(""); // Баркод ожидающий подтверждения
+  const [zoom, setZoom] = useState(1);
+  const [zoomRange, setZoomRange] = useState({ min: 1, max: 1 });
+  const [zoomSupported, setZoomSupported] = useState(false);
 
   const { data: currentUser } = useQuery<any>({
     queryKey: ["/api/auth/me"],
@@ -86,6 +90,27 @@ export default function ScannerMode() {
         () => {}
       );
 
+      // Проверка поддержки зума после запуска камеры
+      try {
+        const capabilities = scanner.getRunningTrackCapabilities() as any;
+        if (capabilities.zoom) {
+          setZoomSupported(true);
+          setZoomRange({
+            min: capabilities.zoom.min || 1,
+            max: capabilities.zoom.max || 8,
+          });
+          // Устанавливаем начальный зум (можно настроить)
+          const initialZoom = Math.min(2, capabilities.zoom.max || 1);
+          setZoom(initialZoom);
+          await scanner.applyVideoConstraints({
+            advanced: [{ zoom: initialZoom } as any]
+          });
+        }
+      } catch (error) {
+        console.log("Zoom not supported:", error);
+        setZoomSupported(false);
+      }
+
       setScanning(true);
       setCameraError("");
       toast({
@@ -147,12 +172,55 @@ export default function ScannerMode() {
         await html5QrCode.stop();
         setScanning(false);
         setHtml5QrCode(null);
+        setZoomSupported(false);
+        setZoom(1);
         toast({
           title: "Камера остановлена",
         });
       } catch (error) {
         console.error("Camera stop error:", error);
       }
+    }
+  };
+
+  const handleZoomChange = async (value: number[]) => {
+    if (!html5QrCode || !zoomSupported) return;
+    
+    const newZoom = value[0];
+    setZoom(newZoom);
+    
+    try {
+      await html5QrCode.applyVideoConstraints({
+        advanced: [{ zoom: newZoom } as any]
+      });
+    } catch (error) {
+      console.error("Zoom change error:", error);
+    }
+  };
+
+  const handleZoomIn = async () => {
+    if (!html5QrCode || !zoomSupported) return;
+    const newZoom = Math.min(zoom + 0.5, zoomRange.max);
+    setZoom(newZoom);
+    try {
+      await html5QrCode.applyVideoConstraints({
+        advanced: [{ zoom: newZoom } as any]
+      });
+    } catch (error) {
+      console.error("Zoom in error:", error);
+    }
+  };
+
+  const handleZoomOut = async () => {
+    if (!html5QrCode || !zoomSupported) return;
+    const newZoom = Math.max(zoom - 0.5, zoomRange.min);
+    setZoom(newZoom);
+    try {
+      await html5QrCode.applyVideoConstraints({
+        advanced: [{ zoom: newZoom } as any]
+      });
+    } catch (error) {
+      console.error("Zoom out error:", error);
     }
   };
 
@@ -295,16 +363,64 @@ export default function ScannerMode() {
               </div>
             )}
             
-            {/* Область камеры */}
-            <div className="relative">
+            {/* Область камеры с зум-контролами */}
+            <div className="relative flex gap-2">
               <div 
                 id="qr-reader" 
-                className="rounded-md overflow-hidden w-full border-2 border-dashed border-muted"
+                className="rounded-md overflow-hidden flex-1 border-2 border-dashed border-muted"
                 style={{ 
                   minHeight: '400px', // Увеличена высота
                   backgroundColor: scanning ? 'transparent' : '#f5f5f5'
                 }}
               />
+              
+              {/* Боковая панель зума (только во время сканирования и если поддерживается) */}
+              {scanning && zoomSupported && (
+                <div className="flex flex-col items-center gap-2 py-4" data-testid="zoom-controls">
+                  {/* Кнопка увеличения */}
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={handleZoomIn}
+                    disabled={zoom >= zoomRange.max}
+                    data-testid="button-zoom-in"
+                    className="h-10 w-10"
+                  >
+                    <ZoomIn className="w-5 h-5" />
+                  </Button>
+                  
+                  {/* Вертикальный слайдер */}
+                  <div className="flex-1 flex items-center justify-center min-h-[200px]">
+                    <Slider
+                      orientation="vertical"
+                      min={zoomRange.min}
+                      max={zoomRange.max}
+                      step={0.1}
+                      value={[zoom]}
+                      onValueChange={handleZoomChange}
+                      className="h-full"
+                      data-testid="slider-zoom"
+                    />
+                  </div>
+                  
+                  {/* Индикатор зума */}
+                  <div className="text-xs font-mono text-center min-w-[3rem] px-2 py-1 bg-muted rounded" data-testid="text-zoom-level">
+                    {zoom.toFixed(1)}x
+                  </div>
+                  
+                  {/* Кнопка уменьшения */}
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={handleZoomOut}
+                    disabled={zoom <= zoomRange.min}
+                    data-testid="button-zoom-out"
+                    className="h-10 w-10"
+                  >
+                    <ZoomOut className="w-5 h-5" />
+                  </Button>
+                </div>
+              )}
               
               {/* Оверлей с подтверждением баркода */}
               {pendingBarcode && (
