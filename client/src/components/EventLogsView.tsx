@@ -239,43 +239,61 @@ export default function EventLogsView({ users }: EventLogsViewProps) {
                   </TableCell>
                 </TableRow>
               ) : (
-                logs.map((log) => (
-                  <TableRow 
-                    key={log.id} 
-                    data-testid={`row-log-${log.id}`}
-                    className={log.isWarning ? "bg-destructive/10 hover:bg-destructive/15" : ""}
-                  >
-                    <TableCell className="font-mono text-sm whitespace-nowrap">
-                      {new Date(log.createdAt).toLocaleString("ru-RU")}
-                    </TableCell>
-                    <TableCell data-testid={`text-user-${log.id}`}>
-                      {getUserName(log.userId)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant={log.isWarning ? "destructive" : getActionBadge(log.action)} 
-                        data-testid={`badge-action-${log.id}`}
-                      >
-                        {log.action}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm" data-testid={`text-product-id-${log.id}`}>
-                      {log.productId || "-"}
-                    </TableCell>
-                    <TableCell className="text-sm" data-testid={`text-item-name-${log.id}`}>
-                      {log.itemName || "-"}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm" data-testid={`text-sku-${log.id}`}>
-                      {log.sku || "-"}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm" data-testid={`text-location-${log.id}`}>
-                      {log.location || "-"}
-                    </TableCell>
-                    <TableCell className={`text-sm ${log.isWarning ? "font-semibold text-destructive" : ""}`} data-testid={`text-details-${log.id}`}>
-                      {log.details}
-                    </TableCell>
-                  </TableRow>
-                ))
+                logs.map((log) => {
+                  // Определяем цветовое выделение: красное для isWarning, желтое для withoutTest
+                  const rowClassName = log.isWarning 
+                    ? "bg-destructive/10 hover:bg-destructive/15" 
+                    : log.withoutTest 
+                      ? "bg-yellow-50 dark:bg-yellow-950/20 hover:bg-yellow-100 dark:hover:bg-yellow-950/30" 
+                      : "";
+                  
+                  return (
+                    <TableRow 
+                      key={log.id} 
+                      data-testid={`row-log-${log.id}`}
+                      className={rowClassName}
+                    >
+                      <TableCell className="font-mono text-sm whitespace-nowrap">
+                        {new Date(log.createdAt).toLocaleString("ru-RU")}
+                      </TableCell>
+                      <TableCell data-testid={`text-user-${log.id}`}>
+                        {getUserName(log.userId)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={log.isWarning ? "destructive" : getActionBadge(log.action)} 
+                          data-testid={`badge-action-${log.id}`}
+                        >
+                          {log.action}
+                        </Badge>
+                        {log.withoutTest && (
+                          <Badge 
+                            variant="outline" 
+                            className="ml-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border-yellow-300 dark:border-yellow-700"
+                            data-testid={`badge-without-test-${log.id}`}
+                          >
+                            БЕЗ ТЕСТА
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm" data-testid={`text-product-id-${log.id}`}>
+                        {log.productId || "-"}
+                      </TableCell>
+                      <TableCell className="text-sm" data-testid={`text-item-name-${log.id}`}>
+                        {log.itemName || "-"}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm" data-testid={`text-sku-${log.id}`}>
+                        {log.sku || "-"}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm" data-testid={`text-location-${log.id}`}>
+                        {log.location || "-"}
+                      </TableCell>
+                      <TableCell className={`text-sm ${log.isWarning ? "font-semibold text-destructive" : ""}`} data-testid={`text-details-${log.id}`}>
+                        {log.details}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

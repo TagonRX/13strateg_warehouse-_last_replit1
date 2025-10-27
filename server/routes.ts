@@ -138,13 +138,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get condition from tested items (automatically)
+      // Get condition from tested items (optional now - товары можно добавлять без тестирования)
       const condition = await storage.getConditionByBarcode(barcode);
-      if (!condition) {
-        return res.status(400).json({ 
-          error: "Состояние товара не найдено. Сначала протестируйте товар." 
-        });
-      }
+      const withoutTest = !condition; // Отметка, если товар не проходил тестирование
 
       // Extract location from SKU
       const location = extractLocationFromSKU(sku);
@@ -159,7 +155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         location,
         productId: productId || null,
         name: name || null,
-        condition,
+        condition: condition || "Не указано", // Если тестирования не было, указываем "Не указано"
         quantity: quantity || 1,
         price: price || null,
         length: length || null,
@@ -170,17 +166,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         stockInBy: userId,
       });
 
-      // Log the event
+      // Log the event с пометкой если товар добавлен без теста
       await storage.createEventLog({
         userId,
         action: "STOCK_IN",
-        details: `Принято на склад: ${name || productId || barcode} (ожидает размещения)`,
+        details: withoutTest 
+          ? `Принято на склад БЕЗ ТЕСТИРОВАНИЯ: ${name || productId || barcode} (ожидает размещения)`
+          : `Принято на склад: ${name || productId || barcode} (ожидает размещения)`,
         productId: productId || null,
         itemName: name || null,
         sku,
         location,
         quantity: quantity || 1,
         price: price || null,
+        withoutTest,
       });
 
       return res.status(201).json(placement);

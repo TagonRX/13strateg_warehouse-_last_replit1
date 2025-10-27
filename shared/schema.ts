@@ -49,6 +49,7 @@ export const eventLogs = pgTable("event_logs", {
   quantity: integer("quantity"), // Количество товара на момент действия
   price: integer("price"), // Цена товара на момент действия
   isWarning: boolean("is_warning").notNull().default(false), // Критическое событие (подсветка красным для админа)
+  withoutTest: boolean("without_test").notNull().default(false), // Товар добавлен без тестирования (подсветка желтым для админа)
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
