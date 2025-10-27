@@ -48,6 +48,52 @@ interface WarehouseLoadingViewProps {
   userRole: "admin" | "worker";
 }
 
+// Memoized Location Table Component - prevents re-renders during typing
+const LocationTable = memo(({ 
+  locationsByLetter,
+  getSettingForLocation,
+  getSkuColor,
+  getQuantityColor 
+}: {
+  locationsByLetter: [string, LocationGroup[]][];
+  getSettingForLocation: (location: string) => WarehouseSetting | undefined;
+  getSkuColor: (location: string, skuCount: number) => string;
+  getQuantityColor: (location: string, quantity: number) => string;
+}) => {
+  return (
+    <div className="flex gap-8 overflow-x-auto pb-4">
+      {locationsByLetter.map(([letter, locations]) => (
+        <div key={letter} className="flex-shrink-0">
+          <div className="text-sm font-bold mb-2 text-center">{letter}</div>
+          <div className="space-y-1">
+            {locations.map((loc) => {
+              const setting = getSettingForLocation(loc.location);
+              const tsku = setting?.tsku || 4;
+              const maxq = setting?.maxq || 10;
+
+              return (
+                <div
+                  key={loc.location}
+                  className="flex items-center gap-1 text-xs border-b py-1"
+                  data-testid={`location-row-${loc.location}`}
+                >
+                  <div className="w-12 font-mono font-semibold">{loc.location}</div>
+                  <div className="w-5 text-center">{loc.skuCount}</div>
+                  <div className={`w-3 h-3 rounded-full ${getSkuColor(loc.location, loc.skuCount)}`} />
+                  <div className="w-6 text-center">{loc.totalQuantity}</div>
+                  <div className={`w-3 h-3 rounded-full ${getQuantityColor(loc.location, loc.totalQuantity)}`} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+});
+
+LocationTable.displayName = "LocationTable";
+
 // Settings Panel Component
 function WarehouseSettingsPanel({ 
   settings, 
@@ -334,7 +380,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     }
   }, [activeLocations]);
 
-  // Debounce TSKU filter (300ms delay)
+  // Debounce TSKU filter (300ms delay - балансируем отзывчивость и производительность)
   useEffect(() => {
     const timer = setTimeout(() => {
       setTskuFilter(tskuInput);
@@ -342,13 +388,22 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     return () => clearTimeout(timer);
   }, [tskuInput]);
 
-  // Debounce MAXQ filter (300ms delay)
+  // Debounce MAXQ filter (300ms delay - балансируем отзывчивость и производительность)
   useEffect(() => {
     const timer = setTimeout(() => {
       setMaxqFilter(maxqInput);
     }, 300);
     return () => clearTimeout(timer);
   }, [maxqInput]);
+
+  // Оптимизированные обработчики с useCallback
+  const handleTskuInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setTskuInput(e.target.value);
+  }, []);
+
+  const handleMaxqInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setMaxqInput(e.target.value);
+  }, []);
 
   // Save locations
   const handleSaveLocations = () => {
@@ -370,8 +425,8 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     return Array.from(letters).sort();
   }, [locationGroups]);
 
-  // Get setting for location pattern (e.g., "A1" from "A101")
-  const getSettingForLocation = (location: string): WarehouseSetting | undefined => {
+  // Get setting for location pattern (e.g., "A1" from "A101") - мемоизировано для оптимизации
+  const getSettingForLocation = useCallback((location: string): WarehouseSetting | undefined => {
     // Extract letter and full number from location (supports Latin A-Z and Cyrillic А-Я)
     const match = location.match(/^([A-ZА-Я]+)(\d+)/);
     if (!match) return undefined;
@@ -387,7 +442,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     return warehouseSettings.find(s => 
       s.locationPattern.split(',').map(p => p.trim()).includes(pattern)
     );
-  };
+  }, [warehouseSettings]);
 
   // Managed locations set for filtering (memoized)
   const managedLocationsSet = useMemo(() => {
@@ -652,8 +707,8 @@ B201,BC205`;
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [filteredLocations]);
 
-  // Color indicators - gradient from green (0) to red (max)
-  const getSkuColor = (location: string, skuCount: number) => {
+  // Color indicators - gradient from green (0) to red (max) - мемоизированы для оптимизации
+  const getSkuColor = useCallback((location: string, skuCount: number) => {
     const setting = getSettingForLocation(location);
     const tsku = setting?.tsku || 4;
     
@@ -664,9 +719,9 @@ B201,BC205`;
     if (ratio >= 0.5) return "bg-yellow-500";
     if (ratio >= 0.25) return "bg-lime-500";
     return "bg-green-500";
-  };
+  }, [getSettingForLocation]);
 
-  const getQuantityColor = (location: string, quantity: number) => {
+  const getQuantityColor = useCallback((location: string, quantity: number) => {
     const setting = getSettingForLocation(location);
     const maxq = setting?.maxq || 10;
     
@@ -677,7 +732,7 @@ B201,BC205`;
     if (ratio >= 0.5) return "bg-yellow-500";
     if (ratio >= 0.25) return "bg-lime-500";
     return "bg-green-500";
-  };
+  }, [getSettingForLocation]);
 
   return (
     <div className="space-y-4">
@@ -1069,7 +1124,7 @@ B201,BC205`;
                 type="number"
                 placeholder="Например: 2"
                 value={tskuInput}
-                onChange={(e) => setTskuInput(e.target.value)}
+                onChange={handleTskuInputChange}
                 className="w-32"
                 data-testid="input-tsku-filter"
               />
@@ -1095,7 +1150,7 @@ B201,BC205`;
                 type="number"
                 placeholder="Например: 5"
                 value={maxqInput}
-                onChange={(e) => setMaxqInput(e.target.value)}
+                onChange={handleMaxqInputChange}
                 className="w-32"
                 data-testid="input-maxq-filter"
               />
@@ -1125,34 +1180,12 @@ B201,BC205`;
           <CardTitle>Загрузка склада ({filteredLocations.length} локаций)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-8 overflow-x-auto pb-4">
-            {locationsByLetter.map(([letter, locations]) => (
-              <div key={letter} className="flex-shrink-0">
-                <div className="text-sm font-bold mb-2 text-center">{letter}</div>
-                <div className="space-y-1">
-                  {locations.map((loc) => {
-                    const setting = getSettingForLocation(loc.location);
-                    const tsku = setting?.tsku || 4;
-                    const maxq = setting?.maxq || 10;
-
-                    return (
-                      <div
-                        key={loc.location}
-                        className="flex items-center gap-1 text-xs border-b py-1"
-                        data-testid={`location-row-${loc.location}`}
-                      >
-                        <div className="w-12 font-mono font-semibold">{loc.location}</div>
-                        <div className="w-5 text-center">{loc.skuCount}</div>
-                        <div className={`w-3 h-3 rounded-full ${getSkuColor(loc.location, loc.skuCount)}`} />
-                        <div className="w-6 text-center">{loc.totalQuantity}</div>
-                        <div className={`w-3 h-3 rounded-full ${getQuantityColor(loc.location, loc.totalQuantity)}`} />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
+          <LocationTable
+            locationsByLetter={locationsByLetter}
+            getSettingForLocation={getSettingForLocation}
+            getSkuColor={getSkuColor}
+            getQuantityColor={getQuantityColor}
+          />
         </CardContent>
       </Card>
 
