@@ -94,6 +94,96 @@ const LocationTable = memo(({
 
 LocationTable.displayName = "LocationTable";
 
+// Memoized Locations Management Table - prevents re-renders during editing
+const LocationsManagementTable = memo(({ 
+  locations,
+  editingBarcode,
+  onEditBarcode,
+  onUpdateBarcode,
+  onCancelEdit,
+  onDeleteLocation
+}: {
+  locations: Array<{ location: string; barcode: string | null }>;
+  editingBarcode: { location: string; value: string } | null;
+  onEditBarcode: (location: string, value: string) => void;
+  onUpdateBarcode: (location: string, value: string) => void;
+  onCancelEdit: () => void;
+  onDeleteLocation: (location: string) => void;
+}) => {
+  if (locations.length === 0) {
+    return (
+      <TableRow>
+        <TableCell colSpan={3} className="text-center text-muted-foreground">
+          Нет локаций
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  return (
+    <>
+      {locations.map((loc, index) => (
+        <TableRow key={index} data-testid={`row-location-${index}`}>
+          <TableCell className="font-mono font-semibold">
+            {loc.location}
+          </TableCell>
+          <TableCell>
+            {editingBarcode?.location === loc.location ? (
+              <div className="flex gap-1">
+                <Input
+                  value={editingBarcode.value}
+                  onChange={(e) => onEditBarcode(loc.location, e.target.value)}
+                  className="h-8 font-mono"
+                  placeholder="Баркод локации"
+                  data-testid={`input-barcode-${index}`}
+                />
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => onUpdateBarcode(loc.location, editingBarcode.value)}
+                  data-testid={`button-save-barcode-${index}`}
+                  className="text-xs px-2"
+                >
+                  OK
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onCancelEdit}
+                  data-testid={`button-cancel-barcode-${index}`}
+                  className="text-xs px-2"
+                >
+                  ✕
+                </Button>
+              </div>
+            ) : (
+              <div 
+                className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded font-mono text-sm"
+                onClick={() => onEditBarcode(loc.location, loc.barcode || "")}
+                data-testid={`text-barcode-${index}`}
+              >
+                {loc.barcode || <span className="text-muted-foreground italic">Нет баркода (нажмите для добавления)</span>}
+              </div>
+            )}
+          </TableCell>
+          <TableCell className="text-right">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onDeleteLocation(loc.location)}
+              data-testid={`button-delete-location-${index}`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+});
+
+LocationsManagementTable.displayName = "LocationsManagementTable";
+
 // Settings Panel Component
 function WarehouseSettingsPanel({ 
   settings, 
@@ -285,8 +375,13 @@ function WarehouseSettingsPanel({
 export default function WarehouseLoadingView({ locationGroups, userRole }: WarehouseLoadingViewProps) {
   const { toast } = useToast();
   const [locationList, setLocationList] = useState<{ location: string; barcode: string | null }[]>([]);
+  // Input states for location range filters (immediate update)
+  const [locationRangeFromInput, setLocationRangeFromInput] = useState<string>("");
+  const [locationRangeToInput, setLocationRangeToInput] = useState<string>("");
+  // Debounced states for actual filtering
   const [locationRangeFrom, setLocationRangeFrom] = useState<string>("");
   const [locationRangeTo, setLocationRangeTo] = useState<string>("");
+  
   const [newLocationName, setNewLocationName] = useState<string>("");
   const [newLocationBarcode, setNewLocationBarcode] = useState<string>("");
   const [editingBarcode, setEditingBarcode] = useState<{ location: string; value: string } | null>(null);
@@ -396,6 +491,22 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     return () => clearTimeout(timer);
   }, [maxqInput]);
 
+  // Debounce location range FROM filter (300ms delay)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLocationRangeFrom(locationRangeFromInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [locationRangeFromInput]);
+
+  // Debounce location range TO filter (300ms delay)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLocationRangeTo(locationRangeToInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [locationRangeToInput]);
+
   // Оптимизированные обработчики с useCallback
   const handleTskuInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setTskuInput(e.target.value);
@@ -498,18 +609,26 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     setNewLocationBarcode("");
   };
 
-  // Handler to delete location
-  const handleDeleteLocation = (location: string) => {
-    setLocationList(locationList.filter(loc => loc.location !== location));
-  };
-
   // Handler to update barcode
-  const handleUpdateBarcode = (location: string, barcode: string) => {
-    setLocationList(locationList.map(loc => 
+  // Оптимизированные обработчики для таблицы управления локациями
+  const handleEditBarcode = useCallback((location: string, value: string) => {
+    setEditingBarcode({ location, value });
+  }, []);
+
+  const handleUpdateBarcode = useCallback((location: string, barcode: string) => {
+    setLocationList(prev => prev.map(loc => 
       loc.location === location ? { ...loc, barcode: barcode || null } : loc
     ));
     setEditingBarcode(null);
-  };
+  }, []);
+
+  const handleCancelEditBarcode = useCallback(() => {
+    setEditingBarcode(null);
+  }, []);
+
+  const handleDeleteLocation = useCallback((location: string) => {
+    setLocationList(prev => prev.filter(loc => loc.location !== location));
+  }, []);
 
   // Handler for downloading CSV template
   const handleDownloadTemplate = () => {
@@ -777,8 +896,8 @@ B201,BC205`;
                   <Input
                     id="location-range-from"
                     placeholder="A100"
-                    value={locationRangeFrom}
-                    onChange={(e) => setLocationRangeFrom(e.target.value.toUpperCase())}
+                    value={locationRangeFromInput}
+                    onChange={(e) => setLocationRangeFromInput(e.target.value.toUpperCase())}
                     className="w-32 font-mono"
                     data-testid="input-location-range-from"
                   />
@@ -788,19 +907,19 @@ B201,BC205`;
                   <Input
                     id="location-range-to"
                     placeholder="A199"
-                    value={locationRangeTo}
-                    onChange={(e) => setLocationRangeTo(e.target.value.toUpperCase())}
+                    value={locationRangeToInput}
+                    onChange={(e) => setLocationRangeToInput(e.target.value.toUpperCase())}
                     className="w-32 font-mono"
                     data-testid="input-location-range-to"
                   />
                 </div>
-                {(locationRangeFrom || locationRangeTo) && (
+                {(locationRangeFromInput || locationRangeToInput) && (
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => {
-                      setLocationRangeFrom("");
-                      setLocationRangeTo("");
+                      setLocationRangeFromInput("");
+                      setLocationRangeToInput("");
                     }}
                     data-testid="button-clear-range-filter"
                   >
@@ -822,70 +941,14 @@ B201,BC205`;
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredLocationList.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={3} className="text-center text-muted-foreground">
-                            Нет локаций
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredLocationList.map((loc, index) => (
-                          <TableRow key={index} data-testid={`row-location-${index}`}>
-                            <TableCell className="font-mono font-semibold">
-                              {loc.location}
-                            </TableCell>
-                            <TableCell>
-                              {editingBarcode?.location === loc.location ? (
-                                <div className="flex gap-1">
-                                  <Input
-                                    value={editingBarcode.value}
-                                    onChange={(e) => setEditingBarcode({ location: loc.location, value: e.target.value })}
-                                    className="h-8 font-mono"
-                                    placeholder="Баркод локации"
-                                    data-testid={`input-barcode-${index}`}
-                                  />
-                                  <Button
-                                    size="sm"
-                                    variant="default"
-                                    onClick={() => handleUpdateBarcode(loc.location, editingBarcode.value)}
-                                    data-testid={`button-save-barcode-${index}`}
-                                    className="text-xs px-2"
-                                  >
-                                    OK
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => setEditingBarcode(null)}
-                                    data-testid={`button-cancel-barcode-${index}`}
-                                    className="text-xs px-2"
-                                  >
-                                    ✕
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div 
-                                  className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded font-mono text-sm"
-                                  onClick={() => setEditingBarcode({ location: loc.location, value: loc.barcode || "" })}
-                                  data-testid={`text-barcode-${index}`}
-                                >
-                                  {loc.barcode || <span className="text-muted-foreground italic">Нет баркода (нажмите для добавления)</span>}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDeleteLocation(loc.location)}
-                                data-testid={`button-delete-location-${index}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
+                      <LocationsManagementTable
+                        locations={filteredLocationList}
+                        editingBarcode={editingBarcode}
+                        onEditBarcode={handleEditBarcode}
+                        onUpdateBarcode={handleUpdateBarcode}
+                        onCancelEdit={handleCancelEditBarcode}
+                        onDeleteLocation={handleDeleteLocation}
+                      />
                     </TableBody>
                   </Table>
                 </div>
