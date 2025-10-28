@@ -570,25 +570,51 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     }, 0);
   }, [locationGroups, managedLocationsSet]);
 
-  // Filter locations by range (С and ПО)
+  // Filter locations by range (С and ПО) with display limit
+  const DISPLAY_LIMIT = 200;
   const filteredLocationList = useMemo(() => {
-    if (!locationRangeFrom && !locationRangeTo) {
-      return locationList;
+    let filtered = locationList;
+    
+    if (locationRangeFrom || locationRangeTo) {
+      filtered = locationList.filter(loc => {
+        const upperLoc = loc.location.toUpperCase();
+        const from = locationRangeFrom.toUpperCase();
+        const to = locationRangeTo.toUpperCase();
+        
+        if (from && to) {
+          return upperLoc >= from && upperLoc <= to;
+        } else if (from) {
+          return upperLoc >= from;
+        } else if (to) {
+          return upperLoc <= to;
+        }
+        return true;
+      });
     }
-    return locationList.filter(loc => {
-      const upperLoc = loc.location.toUpperCase();
-      const from = locationRangeFrom.toUpperCase();
-      const to = locationRangeTo.toUpperCase();
-      
-      if (from && to) {
-        return upperLoc >= from && upperLoc <= to;
-      } else if (from) {
-        return upperLoc >= from;
-      } else if (to) {
-        return upperLoc <= to;
-      }
-      return true;
-    });
+    
+    // Limit to first 200 items for performance
+    return filtered.slice(0, DISPLAY_LIMIT);
+  }, [locationList, locationRangeFrom, locationRangeTo]);
+
+  const hasMoreLocations = useMemo(() => {
+    let count = locationList.length;
+    if (locationRangeFrom || locationRangeTo) {
+      count = locationList.filter(loc => {
+        const upperLoc = loc.location.toUpperCase();
+        const from = locationRangeFrom.toUpperCase();
+        const to = locationRangeTo.toUpperCase();
+        
+        if (from && to) {
+          return upperLoc >= from && upperLoc <= to;
+        } else if (from) {
+          return upperLoc >= from;
+        } else if (to) {
+          return upperLoc <= to;
+        }
+        return true;
+      }).length;
+    }
+    return count > DISPLAY_LIMIT;
   }, [locationList, locationRangeFrom, locationRangeTo]);
 
   // Handler to add new location
@@ -609,53 +635,18 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     setNewLocationBarcode("");
   };
 
-  // Handler to update barcode
-  // Mutation for updating single location barcode
-  const updateBarcodeMutation = useMutation({
-    mutationFn: async ({ location, barcode }: { location: string; barcode: string }) => {
-      console.log('[WarehouseLoadingView] updateBarcodeMutation called with:', { location, barcode });
-      const res = await apiRequest("PATCH", `/api/warehouse/active-locations/${encodeURIComponent(location)}/barcode`, { barcode });
-      console.log('[WarehouseLoadingView] PATCH response:', res.status);
-      return res.json();
-    },
-    onSuccess: (data, variables) => {
-      console.log('[WarehouseLoadingView] updateBarcodeMutation success:', { data, variables });
-      // Clear editing state after successful save
-      setEditingBarcode(null);
-      // Update local state
-      setLocationList(prev => prev.map(loc => 
-        loc.location === variables.location ? { ...loc, barcode: variables.barcode || null } : loc
-      ));
-      // Invalidate queries so PlacementView gets updated data
-      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/active-locations"] });
-      toast({
-        title: "Баркод обновлен",
-        description: `Баркод локации ${variables.location} сохранен`,
-      });
-    },
-    onError: (error: any) => {
-      console.error('[WarehouseLoadingView] updateBarcodeMutation error:', error);
-      // Clear editing state even on error
-      setEditingBarcode(null);
-      toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось обновить баркод",
-        variant: "destructive",
-      });
-    }
-  });
-
-  // Оптимизированные обработчики для таблицы управления локациями
+  // Handlers for location management table
   const handleEditBarcode = useCallback((location: string, value: string) => {
     setEditingBarcode({ location, value });
   }, []);
 
   const handleUpdateBarcode = useCallback((location: string, barcode: string) => {
-    console.log('[WarehouseLoadingView] handleUpdateBarcode called with:', { location, barcode });
-    // Immediately save to database
-    updateBarcodeMutation.mutate({ location, barcode });
-    // Don't clear editing state here - wait for onSuccess/onError
-  }, [updateBarcodeMutation]);
+    // Update local state only
+    setLocationList(prev => prev.map(loc => 
+      loc.location === location ? { ...loc, barcode: barcode || null } : loc
+    ));
+    setEditingBarcode(null);
+  }, []);
 
   const handleCancelEditBarcode = useCallback(() => {
     setEditingBarcode(null);
@@ -987,10 +978,17 @@ B201,BC205`;
                     </TableBody>
                   </Table>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {locationList.length} локаций введено
-                  {(locationRangeFrom || locationRangeTo) && ` (показано: ${filteredLocationList.length})`}
-                </p>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    {locationList.length} локаций введено
+                    {(locationRangeFrom || locationRangeTo) && ` (показано: ${filteredLocationList.length})`}
+                  </p>
+                  {hasMoreLocations && (
+                    <p className="text-sm text-yellow-600 dark:text-yellow-500">
+                      Показаны первые 200 локаций. Используйте фильтр диапазона чтобы найти нужные локации.
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* CSV Upload */}
