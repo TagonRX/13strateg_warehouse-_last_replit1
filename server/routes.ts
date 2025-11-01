@@ -1901,7 +1901,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Whitelist of allowed target fields for security
           const allowedTargetFields = [
             'productName', 'sku', 'location', 'barcode', 'quantity', 'price', 
-            'itemId', 'ebayUrl', 'imageUrls', 'condition',
+            'itemId', 'ebayUrl', 'ebaySellerName', 'imageUrls', 'condition',
             'weight', 'width', 'height', 'length' // Размеры и вес
           ];
           
@@ -1952,12 +1952,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const row = csvRows[csvRowIndex];
         
         // Support both original column names and mapped field names
-        const csvName = row.productName || row['Product Name'] || row['Title'] || '';
-        const itemId = row.itemId || row['Item ID'] || row['ItemID'] || '';
-        const ebayUrl = row.ebayUrl || row['eBay URL'] || row['URL'] || '';
-        const imageUrlsString = row.imageUrls || row['Image URL'] || row['ImageURL'] || '';
+        const csvName = row.productName || row['Product Name'] || row['Title'] || row['title'] || '';
+        const itemId = row.itemId || row['Item ID'] || row['ItemID'] || row['item_id'] || '';
+        const ebayUrl = row.ebayUrl || row['eBay URL'] || row['URL'] || row['url'] || '';
+        const ebaySellerName = row.ebaySellerName || row['eBay Seller'] || row['seller_ebay_seller_id'] || row['Seller'] || '';
+        const imageUrlsString = row.imageUrls || row['Image URL'] || row['ImageURL'] || row['image_url'] || '';
         const parsedImageUrls = parseImageUrls(imageUrlsString);
-        const quantity = parseInt(row.quantity || row['Quantity'] || '1');
+        const quantity = parseInt(row.quantity || row['Quantity'] || row['warehouse_inventory'] || '1');
         const price = parseFloat(row.price || row['Price'] || '0');
         
         // Parse dimension fields from CSV
@@ -2025,6 +2026,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             updates: {
               itemId,
               ebayUrl,
+              ebaySellerName,
               imageUrls: parsedImageUrls,
               quantity,
               price,
@@ -2042,6 +2044,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             updates: {
               itemId,
               ebayUrl,
+              ebaySellerName,
               imageUrls: parsedImageUrls,
               quantity,
               price,

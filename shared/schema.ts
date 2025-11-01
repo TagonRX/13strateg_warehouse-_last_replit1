@@ -32,6 +32,7 @@ export const inventoryItems = pgTable("inventory_items", {
   price: integer("price"), // Цена товара (целое число)
   itemId: text("item_id"), // eBay item ID из CSV (например "397123149682")
   ebayUrl: text("ebay_url"), // Ссылка на страницу товара на eBay
+  ebaySellerName: text("ebay_seller_name"), // Имя продавца eBay (например "toponesale")
   imageUrls: text("image_urls"), // JSON массив URL фотографий товара
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -84,6 +85,7 @@ export const pickingTasks = pgTable("picking_tasks", {
   sku: text("sku").notNull(), // SKU to pick (not specific item ID)
   itemName: text("item_name"), // Name of the item from inventory
   itemNameSource: text("item_name_source"), // 'file' (from CSV) or 'inventory' (looked up)
+  ebaySellerName: text("ebay_seller_name"), // Имя продавца eBay для сверки при сборке
   requiredQuantity: integer("required_quantity").notNull().default(1), // How many needed
   pickedQuantity: integer("picked_quantity").notNull().default(0), // How many picked
   status: text("status").notNull().default("PENDING"), // PENDING, COMPLETED

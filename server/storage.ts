@@ -1903,6 +1903,7 @@ export class DbStorage implements IStorage {
           if (item.name !== undefined) updates.name = item.name;
           if (item.itemId !== undefined) updates.itemId = item.itemId;
           if (item.ebayUrl !== undefined) updates.ebayUrl = item.ebayUrl;
+          if (item.ebaySellerName !== undefined) updates.ebaySellerName = item.ebaySellerName;
           if (imageUrlsJson !== null) updates.imageUrls = imageUrlsJson;
           if (item.quantity !== undefined) updates.quantity = item.quantity;
           
