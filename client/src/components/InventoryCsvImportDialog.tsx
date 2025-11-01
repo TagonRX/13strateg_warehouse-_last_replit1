@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -17,12 +18,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileUp, CheckCircle2, AlertTriangle, XCircle, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { getAuthToken } from "@/lib/api";
 
 interface CsvImportDialogProps {
   onSuccess: () => void;
@@ -42,37 +52,135 @@ interface ImportSession {
   };
 }
 
+interface ColumnMapping {
+  csvColumn: string;
+  enabled: boolean;
+  targetField: string;
+  sampleData: string[];
+}
+
+// Helper: Parse CSV text to get headers and rows
+function parseCSV(text: string): { headers: string[]; rows: any[] } {
+  const lines = text.trim().split('\n');
+  if (lines.length === 0) return { headers: [], rows: [] };
+  
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const rows = lines.slice(1).map(line => {
+    const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+    const row: any = {};
+    headers.forEach((header, idx) => {
+      row[header] = values[idx] || '';
+    });
+    return row;
+  });
+  
+  return { headers, rows };
+}
+
+// Helper: Auto-suggest target field based on CSV column name
+function suggestTargetField(csvColumn: string): string {
+  const lower = csvColumn.toLowerCase();
+  
+  if (lower.includes('product') || lower.includes('title') || lower.includes('name')) return 'productName';
+  if (lower.includes('sku') || lower.includes('артикул')) return 'sku';
+  if (lower.includes('location') || lower.includes('локация')) return 'location';
+  if (lower.includes('barcode') || lower.includes('штрихкод')) return 'barcode';
+  if (lower.includes('quantity') || lower.includes('количество') || lower.includes('qty')) return 'quantity';
+  if (lower.includes('price') || lower.includes('цена')) return 'price';
+  if (lower.includes('itemid') || lower.includes('item id')) return 'itemId';
+  if (lower.includes('url') || lower.includes('ссылка') || lower.includes('ebay')) return 'ebayUrl';
+  if (lower.includes('image') || lower.includes('photo') || lower.includes('фото')) return 'imageUrls';
+  if (lower.includes('condition') || lower.includes('состояние')) return 'condition';
+  
+  return '(skip)';
+}
+
 export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(1);
   const [sourceType, setSourceType] = useState<'url' | 'file'>('url');
   const [sourceUrl, setSourceUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping[]>([]);
+  const [csvPreview, setCsvPreview] = useState<{ headers: string[]; rows: any[] } | null>(null);
   const [sessionData, setSessionData] = useState<ImportSession | null>(null);
   const [resolutions, setResolutions] = useState<{ csvRowIndex: number; selectedProductId: string }[]>([]);
   const { toast } = useToast();
 
+  // Preview CSV mutation - parses CSV and generates column mapping suggestions
+  const previewCSVMutation = useMutation({
+    mutationFn: async () => {
+      let csvText = '';
+      
+      if (sourceType === 'url') {
+        const response = await fetch(sourceUrl);
+        if (!response.ok) throw new Error('Failed to fetch CSV from URL');
+        csvText = await response.text();
+      } else if (file) {
+        csvText = await file.text();
+      }
+      
+      return csvText;
+    },
+    onSuccess: (csvText) => {
+      const { headers, rows } = parseCSV(csvText);
+      setCsvPreview({ headers, rows });
+      
+      // Generate column mapping with auto-suggestions
+      const mappings: ColumnMapping[] = headers.map(csvColumn => {
+        const targetField = suggestTargetField(csvColumn);
+        const sampleData = rows.slice(0, 3).map(row => row[csvColumn] || '');
+        
+        return {
+          csvColumn,
+          enabled: targetField !== '(skip)',
+          targetField,
+          sampleData,
+        };
+      });
+      
+      setColumnMapping(mappings);
+      setStep(2); // Move to column mapping step
+      
+      toast({
+        title: "CSV загружен",
+        description: `Найдено ${headers.length} колонок. Проверьте соответствие полей.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка загрузки CSV",
+        description: error.message || "Не удалось прочитать CSV файл",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Start import mutation - sends CSV with column mapping to backend
   const startImportMutation = useMutation({
     mutationFn: async () => {
+      let csvText = '';
+      
       if (sourceType === 'url') {
-        return apiRequest('/api/inventory/import-csv', {
-          method: 'POST',
-          body: JSON.stringify({ sourceType: 'url', sourceUrl }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-      } else {
-        const formData = new FormData();
-        formData.append('file', file!);
-        formData.append('sourceType', 'file');
-        return apiRequest('/api/inventory/import-csv', {
-          method: 'POST',
-          body: formData,
-        });
+        const response = await fetch(sourceUrl);
+        if (!response.ok) throw new Error('Failed to fetch CSV from URL');
+        csvText = await response.text();
+      } else if (file) {
+        csvText = await file.text();
       }
+      
+      // Send CSV text and column mapping to backend
+      const response = await apiRequest('POST', '/api/inventory/import-csv', {
+        sourceType: 'text',
+        csvText,
+        columnMapping: columnMapping.filter(m => m.enabled),
+      });
+      
+      return response.json();
     },
     onSuccess: (data) => {
       setSessionData(data);
-      setStep(2);
+      setStep(3); // Move to matching step
       toast({
         title: "CSV обработан",
         description: `Найдено: ${data.summary.matched} совпадений, ${data.summary.conflicts} конфликтов, ${data.summary.unmatched} не найдено`,
@@ -93,17 +201,20 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
       
       // First resolve conflicts if any
       if (resolutions.length > 0) {
-        await apiRequest(`/api/inventory/import-sessions/${sessionData.session.id}/resolve`, {
-          method: 'POST',
-          body: JSON.stringify({ resolutions }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+        const resolveResponse = await apiRequest(
+          'POST',
+          `/api/inventory/import-sessions/${sessionData.session.id}/resolve`,
+          { resolutions }
+        );
+        await resolveResponse.json();
       }
       
       // Then commit the import
-      return apiRequest(`/api/inventory/import-sessions/${sessionData.session.id}/commit`, {
-        method: 'POST',
-      });
+      const commitResponse = await apiRequest(
+        'POST',
+        `/api/inventory/import-sessions/${sessionData.session.id}/commit`
+      );
+      return commitResponse.json();
     },
     onSuccess: (data: any) => {
       toast({
@@ -122,7 +233,7 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
     },
   });
 
-  const handleStartImport = () => {
+  const handleLoadCSV = () => {
     if (sourceType === 'url' && !sourceUrl.trim()) {
       toast({
         title: "Ошибка",
@@ -141,7 +252,43 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
       return;
     }
     
+    // Load CSV and show column mapping
+    previewCSVMutation.mutate();
+  };
+
+  const handleProceedWithMapping = () => {
+    // Validate that at least one column is enabled with valid target field
+    const validMappings = columnMapping.filter(m => 
+      m.enabled && m.targetField !== '(skip)' && m.targetField.trim() !== ''
+    );
+    
+    if (validMappings.length === 0) {
+      toast({
+        title: "Ошибка валидации",
+        description: "Необходимо выбрать хотя бы один столбец для импорта",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Proceed with import using selected column mapping
     startImportMutation.mutate();
+  };
+
+  const handleColumnMappingChange = (index: number, field: 'enabled' | 'targetField', value: boolean | string) => {
+    setColumnMapping(prev => {
+      const updated = [...prev];
+      if (field === 'enabled') {
+        updated[index].enabled = value as boolean;
+      } else if (field === 'targetField') {
+        updated[index].targetField = value as string;
+        // Auto-disable if "(skip)" is selected
+        if (value === '(skip)') {
+          updated[index].enabled = false;
+        }
+      }
+      return updated;
+    });
   };
 
   const handleResolveConflict = (conflictIndex: number, productId: string) => {
@@ -152,7 +299,7 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
   };
 
   const handleCommit = () => {
-    setStep(3);
+    setStep(4);
   };
 
   const handleFinalCommit = () => {
@@ -164,6 +311,8 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
     setSourceType('url');
     setSourceUrl("");
     setFile(null);
+    setColumnMapping([]);
+    setCsvPreview(null);
     setSessionData(null);
     setResolutions([]);
     setOpen(false);
@@ -171,6 +320,21 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
 
   const parsedData = sessionData ? JSON.parse(sessionData.session.parsedData) : null;
   const hasUnresolvedConflicts = parsedData && parsedData.conflicts.length > resolutions.length;
+
+  // Target field options for dropdown
+  const targetFieldOptions = [
+    { value: 'productName', label: 'Product Name' },
+    { value: 'sku', label: 'SKU' },
+    { value: 'location', label: 'Location' },
+    { value: 'barcode', label: 'Barcode' },
+    { value: 'quantity', label: 'Quantity' },
+    { value: 'price', label: 'Price' },
+    { value: 'itemId', label: 'eBay Item ID' },
+    { value: 'ebayUrl', label: 'eBay URL' },
+    { value: 'imageUrls', label: 'Image URLs' },
+    { value: 'condition', label: 'Condition' },
+    { value: '(skip)', label: '(Пропустить)' },
+  ];
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -184,7 +348,7 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
         <DialogHeader>
           <DialogTitle>
             Импорт товаров из CSV
-            <Badge className="ml-2" variant="secondary">Шаг {step} из 3</Badge>
+            <Badge className="ml-2" variant="secondary">Шаг {step} из 4</Badge>
           </DialogTitle>
         </DialogHeader>
 
@@ -242,18 +406,98 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
                 Отмена
               </Button>
               <Button 
-                onClick={handleStartImport} 
-                disabled={startImportMutation.isPending}
-                data-testid="button-start-import"
+                onClick={handleLoadCSV} 
+                disabled={previewCSVMutation.isPending}
+                data-testid="button-load-csv"
               >
-                {startImportMutation.isPending ? "Обработка..." : "Далее"}
+                {previewCSVMutation.isPending ? "Загрузка..." : "Далее"}
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step 2: Review matches and conflicts */}
-        {step === 2 && parsedData && (
+        {/* Step 2: Column Mapping */}
+        {step === 2 && columnMapping.length > 0 && (
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <h3 className="font-semibold">Настройка соответствия колонок</h3>
+              <p className="text-sm text-muted-foreground">
+                Укажите, какие колонки из CSV файла соответствуют полям в системе.
+                Отключите ненужные колонки с помощью чекбоксов.
+              </p>
+            </div>
+
+            <div className="border rounded-md max-h-96 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">Вкл.</TableHead>
+                    <TableHead>Колонка CSV</TableHead>
+                    <TableHead>Поле в системе</TableHead>
+                    <TableHead>Примеры данных</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {columnMapping.map((mapping, idx) => (
+                    <TableRow key={idx} data-testid={`row-column-mapping-${idx}`}>
+                      <TableCell>
+                        <Checkbox
+                          checked={mapping.enabled}
+                          onCheckedChange={(checked) => 
+                            handleColumnMappingChange(idx, 'enabled', checked as boolean)
+                          }
+                          data-testid={`checkbox-column-${idx}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium font-mono text-sm">
+                        {mapping.csvColumn}
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={mapping.targetField}
+                          onValueChange={(value) => 
+                            handleColumnMappingChange(idx, 'targetField', value)
+                          }
+                          disabled={!mapping.enabled}
+                        >
+                          <SelectTrigger data-testid={`select-target-field-${idx}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {targetFieldOptions.map(option => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {mapping.sampleData.filter(d => d).slice(0, 3).join(', ') || '(нет данных)'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="flex justify-between gap-2">
+              <Button variant="outline" onClick={() => setStep(1)} data-testid="button-back-to-upload">
+                Назад
+              </Button>
+              <Button 
+                onClick={handleProceedWithMapping}
+                disabled={startImportMutation.isPending || columnMapping.filter(m => m.enabled).length === 0}
+                data-testid="button-proceed-mapping"
+              >
+                {startImportMutation.isPending ? "Обработка..." : "Продолжить"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Review matches and conflicts */}
+        {step === 3 && parsedData && (
           <div className="space-y-6">
             <Card>
               <CardContent className="pt-6">
@@ -353,8 +597,8 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
             </div>
 
             <div className="flex justify-between gap-2">
-              <Button variant="outline" onClick={handleReset} data-testid="button-back">
-                Отмена
+              <Button variant="outline" onClick={() => setStep(2)} data-testid="button-back">
+                Назад
               </Button>
               <Button 
                 onClick={handleCommit}
@@ -369,8 +613,8 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
           </div>
         )}
 
-        {/* Step 3: Confirm and commit */}
-        {step === 3 && parsedData && (
+        {/* Step 4: Confirm and commit */}
+        {step === 4 && parsedData && (
           <div className="space-y-6">
             <Card>
               <CardContent className="pt-6">
@@ -380,13 +624,13 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
                     <div>
                       <p className="text-sm text-muted-foreground">Будет обновлено товаров:</p>
                       <p className="text-2xl font-bold text-green-600">
-                        {sessionData?.summary.matched + resolutions.length}
+                        {(sessionData?.summary?.matched || 0) + resolutions.length}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Будет пропущено:</p>
                       <p className="text-2xl font-bold text-red-600">
-                        {sessionData?.summary.unmatched + (sessionData?.summary.conflicts || 0) - resolutions.length}
+                        {(sessionData?.summary?.unmatched || 0) + (sessionData?.summary?.conflicts || 0) - resolutions.length}
                       </p>
                     </div>
                   </div>
@@ -398,7 +642,7 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
             </Card>
 
             <div className="flex justify-between gap-2">
-              <Button variant="outline" onClick={() => setStep(2)} data-testid="button-back-to-review">
+              <Button variant="outline" onClick={() => setStep(3)} data-testid="button-back-to-review">
                 Назад
               </Button>
               <Button 

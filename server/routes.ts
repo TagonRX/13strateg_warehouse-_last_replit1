@@ -1839,13 +1839,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/inventory/import-csv - Start CSV import process
   app.post("/api/inventory/import-csv", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { sourceType, sourceUrl } = req.body;
+      const { sourceType, sourceUrl, csvText, columnMapping } = req.body;
       const userId = (req as any).userId;
       
       let csvRows: any[];
       
       // Parse CSV based on source type
-      if (sourceType === 'url') {
+      if (sourceType === 'text') {
+        // New: Parse from CSV text with column mapping
+        if (!csvText) {
+          return res.status(400).json({ error: "CSV text is required for text source type" });
+        }
+        
+        const lines = csvText.trim().split('\n');
+        if (lines.length === 0) {
+          return res.status(400).json({ error: "CSV file is empty" });
+        }
+        
+        // Parse headers
+        const originalHeaders = lines[0].split(',').map((h: string) => h.trim().replace(/^"|"$/g, ''));
+        
+        // Parse rows
+        const rawRows = lines.slice(1).map((line: string) => {
+          const values = line.split(',').map((v: string) => v.trim().replace(/^"|"$/g, ''));
+          const row: any = {};
+          originalHeaders.forEach((header: string, idx: number) => {
+            row[header] = values[idx] || '';
+          });
+          return row;
+        });
+        
+        // Apply column mapping if provided
+        if (columnMapping && Array.isArray(columnMapping) && columnMapping.length > 0) {
+          // Whitelist of allowed target fields for security
+          const allowedTargetFields = ['productName', 'sku', 'location', 'barcode', 'quantity', 'price', 'itemId', 'ebayUrl', 'imageUrls', 'condition'];
+          
+          csvRows = rawRows.map(rawRow => {
+            const mappedRow: any = {};
+            
+            columnMapping.forEach((mapping: any) => {
+              // Filter out skip and validate against whitelist
+              if (mapping.enabled && 
+                  mapping.targetField !== '(skip)' && 
+                  allowedTargetFields.includes(mapping.targetField)) {
+                const csvValue = rawRow[mapping.csvColumn];
+                mappedRow[mapping.targetField] = csvValue;
+              }
+            });
+            
+            return mappedRow;
+          });
+        } else {
+          csvRows = rawRows;
+        }
+      } else if (sourceType === 'url') {
         if (!sourceUrl) {
           return res.status(400).json({ error: "URL is required for URL source type" });
         }
@@ -1870,12 +1917,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Process each CSV row
       for (const row of csvRows) {
-        const csvName = row['Product Name'] || row['Title'] || '';
-        const itemId = row['Item ID'] || row['ItemID'] || '';
-        const ebayUrl = row['eBay URL'] || row['URL'] || '';
-        const imageUrl = row['Image URL'] || row['ImageURL'] || '';
-        const quantity = parseInt(row['Quantity'] || '1');
-        const price = parseFloat(row['Price'] || '0');
+        // Support both original column names and mapped field names
+        const csvName = row.productName || row['Product Name'] || row['Title'] || '';
+        const itemId = row.itemId || row['Item ID'] || row['ItemID'] || '';
+        const ebayUrl = row.ebayUrl || row['eBay URL'] || row['URL'] || '';
+        const imageUrl = row.imageUrls || row['Image URL'] || row['ImageURL'] || '';
+        const quantity = parseInt(row.quantity || row['Quantity'] || '1');
+        const price = parseFloat(row.price || row['Price'] || '0');
         
         if (!csvName) {
           unmatched.push({ csvRow: row, reason: 'No product name' });
@@ -1894,6 +1942,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ebayUrl,
               imageUrls: imageUrl ? [imageUrl] : [],
               quantity,
+              price,
             }
           });
         } else if (match && itemConflicts.length > 0) {
@@ -1905,6 +1954,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ebayUrl,
               imageUrls: imageUrl ? [imageUrl] : [],
               quantity,
+              price,
             }
           });
         } else {
