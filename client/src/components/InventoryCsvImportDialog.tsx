@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +28,8 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileUp, CheckCircle2, AlertTriangle, XCircle, Upload } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { FileUp, CheckCircle2, AlertTriangle, XCircle, Upload, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -70,6 +71,18 @@ interface ColumnMapping {
   enabled: boolean;
   targetField: string;
   sampleData: string[];
+}
+
+interface SavedSource {
+  id: string;
+  label: string;
+  url: string;
+}
+
+interface LoadProgress {
+  current: number;
+  total: number;
+  errors: string[];
 }
 
 // Helper: Parse CSV text to get headers and rows
@@ -130,15 +143,150 @@ function suggestTargetField(csvColumn: string): string {
 export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(1);
-  const [sourceType, setSourceType] = useState<'url' | 'file'>('url');
+  const [sourceType, setSourceType] = useState<'url' | 'file' | 'multiple-urls'>('url');
   const [sourceUrl, setSourceUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [savedSources, setSavedSources] = useState<SavedSource[]>([]);
+  const [loadProgress, setLoadProgress] = useState<LoadProgress | null>(null);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping[]>([]);
   const [csvPreview, setCsvPreview] = useState<{ headers: string[]; rows: any[] } | null>(null);
   const [sessionData, setSessionData] = useState<ImportSession | null>(null);
   const [resolutions, setResolutions] = useState<{ csvRowIndex: number; selectedProductId: string }[]>([]);
   const [dimensionChoices, setDimensionChoices] = useState<{ productId: string; useCSV: boolean }[]>([]);
   const { toast } = useToast();
+
+  // Load saved sources from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('csvImportSources');
+      if (saved) {
+        const sources: SavedSource[] = JSON.parse(saved);
+        setSavedSources(sources);
+      }
+    } catch (e) {
+      console.error('Failed to load saved sources:', e);
+    }
+  }, []);
+
+  // Helper: Save sources to localStorage
+  const saveSourcesToLocalStorage = (sources: SavedSource[]) => {
+    try {
+      localStorage.setItem('csvImportSources', JSON.stringify(sources));
+    } catch (e) {
+      console.error('Failed to save sources:', e);
+    }
+  };
+
+  // Helper: Add new source
+  const addNewSource = () => {
+    const newSource: SavedSource = {
+      id: crypto.randomUUID(),
+      label: '',
+      url: '',
+    };
+    const updated = [...savedSources, newSource];
+    setSavedSources(updated);
+    saveSourcesToLocalStorage(updated);
+  };
+
+  // Helper: Remove source
+  const removeSource = (id: string) => {
+    const updated = savedSources.filter(s => s.id !== id);
+    setSavedSources(updated);
+    saveSourcesToLocalStorage(updated);
+  };
+
+  // Helper: Update source
+  const updateSource = (id: string, field: 'label' | 'url', value: string) => {
+    const updated = savedSources.map(s => {
+      if (s.id === id) {
+        if (field === 'label') {
+          return { ...s, label: value.toUpperCase().slice(0, 4) };
+        } else {
+          return { ...s, url: value };
+        }
+      }
+      return s;
+    });
+    setSavedSources(updated);
+    saveSourcesToLocalStorage(updated);
+  };
+
+  // Helper: Load multiple CSVs sequentially
+  const loadMultipleCSVs = async (): Promise<string> => {
+    const validSources = savedSources.filter(s => s.label && s.url);
+    
+    if (validSources.length === 0) {
+      throw new Error('Нет валидных источников для загрузки');
+    }
+
+    setLoadProgress({ current: 0, total: validSources.length, errors: [] });
+
+    let mergedHeaders: string[] | null = null;
+    let allRows: any[] = [];
+    const errors: string[] = [];
+
+    for (let i = 0; i < validSources.length; i++) {
+      const source = validSources[i];
+      setLoadProgress({ current: i + 1, total: validSources.length, errors });
+
+      try {
+        const response = await fetch(source.url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const csvText = await response.text();
+        const { headers, rows } = parseCSV(csvText);
+
+        // Validate headers match
+        if (mergedHeaders === null) {
+          mergedHeaders = headers;
+        } else {
+          const headersMatch = 
+            headers.length === mergedHeaders.length &&
+            headers.every((h, idx) => h === mergedHeaders![idx]);
+          
+          if (!headersMatch) {
+            throw new Error('Заголовки CSV не совпадают с первым файлом');
+          }
+        }
+
+        allRows = [...allRows, ...rows];
+
+        toast({
+          title: `${source.label} загружен`,
+          description: `${rows.length} строк добавлено`,
+        });
+      } catch (error: any) {
+        const errorMsg = `${source.label}: ${error.message}`;
+        errors.push(errorMsg);
+        
+        toast({
+          title: `Ошибка загрузки ${source.label}`,
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    }
+
+    setLoadProgress(null);
+
+    if (!mergedHeaders || allRows.length === 0) {
+      throw new Error('Не удалось загрузить ни один CSV файл');
+    }
+
+    // Convert merged data back to CSV text
+    const headerLine = mergedHeaders.join(',');
+    const dataLines = allRows.map(row => {
+      return mergedHeaders!.map(header => {
+        const value = row[header] || '';
+        return value.includes(',') ? `"${value}"` : value;
+      }).join(',');
+    });
+
+    return [headerLine, ...dataLines].join('\n');
+  };
 
   // Helper: Load saved column mapping from localStorage
   const loadSavedMapping = (headers: string[]): ColumnMapping[] | null => {
@@ -192,8 +340,10 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
         const response = await fetch(sourceUrl);
         if (!response.ok) throw new Error('Failed to fetch CSV from URL');
         csvText = await response.text();
-      } else if (file) {
+      } else if (sourceType === 'file' && file) {
         csvText = await file.text();
+      } else if (sourceType === 'multiple-urls') {
+        csvText = await loadMultipleCSVs();
       }
       
       return csvText;
@@ -251,8 +401,10 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
         const response = await fetch(sourceUrl);
         if (!response.ok) throw new Error('Failed to fetch CSV from URL');
         csvText = await response.text();
-      } else if (file) {
+      } else if (sourceType === 'file' && file) {
         csvText = await file.text();
+      } else if (sourceType === 'multiple-urls') {
+        csvText = await loadMultipleCSVs();
       }
       
       // Save column mapping to localStorage for future use
@@ -352,6 +504,30 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
       });
       return;
     }
+
+    if (sourceType === 'multiple-urls') {
+      const validSources = savedSources.filter(s => s.label && s.url);
+      if (validSources.length === 0) {
+        toast({
+          title: "Ошибка",
+          description: "Добавьте хотя бы один источник с меткой и URL",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Check for duplicate labels
+      const labels = validSources.map(s => s.label);
+      const uniqueLabels = new Set(labels);
+      if (labels.length !== uniqueLabels.size) {
+        toast({
+          title: "Ошибка",
+          description: "Метки должны быть уникальными",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     
     // Load CSV and show column mapping
     previewCSVMutation.mutate();
@@ -419,6 +595,7 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
     setSourceType('url');
     setSourceUrl("");
     setFile(null);
+    setLoadProgress(null);
     setColumnMapping([]);
     setCsvPreview(null);
     setSessionData(null);
@@ -467,7 +644,7 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
           <div className="space-y-6">
             <div className="space-y-4">
               <Label>Выберите источник</Label>
-              <RadioGroup value={sourceType} onValueChange={(v) => setSourceType(v as 'url' | 'file')}>
+              <RadioGroup value={sourceType} onValueChange={(v) => setSourceType(v as 'url' | 'file' | 'multiple-urls')}>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="url" id="source-url" data-testid="radio-source-url" />
                   <Label htmlFor="source-url">URL файла</Label>
@@ -476,10 +653,14 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
                   <RadioGroupItem value="file" id="source-file" data-testid="radio-source-file" />
                   <Label htmlFor="source-file">Загрузить файл</Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="multiple-urls" id="source-multiple" data-testid="radio-source-multiple" />
+                  <Label htmlFor="source-multiple">Несколько URL источников</Label>
+                </div>
               </RadioGroup>
             </div>
 
-            {sourceType === 'url' ? (
+            {sourceType === 'url' && (
               <div className="space-y-2">
                 <Label htmlFor="csv-url">URL CSV файла</Label>
                 <Input
@@ -493,7 +674,9 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
                   Ожидаемые колонки: Product Name/Title, Item ID, eBay URL, Image URL, Quantity, Price
                 </p>
               </div>
-            ) : (
+            )}
+
+            {sourceType === 'file' && (
               <div className="space-y-2">
                 <Label htmlFor="csv-file">Выберите CSV файл</Label>
                 <Input
@@ -511,16 +694,122 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
               </div>
             )}
 
+            {sourceType === 'multiple-urls' && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>URL источники</Label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={addNewSource}
+                      data-testid="button-add-url"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Добавить
+                    </Button>
+                  </div>
+                  
+                  {savedSources.length === 0 ? (
+                    <Card>
+                      <CardContent className="p-6 text-center text-muted-foreground">
+                        Нет сохраненных источников. Нажмите "Добавить" чтобы начать.
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="border rounded-md max-h-96 overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-32">Метка (4 макс.)</TableHead>
+                            <TableHead>URL</TableHead>
+                            <TableHead className="w-16"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {savedSources.map((source, idx) => (
+                            <TableRow key={source.id} data-testid={`row-url-source-${idx}`}>
+                              <TableCell>
+                                <Input
+                                  placeholder="eBay"
+                                  value={source.label}
+                                  onChange={(e) => updateSource(source.id, 'label', e.target.value)}
+                                  maxLength={4}
+                                  className="font-mono uppercase"
+                                  data-testid={`input-label-${idx}`}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  placeholder="https://example.com/data.csv"
+                                  value={source.url}
+                                  onChange={(e) => updateSource(source.id, 'url', e.target.value)}
+                                  data-testid={`input-url-${idx}`}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => removeSource(source.id)}
+                                  data-testid={`button-remove-${idx}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    Метки должны быть уникальными (например: eBay, AMZN, ETSY). Все CSV файлы должны иметь одинаковые заголовки.
+                  </p>
+                </div>
+
+                {loadProgress && (
+                  <Card>
+                    <CardContent className="p-6 space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">Загрузка CSV файлов</span>
+                          <span className="text-muted-foreground">
+                            {loadProgress.current} из {loadProgress.total}
+                          </span>
+                        </div>
+                        <Progress 
+                          value={(loadProgress.current / loadProgress.total) * 100} 
+                          data-testid="progress-loading"
+                        />
+                      </div>
+                      {loadProgress.errors.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-destructive">Ошибки:</p>
+                          {loadProgress.errors.map((error, idx) => (
+                            <p key={idx} className="text-xs text-muted-foreground">• {error}</p>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={handleReset} data-testid="button-cancel">
                 Отмена
               </Button>
               <Button 
                 onClick={handleLoadCSV} 
-                disabled={previewCSVMutation.isPending}
-                data-testid="button-load-csv"
+                disabled={previewCSVMutation.isPending || loadProgress !== null}
+                data-testid={sourceType === 'multiple-urls' ? 'button-load-multiple' : 'button-load-csv'}
               >
-                {previewCSVMutation.isPending ? "Загрузка..." : "Далее"}
+                {previewCSVMutation.isPending || loadProgress !== null ? "Загрузка..." : "Загрузить"}
               </Button>
             </div>
           </div>
