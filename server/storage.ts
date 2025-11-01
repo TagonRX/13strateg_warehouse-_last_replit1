@@ -71,6 +71,7 @@ export interface IStorage {
   updateInventoryItem(productId: string, updates: Partial<InsertInventoryItem>): Promise<InventoryItem>;
   updateInventoryItemById(id: string, updates: Partial<InsertInventoryItem>): Promise<InventoryItem>;
   deleteInventoryItem(id: string, userId: string): Promise<boolean>;
+  deleteAllInventoryItems(userId: string): Promise<number>;
   bulkUpsertInventoryItems(items: InsertInventoryItem[]): Promise<{ success: number; updated: number; errors: number }>;
   updateItemCondition(itemId: string, condition: string, userId: string): Promise<void>;
   getConditionByBarcode(barcode: string): Promise<string | null>;
@@ -744,6 +745,24 @@ export class DbStorage implements IStorage {
     });
 
     return true;
+  }
+
+  async deleteAllInventoryItems(userId: string): Promise<number> {
+    // Get all inventory items before deletion for logging
+    const items = await db.select().from(inventoryItems);
+    const count = items.length;
+
+    // Delete all inventory items
+    await db.delete(inventoryItems);
+
+    // Log the mass deletion
+    await this.createEventLog({
+      userId,
+      action: "DELETE_ALL_INVENTORY",
+      details: `Deleted all inventory items (${count} items)`,
+    });
+
+    return count;
   }
 
   async updateItemCondition(itemId: string, condition: string, userId: string): Promise<void> {

@@ -416,6 +416,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete all inventory items
+  app.delete("/api/inventory/all/items", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const count = await storage.deleteAllInventoryItems(userId);
+
+      return res.json({ message: `Удалено товаров: ${count}`, count });
+    } catch (error: any) {
+      console.error("Delete all inventory error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Get condition by barcode (GET /api/inventory/barcode/:barcode/condition)
   app.get("/api/inventory/barcode/:barcode/condition", requireAuth, async (req, res) => {
     try {
@@ -508,7 +521,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/inventory/sync-from-file", requireAuth, requireAdmin, async (req, res) => {
     try {
       const userId = (req as any).userId;
-      const filePath = path.join(process.cwd(), "data", "inventory_sync.csv");
+      const filePath = path.join(process.cwd(), "data", "inventory.csv");
 
       console.log("[FILE SYNC] Reading file:", filePath);
 
