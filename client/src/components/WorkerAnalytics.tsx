@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type SortColumn = 'userName' | 'login' | 'stockIn' | 'stockInCost' | 'stockOut' | 'stockOutCost' | 'csvUpload' | 'pickingListCreated' | 'itemPicked' | 'locationDeleted';
+type SortColumn = 'userName' | 'login' | 'stockIn' | 'stockInCost' | 'stockOut' | 'stockOutCost' | 'csvUpload' | 'pickingListCreated' | 'itemPicked' | 'itemsPacked' | 'locationDeleted';
 type SortDirection = 'asc' | 'desc' | null;
 
 export default function WorkerAnalytics() {
@@ -25,6 +25,7 @@ export default function WorkerAnalytics() {
     csvUpload: number;
     pickingListCreated: number;
     itemPicked: number;
+    itemsPacked: number;
     locationDeleted: number;
   }>>({
     queryKey: [`/api/analytics?period=${period}`],
@@ -213,6 +214,17 @@ export default function WorkerAnalytics() {
                     <Button 
                       variant="ghost" 
                       size="sm" 
+                      onClick={() => handleSort('itemsPacked')}
+                      className="hover-elevate active-elevate-2"
+                      data-testid="sort-itemsPacked"
+                    >
+                      Упаковано {getSortIcon('itemsPacked')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
                       onClick={() => handleSort('locationDeleted')}
                       className="hover-elevate active-elevate-2"
                       data-testid="sort-locationDeleted"
@@ -251,6 +263,9 @@ export default function WorkerAnalytics() {
                     </TableCell>
                     <TableCell className="text-center" data-testid={`text-item-picked-${worker.userId}`}>
                       {worker.itemPicked}
+                    </TableCell>
+                    <TableCell className="text-center" data-testid={`text-items-packed-${worker.userId}`}>
+                      {worker.itemsPacked}
                     </TableCell>
                     <TableCell className="text-center" data-testid={`text-location-deleted-${worker.userId}`}>
                       {worker.locationDeleted}

@@ -48,6 +48,7 @@ export default function EventLogsView({ users }: EventLogsViewProps) {
       CSV_UPLOAD: "default",
       PICKING_LIST_CREATED: "default",
       ITEM_PICKED: "secondary",
+      ORDER_PACKED: "default",
       LOCATION_DELETED: "destructive",
     };
     return variants[action] || "outline";

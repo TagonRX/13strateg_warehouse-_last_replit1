@@ -104,6 +104,7 @@ export interface IStorage {
     csvUpload: number;
     pickingListCreated: number;
     itemPicked: number;
+    itemsPacked: number;
     locationDeleted: number;
   }[]>;
 
@@ -1356,6 +1357,7 @@ export class DbStorage implements IStorage {
     csvUpload: number;
     pickingListCreated: number;
     itemPicked: number;
+    itemsPacked: number;
     locationDeleted: number;
   }[]> {
     // Calculate date filter based on period
@@ -1405,6 +1407,7 @@ export class DbStorage implements IStorage {
         csvUpload: userLogs.filter(log => log.action === 'CSV_UPLOAD').length,
         pickingListCreated: userLogs.filter(log => log.action === 'PICKING_LIST_CREATED').length,
         itemPicked: userLogs.filter(log => log.action === 'PICK_ITEM' || log.action === 'ITEM_PICKED' || log.action === 'PICK_ITEM_MANUAL' || log.action === 'PICK_ITEM_MANUAL_NO_INVENTORY').length,
+        itemsPacked: userLogs.filter(log => log.action === 'ORDER_PACKED').length,
         locationDeleted: userLogs.filter(log => log.action === 'LOCATION_DELETED').length,
       };
     });
@@ -1979,6 +1982,7 @@ export class DbStorage implements IStorage {
   }
 
   async updatePackingData(id: string, userId: string): Promise<Order> {
+    // Update order status first
     const result = await db.update(orders)
       .set({
         packedBy: userId,
@@ -1988,7 +1992,67 @@ export class DbStorage implements IStorage {
       })
       .where(eq(orders.id, id))
       .returning();
-    return result[0];
+
+    const updatedOrder = result[0];
+    if (!updatedOrder) {
+      throw new Error("Order not found or update failed");
+    }
+
+    // Get user info for event log
+    const user = await this.getUser(userId);
+    const userName = user?.name || 'Unknown';
+
+    // Parse items and barcodes for details - handle both JSON strings and arrays
+    let itemsInfo = '';
+    let barcodesInfo = '';
+    let itemCount = 0;
+    
+    try {
+      // Handle both JSON string and already-parsed array
+      const items = updatedOrder.items 
+        ? (typeof updatedOrder.items === 'string' ? JSON.parse(updatedOrder.items) : updatedOrder.items)
+        : [];
+      itemCount = items.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0);
+      itemsInfo = items.map((item: any) => 
+        `${item.itemName || item.sku} (${item.quantity || 1}шт)`
+      ).join(', ');
+    } catch (e) {
+      console.error('Failed to parse order items:', e);
+      itemsInfo = 'Не удалось распарсить товары';
+      itemCount = 1; // Default to 1 if we can't count
+    }
+
+    try {
+      // Handle both JSON string and already-parsed array
+      const barcodes = updatedOrder.dispatchedBarcodes
+        ? (typeof updatedOrder.dispatchedBarcodes === 'string' ? JSON.parse(updatedOrder.dispatchedBarcodes) : updatedOrder.dispatchedBarcodes)
+        : [];
+      
+      if (Array.isArray(barcodes) && barcodes.length > 0) {
+        barcodesInfo = barcodes.slice(0, 5).join(', ');
+        if (barcodes.length > 5) {
+          barcodesInfo += ` (+${barcodes.length - 5} ещё)`;
+        }
+      } else {
+        barcodesInfo = itemsInfo; // Fallback to items info if no barcodes
+      }
+    } catch (e) {
+      console.error('Failed to parse barcodes:', e);
+      barcodesInfo = itemsInfo; // Fallback to items info on error
+    }
+
+    // Create event log for packing completion
+    await db.insert(eventLogs).values({
+      userId,
+      action: "ORDER_PACKED",
+      details: `Упакован заказ №${updatedOrder.orderNumber} | ${userName} | Товаров: ${itemCount} | Баркоды: ${barcodesInfo}`,
+      productId: updatedOrder.orderNumber,
+      itemName: updatedOrder.customerName || null,
+      sku: updatedOrder.shippingLabel || null,
+      quantity: itemCount,
+    });
+
+    return updatedOrder;
   }
 
   async findOrdersBySku(sku: string, status?: string): Promise<Order[]> {

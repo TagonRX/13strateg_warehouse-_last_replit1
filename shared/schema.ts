@@ -63,6 +63,7 @@ export const workerAnalytics = pgTable("worker_analytics", {
   date: text("date").notNull(), // YYYY-MM-DD
   itemsReceived: integer("items_received").notNull().default(0),
   itemsPicked: integer("items_picked").notNull().default(0),
+  itemsPacked: integer("items_packed").notNull().default(0),
   csvErrors: integer("csv_errors").notNull().default(0),
 });
 
