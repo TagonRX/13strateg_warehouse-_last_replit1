@@ -1,0 +1,99 @@
+[
+  {
+    "productId": "PROD001",
+    "name": "Ноутбук Dell XPS 15",
+    "sku": "A101-DELL-XPS15",
+    "quantity": 3,
+    "condition": "New",
+    "length": 36,
+    "width": 24,
+    "height": 2,
+    "weight": 2,
+    "price": 85000,
+    "itemId": "397123149682",
+    "ebayUrl": "https://www.ebay.com/itm/397123149682",
+    "ebaySellerName": "toponesale",
+    "imageUrl1": "https://i.ebayimg.com/images/g/abc123/s-l1600.jpg",
+    "imageUrl2": "https://i.ebayimg.com/images/g/abc124/s-l1600.jpg",
+    "barcodeMappings": [
+      { "code": "BARCODE001", "qty": 1 },
+      { "code": "BARCODE002", "qty": 1 },
+      { "code": "BARCODE003", "qty": 1 }
+    ]
+  },
+  {
+    "productId": "PROD002",
+    "name": "Монитор Samsung 27\"",
+    "sku": "A102-SAM-MON27",
+    "quantity": 5,
+    "condition": "Used",
+    "length": 61,
+    "width": 46,
+    "height": 18,
+    "weight": 5,
+    "price": 25000,
+    "itemId": "397123149683",
+    "ebayUrl": "https://www.ebay.com/itm/397123149683",
+    "ebaySellerName": "techseller",
+    "imageUrl1": "https://i.ebayimg.com/images/g/def123/s-l1600.jpg",
+    "barcodeMappings": [
+      { "code": "BARCODE004", "qty": 2 },
+      { "code": "BARCODE005", "qty": 3 }
+    ]
+  },
+  {
+    "productId": "PROD003",
+    "name": "Клавиатура Logitech MX Keys",
+    "sku": "B201-LOG-MX",
+    "quantity": 10,
+    "condition": "New",
+    "length": 43,
+    "width": 13,
+    "height": 2,
+    "weight": 1,
+    "price": 12000,
+    "imageUrl1": "https://i.ebayimg.com/images/g/ghi123/s-l1600.jpg",
+    "imageUrl2": "https://i.ebayimg.com/images/g/ghi124/s-l1600.jpg",
+    "imageUrl3": "https://i.ebayimg.com/images/g/ghi125/s-l1600.jpg",
+    "barcodeMappings": [
+      { "code": "BARCODE006", "qty": 5 },
+      { "code": "BARCODE007", "qty": 5 }
+    ]
+  },
+  {
+    "productId": "PROD004",
+    "name": "Мышь Apple Magic Mouse",
+    "sku": "B202-APP-MOUSE",
+    "quantity": 7,
+    "condition": "Exdisplay",
+    "length": 11,
+    "width": 6,
+    "height": 2,
+    "weight": 0,
+    "price": 7500,
+    "ebayUrl": "https://www.ebay.com/itm/397123149684",
+    "barcodeMappings": [
+      { "code": "BARCODE008", "qty": 7 }
+    ]
+  },
+  {
+    "productId": "PROD005",
+    "name": "Принтер HP LaserJet Pro",
+    "sku": "C301-HP-LASER",
+    "quantity": 2,
+    "condition": "Parts",
+    "length": 38,
+    "width": 36,
+    "height": 23,
+    "weight": 8,
+    "price": 18000,
+    "itemId": "397123149685",
+    "ebayUrl": "https://www.ebay.com/itm/397123149685",
+    "ebaySellerName": "officeequip",
+    "imageUrl1": "https://i.ebayimg.com/images/g/jkl123/s-l1600.jpg",
+    "barcodeMappings": [
+      { "code": "BARCODE009", "qty": 1 },
+      { "code": "BARCODE010", "qty": 1 }
+    ]
+  }
+]
