@@ -781,8 +781,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
             {item.ebayUrl && (
               <Button 
                 size="icon" 
-                variant="ghost" 
-                className="h-5 w-5"
+                variant="ghost"
                 onClick={() => setSelectedUrl(item.ebayUrl || null)}
                 data-testid={`button-open-url-${item.id}`}
               >
@@ -1035,7 +1034,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
               {selectedUrl}
             </div>
             <Button 
-              onClick={() => window.open(selectedUrl!, '_blank')}
+              onClick={() => window.open(selectedUrl!, '_blank', 'noopener,noreferrer')}
               data-testid="button-open-ebay-url"
             >
               <ExternalLink className="w-4 h-4 mr-2" />
