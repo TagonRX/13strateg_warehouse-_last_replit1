@@ -58,11 +58,21 @@ async function parseCsvFromUrl(url: string): Promise<any[]> {
 
 // Helper: Match products by name using similarity
 function matchProductsByName(csvName: string, inventoryItems: any[]): { match: any | null; score: number; conflicts: any[] } {
+  // Skip if csvName is empty or null
+  if (!csvName || csvName.trim() === '') {
+    return { match: null, score: 0, conflicts: [] };
+  }
+  
   let bestMatch = null;
   let bestScore = 0;
   const conflicts: any[] = [];
   
   for (const item of inventoryItems) {
+    // Skip items without names
+    if (!item.name) {
+      continue;
+    }
+    
     const score = compareTwoStrings(csvName.toLowerCase(), item.name.toLowerCase());
     if (score >= 0.9) {
       if (score > bestScore) {
