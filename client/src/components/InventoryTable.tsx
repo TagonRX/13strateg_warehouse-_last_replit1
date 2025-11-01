@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, ChevronDown, ChevronRight, Pencil, Save, X, Trash2, ExternalLink, Image as ImageIcon } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, Pencil, Save, X, Trash2, ExternalLink, Image as ImageIcon, FolderOpen } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -847,6 +847,40 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     });
   };
 
+  // Mutation to load CSV from project file
+  const loadProjectCsvMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/inventory/load-project-csv', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Ошибка загрузки CSV файла');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      toast({
+        title: "Загрузка завершена",
+        description: data.message || `Загружено: ${data.success} новых, обновлено: ${data.updated}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка загрузки",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const openImageGallery = (imageUrls: string[]) => {
     setSelectedImageUrls(imageUrls);
     setImageModalOpen(true);
@@ -862,7 +896,18 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
               Всего товаров: {items.length}
             </div>
             {userRole === "admin" && (
-              <InventoryCsvImportDialog onSuccess={handleRefreshInventory} />
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => loadProjectCsvMutation.mutate()}
+                  disabled={loadProjectCsvMutation.isPending}
+                  data-testid="button-load-project-csv"
+                >
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  {loadProjectCsvMutation.isPending ? "Загрузка..." : "Загрузить из файла"}
+                </Button>
+                <InventoryCsvImportDialog onSuccess={handleRefreshInventory} />
+              </>
             )}
           </div>
         </div>

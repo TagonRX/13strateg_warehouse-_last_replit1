@@ -2550,6 +2550,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Load inventory from project CSV file (data/inventory.csv)
+  app.post("/api/inventory/load-project-csv", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const filePath = path.join(process.cwd(), "data", "inventory.csv");
+
+      console.log("[PROJECT CSV] Reading file:", filePath);
+
+      // Read CSV file
+      let fileContent: string;
+      try {
+        fileContent = await fs.readFile(filePath, "utf-8");
+      } catch (error) {
+        return res.status(404).json({ error: "CSV файл не найден. Создайте файл data/inventory.csv" });
+      }
+
+      if (!fileContent.trim()) {
+        return res.status(400).json({ error: "CSV файл пуст" });
+      }
+
+      // Parse CSV using fast-csv
+      const rows: any[] = [];
+      await new Promise<void>((resolve, reject) => {
+        Readable.from(fileContent)
+          .pipe(parse({ headers: true, trim: true }))
+          .on('data', (row) => rows.push(row))
+          .on('end', () => resolve())
+          .on('error', (error) => reject(error));
+      });
+
+      console.log("[PROJECT CSV] Parsed rows:", rows.length);
+
+      if (rows.length === 0) {
+        return res.status(400).json({ error: "CSV файл не содержит данных" });
+      }
+
+      // Convert CSV rows to inventory items
+      const items = rows.map((row) => {
+        const sku = row.SKU || row.sku || '';
+        const location = extractLocationFromSKU(sku);
+        
+        // Calculate volume if dimensions are available
+        const length = row.Length || row.length ? parseFloat(row.Length || row.length) : undefined;
+        const width = row.Width || row.width ? parseFloat(row.Width || row.width) : undefined;
+        const height = row.Height || row.height ? parseFloat(row.Height || row.height) : undefined;
+        const volume = length && width && height ? length * width * height : undefined;
+
+        return {
+          productId: row['Product ID'] || row.productId || row.ProductID || null,
+          name: row.Name || row.name || null,
+          sku,
+          location,
+          quantity: parseInt(row.Quantity || row.quantity || '1'),
+          barcode: row.Barcode || row.barcode || undefined,
+          condition: row.Condition || row.condition || null,
+          price: row.Price || row.price ? parseFloat(row.Price || row.price) : undefined,
+          length,
+          width,
+          height,
+          volume,
+          weight: row.Weight || row.weight ? parseFloat(row.Weight || row.weight) : undefined,
+          itemId: row['Item ID'] || row.itemId || row.ItemID || null,
+          ebayUrl: row.URL || row.url || row.ebayUrl || null,
+          ebaySellerName: row['eBay Seller'] || row.ebaySellerName || row.Seller || null,
+          // Image URLs (1-24)
+          imageUrl1: row['Image URL 1'] || row.imageUrl1 || null,
+          imageUrl2: row['Image URL 2'] || row.imageUrl2 || null,
+          imageUrl3: row['Image URL 3'] || row.imageUrl3 || null,
+          imageUrl4: row['Image URL 4'] || row.imageUrl4 || null,
+          imageUrl5: row['Image URL 5'] || row.imageUrl5 || null,
+          imageUrl6: row['Image URL 6'] || row.imageUrl6 || null,
+          imageUrl7: row['Image URL 7'] || row.imageUrl7 || null,
+          imageUrl8: row['Image URL 8'] || row.imageUrl8 || null,
+          imageUrl9: row['Image URL 9'] || row.imageUrl9 || null,
+          imageUrl10: row['Image URL 10'] || row.imageUrl10 || null,
+          imageUrl11: row['Image URL 11'] || row.imageUrl11 || null,
+          imageUrl12: row['Image URL 12'] || row.imageUrl12 || null,
+          imageUrl13: row['Image URL 13'] || row.imageUrl13 || null,
+          imageUrl14: row['Image URL 14'] || row.imageUrl14 || null,
+          imageUrl15: row['Image URL 15'] || row.imageUrl15 || null,
+          imageUrl16: row['Image URL 16'] || row.imageUrl16 || null,
+          imageUrl17: row['Image URL 17'] || row.imageUrl17 || null,
+          imageUrl18: row['Image URL 18'] || row.imageUrl18 || null,
+          imageUrl19: row['Image URL 19'] || row.imageUrl19 || null,
+          imageUrl20: row['Image URL 20'] || row.imageUrl20 || null,
+          imageUrl21: row['Image URL 21'] || row.imageUrl21 || null,
+          imageUrl22: row['Image URL 22'] || row.imageUrl22 || null,
+          imageUrl23: row['Image URL 23'] || row.imageUrl23 || null,
+          imageUrl24: row['Image URL 24'] || row.imageUrl24 || null,
+          createdBy: userId,
+        };
+      });
+
+      // Bulk upsert items
+      const result = await storage.bulkUpsertInventoryItems(items);
+
+      // Log the event
+      await storage.createEventLog({
+        userId,
+        action: "PROJECT_CSV_LOAD",
+        details: `Загружено из data/inventory.csv: ${result.success} новых, ${result.updated} обновлено, ${result.errors} ошибок`,
+      });
+
+      console.log("[PROJECT CSV] Result:", result);
+
+      return res.json({
+        success: result.success,
+        updated: result.updated,
+        errors: result.errors,
+        message: `Успешно загружено: ${result.success} новых товаров, обновлено: ${result.updated}`,
+      });
+    } catch (error: any) {
+      console.error("[PROJECT CSV] Error:", error);
+      return res.status(500).json({ error: "Ошибка при загрузке CSV файла: " + error.message });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // Setup WebSocket server for remote scanning
