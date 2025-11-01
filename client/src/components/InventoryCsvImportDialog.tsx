@@ -77,11 +77,23 @@ function parseCSV(text: string): { headers: string[]; rows: any[] } {
   return { headers, rows };
 }
 
+// Helper: Check if column should be skipped
+function shouldSkipColumn(csvColumn: string): boolean {
+  const lower = csvColumn.toLowerCase();
+  // Skip columns with "c:" prefix or "variation" in name
+  return csvColumn.startsWith('c:') || lower.includes('variation');
+}
+
 // Helper: Auto-suggest target field based on CSV column name
 function suggestTargetField(csvColumn: string): string {
+  // Skip if this column should be filtered out
+  if (shouldSkipColumn(csvColumn)) {
+    return '(skip)';
+  }
+  
   const lower = csvColumn.toLowerCase();
   
-  if (lower.includes('product') || lower.includes('title') || lower.includes('name')) return 'productName';
+  if (lower.includes('product') || lower.includes('title') || lower.includes('название')) return 'productName';
   if (lower.includes('sku') || lower.includes('артикул')) return 'sku';
   if (lower.includes('location') || lower.includes('локация')) return 'location';
   if (lower.includes('barcode') || lower.includes('штрихкод')) return 'barcode';
@@ -91,6 +103,12 @@ function suggestTargetField(csvColumn: string): string {
   if (lower.includes('url') || lower.includes('ссылка') || lower.includes('ebay')) return 'ebayUrl';
   if (lower.includes('image') || lower.includes('photo') || lower.includes('фото')) return 'imageUrls';
   if (lower.includes('condition') || lower.includes('состояние')) return 'condition';
+  
+  // Dimensions and weight
+  if (lower.includes('weight') || lower.includes('вес')) return 'weight';
+  if (lower.includes('width') || lower.includes('ширина')) return 'width';
+  if (lower.includes('height') || lower.includes('высота')) return 'height';
+  if (lower.includes('length') || lower.includes('depth') || lower.includes('длина') || lower.includes('глубина')) return 'length';
   
   return '(skip)';
 }
@@ -106,6 +124,49 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
   const [sessionData, setSessionData] = useState<ImportSession | null>(null);
   const [resolutions, setResolutions] = useState<{ csvRowIndex: number; selectedProductId: string }[]>([]);
   const { toast } = useToast();
+
+  // Helper: Load saved column mapping from localStorage
+  const loadSavedMapping = (headers: string[]): ColumnMapping[] | null => {
+    try {
+      const saved = localStorage.getItem('csvColumnMapping');
+      if (!saved) return null;
+      
+      const savedMappings: {[key: string]: string} = JSON.parse(saved);
+      
+      // Apply saved mappings to current headers
+      const mappings: ColumnMapping[] = headers.map(csvColumn => {
+        const savedTarget = savedMappings[csvColumn];
+        const targetField = savedTarget || suggestTargetField(csvColumn);
+        
+        return {
+          csvColumn,
+          enabled: targetField !== '(skip)',
+          targetField,
+          sampleData: [],
+        };
+      });
+      
+      return mappings;
+    } catch (e) {
+      console.error('Failed to load saved mapping:', e);
+      return null;
+    }
+  };
+
+  // Helper: Save column mapping to localStorage
+  const saveMapping = (mappings: ColumnMapping[]) => {
+    try {
+      const mappingObj: {[key: string]: string} = {};
+      mappings.forEach(m => {
+        if (m.enabled && m.targetField !== '(skip)') {
+          mappingObj[m.csvColumn] = m.targetField;
+        }
+      });
+      localStorage.setItem('csvColumnMapping', JSON.stringify(mappingObj));
+    } catch (e) {
+      console.error('Failed to save mapping:', e);
+    }
+  };
 
   // Preview CSV mutation - parses CSV and generates column mapping suggestions
   const previewCSVMutation = useMutation({
@@ -126,18 +187,28 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
       const { headers, rows } = parseCSV(csvText);
       setCsvPreview({ headers, rows });
       
-      // Generate column mapping with auto-suggestions
-      const mappings: ColumnMapping[] = headers.map(csvColumn => {
-        const targetField = suggestTargetField(csvColumn);
-        const sampleData = rows.slice(0, 3).map(row => row[csvColumn] || '');
-        
-        return {
-          csvColumn,
-          enabled: targetField !== '(skip)',
-          targetField,
-          sampleData,
-        };
-      });
+      // Try to load saved mapping first
+      let mappings = loadSavedMapping(headers);
+      
+      // If no saved mapping, generate auto-suggestions
+      if (!mappings) {
+        mappings = headers.map(csvColumn => {
+          const targetField = suggestTargetField(csvColumn);
+          const sampleData = rows.slice(0, 3).map(row => row[csvColumn] || '');
+          
+          return {
+            csvColumn,
+            enabled: targetField !== '(skip)',
+            targetField,
+            sampleData,
+          };
+        });
+      } else {
+        // Add sample data to saved mappings
+        mappings.forEach(m => {
+          m.sampleData = rows.slice(0, 3).map(row => row[m.csvColumn] || '');
+        });
+      }
       
       setColumnMapping(mappings);
       setStep(2); // Move to column mapping step
@@ -168,6 +239,9 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
       } else if (file) {
         csvText = await file.text();
       }
+      
+      // Save column mapping to localStorage for future use
+      saveMapping(columnMapping);
       
       // Send CSV text and column mapping to backend
       const response = await apiRequest('POST', '/api/inventory/import-csv', {

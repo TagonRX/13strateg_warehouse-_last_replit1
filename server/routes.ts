@@ -1882,7 +1882,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Apply column mapping if provided
         if (columnMapping && Array.isArray(columnMapping) && columnMapping.length > 0) {
           // Whitelist of allowed target fields for security
-          const allowedTargetFields = ['productName', 'sku', 'location', 'barcode', 'quantity', 'price', 'itemId', 'ebayUrl', 'imageUrls', 'condition'];
+          const allowedTargetFields = [
+            'productName', 'sku', 'location', 'barcode', 'quantity', 'price', 
+            'itemId', 'ebayUrl', 'imageUrls', 'condition',
+            'weight', 'width', 'height', 'length' // Размеры и вес
+          ];
           
           csvRows = rawRows.map((rawRow: any) => {
             const mappedRow: any = {};
