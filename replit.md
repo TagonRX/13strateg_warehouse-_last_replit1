@@ -32,23 +32,33 @@ The backend is built with Node.js and Express.js, using TypeScript and ES Module
 The database schema, managed by Drizzle ORM, includes tables for users, inventory, event logs, worker analytics, picking lists, SKU errors, CSV sources, global settings, CSV import sessions, and a dedicated workflow for product testing (pending_tests, tested_items, faulty_stock). UUID primary keys and automatic timestamps are used, with foreign key relationships for data integrity. Product deduplication is achieved by `productId`, and upsert patterns handle bulk inventory updates.
 
 ### CSV Import Feature
-The CSV import system provides a comprehensive 3-step wizard for bulk inventory updates:
+The CSV import system provides a comprehensive 4-step wizard for bulk inventory updates:
 
 **Step 1: Source Selection**
 - Supports two input methods: direct file upload or URL-based CSV import
-- Accepts standard CSV files with expected columns: "Product Name"/"Title", "Item ID"/"ItemID", "eBay URL"/"URL", "Image URL"/"ImageURL", "Quantity", "Price"
+- Accepts any CSV format with flexible column names
 - Admin-only feature with session-based tracking
 
-**Step 2: Intelligent Matching & Conflict Resolution**
+**Step 2: Column Mapping (NEW - Nov 2024)**
+- Interactive table displays all CSV columns with enable/disable checkboxes
+- Smart auto-mapping with bilingual suggestions (English/Russian)
+  - Auto-detects: Product Name/Название → productName, Price/Цена → price, Quantity/Количество → quantity
+  - Full support: productName, sku, location, barcode, quantity, price, itemId, ebayUrl, imageUrls, condition
+- "(Пропустить)" option to skip unwanted columns (auto-disables checkbox)
+- Sample data preview from first CSV row
+- Frontend validation: requires at least one enabled column before proceeding
+- Backend security: whitelist filtering prevents injection of invalid fields
+
+**Step 3: Intelligent Matching & Conflict Resolution**
 - Uses Levenshtein distance algorithm (string-similarity library) to match CSV product names against existing inventory
 - Automatic matching: Products with ≥90% similarity score and no conflicts are auto-matched (shown in green)
 - Conflict detection: Multiple products with ≥90% similarity require manual selection via dropdown (shown in yellow/amber)
 - Unmatched items: Products with <90% similarity or missing names are skipped (shown in red)
 - Real-time summary displays: total rows, matched items, conflicts requiring resolution, and unmatched/skipped items
 
-**Step 3: Confirmation & Commit**
+**Step 4: Confirmation & Commit**
 - Final summary before applying changes
-- Bulk update operation updates inventory with: itemId (eBay item ID), ebayUrl, imageUrls (JSON array), quantity
+- Bulk update operation updates inventory with mapped fields based on Step 2 configuration
 - Creates event log entry upon successful completion
 - Session status tracking: READY_FOR_REVIEW → RESOLVING → COMMITTED/FAILED
 
