@@ -533,32 +533,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       if (data.hasConflicts && data.conflicts && data.conflicts.length > 0) {
         console.log("[FILE SYNC] Found", data.conflicts.length, "conflicts");
         setConflicts(data.conflicts);
-        
-        // We need to read the CSV file to get the raw data for conflict resolution
-        try {
-          const filePath = "/data/inventory.csv";
-          const csvResponse = await fetch(filePath);
-          if (csvResponse.ok) {
-            const csvText = await csvResponse.text();
-            const lines = csvText.trim().split("\n");
-            if (lines.length > 1) {
-              const delimiter = lines[0].includes(";") ? ";" : ",";
-              const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase());
-              const csvData = lines.slice(1).map(line => {
-                const values = line.split(delimiter).map(v => v.trim());
-                const item: any = {};
-                headers.forEach((header, index) => {
-                  item[header] = values[index];
-                });
-                return item;
-              });
-              setPendingCsvData(csvData);
-            }
-          }
-        } catch (error) {
-          console.error("[FILE SYNC] Failed to read CSV file:", error);
-        }
-        
+        setPendingCsvData(data.csvData || []);
         setConflictDialogOpen(true);
         
         toast({

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,13 @@ export function ConflictResolutionDialog({
   // Track individual decisions: itemId -> 'accept_csv' | 'keep_existing' | undefined
   const [decisions, setDecisions] = useState<Record<string, 'accept_csv' | 'keep_existing'>>({});
   const [isResolving, setIsResolving] = useState(false);
+
+  // Reset decisions when dialog opens or conflicts change
+  useEffect(() => {
+    if (open) {
+      setDecisions({});
+    }
+  }, [open, conflicts]);
 
   const handleDecision = (itemId: string, action: 'accept_csv' | 'keep_existing') => {
     setDecisions(prev => ({

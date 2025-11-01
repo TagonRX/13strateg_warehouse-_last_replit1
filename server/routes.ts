@@ -764,6 +764,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({
           hasConflicts: true,
           conflicts,
+          csvData: csvItems, // Include CSV data for conflict resolution
           created,
           updated,
         });
