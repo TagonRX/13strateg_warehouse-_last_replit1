@@ -178,6 +178,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const [pendingCondition, setPendingCondition] = useState<string>("");
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [selectedImageUrls, setSelectedImageUrls] = useState<string[]>([]);
+  const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch tested items for condition display
@@ -774,7 +775,22 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
             </div>
           )}
         </TableCell>
-        <TableCell style={{ width: `${columnWidths.name}px`, minWidth: `${columnWidths.name}px` }} className="text-xs">{item.name || "-"}</TableCell>
+        <TableCell style={{ width: `${columnWidths.name}px`, minWidth: `${columnWidths.name}px` }} className="text-xs">
+          <div className="flex items-center gap-1">
+            <span>{item.name || "-"}</span>
+            {item.ebayUrl && (
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                className="h-5 w-5"
+                onClick={() => setSelectedUrl(item.ebayUrl || null)}
+                data-testid={`button-open-url-${item.id}`}
+              >
+                <ExternalLink className="w-3 h-3" />
+              </Button>
+            )}
+          </div>
+        </TableCell>
         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="font-mono text-xs">{item.sku}</TableCell>
         <TableCell style={{ width: `${columnWidths.quantity}px`, minWidth: `${columnWidths.quantity}px` }} className="text-right text-xs font-medium">{item.quantity}</TableCell>
         <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="font-mono text-xs">{displayBarcodes}</TableCell>
@@ -1007,6 +1023,27 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         isOpen={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
       />
+
+      {/* eBay URL Dialog */}
+      <Dialog open={selectedUrl !== null} onOpenChange={(open) => !open && setSelectedUrl(null)}>
+        <DialogContent data-testid="dialog-ebay-url">
+          <DialogHeader>
+            <DialogTitle>Ссылка на товар</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-muted rounded text-sm break-all" data-testid="text-ebay-url">
+              {selectedUrl}
+            </div>
+            <Button 
+              onClick={() => window.open(selectedUrl!, '_blank')}
+              data-testid="button-open-ebay-url"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Перейти по ссылке
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
