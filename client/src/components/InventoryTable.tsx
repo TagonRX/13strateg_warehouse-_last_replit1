@@ -36,6 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 import * as api from "@/lib/api";
 import BarcodeEditor from "./BarcodeEditor";
 import InventoryCsvImportDialog from "./InventoryCsvImportDialog";
+import ImageGalleryModal from "./ImageGalleryModal";
 
 interface BarcodeMapping {
   code: string;
@@ -152,7 +153,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const [showFaultyDialog, setShowFaultyDialog] = useState(false);
   const [pendingCondition, setPendingCondition] = useState<string>("");
   const [imageModalOpen, setImageModalOpen] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageUrls, setSelectedImageUrls] = useState<string[]>([]);
   const { toast } = useToast();
 
   // Fetch tested items for condition display
@@ -718,16 +719,21 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         <TableCell style={{ width: `${columnWidths.photo}px`, minWidth: `${columnWidths.photo}px` }} className="text-xs">
           {firstImageUrl ? (
             <button
-              onClick={() => openImageModal(firstImageUrl)}
-              className="hover-elevate rounded overflow-hidden"
-              data-testid={`button-image-${item.id}`}
+              onClick={() => openImageGallery(imageUrls)}
+              className="hover-elevate rounded overflow-hidden relative"
+              data-testid={`button-open-gallery-${item.id}`}
             >
               <img 
                 src={firstImageUrl} 
                 alt={item.name || "Product"} 
                 className="w-12 h-12 object-cover"
-                data-testid={`img-thumbnail-${item.id}`}
+                data-testid={`image-thumbnail-${item.id}`}
               />
+              {imageUrls.length > 1 && (
+                <div className="absolute bottom-0 right-0 bg-black/70 text-white text-xs px-1 rounded-tl">
+                  +{imageUrls.length - 1}
+                </div>
+              )}
             </button>
           ) : (
             <div className="w-12 h-12 bg-muted rounded flex items-center justify-center" data-testid={`placeholder-image-${item.id}`}>
@@ -791,8 +797,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     });
   };
 
-  const openImageModal = (imageUrl: string) => {
-    setSelectedImage(imageUrl);
+  const openImageGallery = (imageUrls: string[]) => {
+    setSelectedImageUrls(imageUrls);
     setImageModalOpen(true);
   };
 
@@ -951,24 +957,12 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Image Modal Dialog */}
-      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Просмотр изображения</DialogTitle>
-          </DialogHeader>
-          {selectedImage && (
-            <div className="flex items-center justify-center p-4">
-              <img 
-                src={selectedImage} 
-                alt="Product full size" 
-                className="max-w-full max-h-[70vh] object-contain"
-                data-testid="img-modal-fullsize"
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Image Gallery Modal */}
+      <ImageGalleryModal
+        imageUrls={selectedImageUrls}
+        isOpen={imageModalOpen}
+        onClose={() => setImageModalOpen(false)}
+      />
     </Card>
   );
 }

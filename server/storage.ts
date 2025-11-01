@@ -1893,18 +1893,31 @@ export class DbStorage implements IStorage {
         
         if (existing) {
           // Update existing item with CSV data
+          // imageUrls is expected to be an array, stringify it for storage
+          const imageUrlsJson = item.imageUrls 
+            ? (Array.isArray(item.imageUrls) ? JSON.stringify(item.imageUrls) : item.imageUrls)
+            : null;
+          
           await this.updateInventoryItem(item.productId!, {
             name: item.name,
             itemId: item.itemId,
             ebayUrl: item.ebayUrl,
-            imageUrls: item.imageUrls,
+            imageUrls: imageUrlsJson,
             quantity: item.quantity,
           });
           updated++;
         } else {
           // This would be unusual - CSV import should only update existing inventory
           // But we can handle it if needed
-          await this.createInventoryItem({ ...item, createdBy: userId });
+          const imageUrlsJson = item.imageUrls 
+            ? (Array.isArray(item.imageUrls) ? JSON.stringify(item.imageUrls) : item.imageUrls)
+            : null;
+          
+          await this.createInventoryItem({ 
+            ...item, 
+            imageUrls: imageUrlsJson,
+            createdBy: userId 
+          });
           success++;
         }
       } catch (error) {

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle2, Circle, ExternalLink, Image as ImageIcon, Package, Truck, AlertTriangle } from "lucide-react";
 import BarcodeScanner from "@/components/BarcodeScanner";
+import ImageGalleryModal from "@/components/ImageGalleryModal";
 import type { Order, InventoryItem } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -18,7 +19,7 @@ type Phase = 'scanning_product' | 'scanning_items' | 'scanning_label' | 'confirm
 interface OrderItem {
   sku: string;
   barcode?: string;
-  imageUrl?: string;
+  imageUrls?: string[];
   ebayUrl?: string;
   itemName?: string;
   quantity: number;
@@ -37,7 +38,7 @@ export default function Dispatch() {
   const [scannedCounts, setScannedCounts] = useState<Map<string, number>>(new Map());
   const [dispatchedOrders, setDispatchedOrders] = useState<ParsedOrder[]>([]);
   const [imageModalOpen, setImageModalOpen] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageUrls, setSelectedImageUrls] = useState<string[]>([]);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [shippingLabel, setShippingLabel] = useState<string>("");
 
@@ -164,7 +165,7 @@ export default function Dispatch() {
         const imageUrls = inventoryItem.imageUrls ? JSON.parse(inventoryItem.imageUrls) : [];
         return {
           ...item,
-          imageUrl: imageUrls[0] || item.imageUrl,
+          imageUrls: imageUrls.length > 0 ? imageUrls : item.imageUrls,
           ebayUrl: inventoryItem.ebayUrl || item.ebayUrl,
           itemName: inventoryItem.name || item.itemName,
         };
@@ -289,8 +290,8 @@ export default function Dispatch() {
     setShippingLabel("");
   };
 
-  const openImageModal = (imageUrl: string) => {
-    setSelectedImage(imageUrl);
+  const openImageGallery = (imageUrls: string[]) => {
+    setSelectedImageUrls(imageUrls);
     setImageModalOpen(true);
   };
 
@@ -386,17 +387,23 @@ export default function Dispatch() {
                         )}
                       </div>
 
-                      {item.imageUrl && (
+                      {item.imageUrls && item.imageUrls.length > 0 && (
                         <button
-                          onClick={() => openImageModal(item.imageUrl!)}
-                          className="flex-shrink-0 hover-elevate"
-                          data-testid={`button-image-${item.sku}`}
+                          onClick={() => openImageGallery(item.imageUrls!)}
+                          className="flex-shrink-0 hover-elevate rounded overflow-hidden relative"
+                          data-testid={`button-open-gallery-${item.sku}`}
                         >
                           <img
-                            src={item.imageUrl}
+                            src={item.imageUrls[0]}
                             alt={item.itemName || item.sku}
-                            className="w-12 h-12 object-cover rounded"
+                            className="w-12 h-12 object-cover"
+                            data-testid={`image-thumbnail-${item.sku}`}
                           />
+                          {item.imageUrls.length > 1 && (
+                            <div className="absolute bottom-0 right-0 bg-black/70 text-white text-xs px-1 rounded-tl">
+                              +{item.imageUrls.length - 1}
+                            </div>
+                          )}
                         </button>
                       )}
 
@@ -490,23 +497,11 @@ export default function Dispatch() {
         </Card>
       )}
 
-      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Фото товара</DialogTitle>
-          </DialogHeader>
-          {selectedImage && (
-            <div className="flex justify-center">
-              <img
-                src={selectedImage}
-                alt="Product"
-                className="max-w-full max-h-[70vh] object-contain"
-                data-testid="img-modal"
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ImageGalleryModal
+        imageUrls={selectedImageUrls}
+        isOpen={imageModalOpen}
+        onClose={() => setImageModalOpen(false)}
+      />
 
       <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
         <DialogContent data-testid="dialog-confirm-dispatch">

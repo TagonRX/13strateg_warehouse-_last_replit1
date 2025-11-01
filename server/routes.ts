@@ -90,6 +90,23 @@ function matchProductsByName(csvName: string, inventoryItems: any[]): { match: a
   return { match: bestMatch, score: bestScore, conflicts };
 }
 
+// Helper: Parse imageUrls string into array
+// Supports multiple separators: spaces, commas, semicolons
+// Example: "url1.jpg url2.jpg" or "url1.jpg, url2.jpg" → ["url1.jpg", "url2.jpg"]
+function parseImageUrls(imageUrlsString: string): string[] {
+  if (!imageUrlsString || imageUrlsString.trim() === '') {
+    return [];
+  }
+  
+  // Split by spaces, commas, or semicolons
+  const urls = imageUrlsString
+    .split(/[\s,;]+/)
+    .map(url => url.trim())
+    .filter(url => url.length > 0);
+  
+  return urls;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user (check token validity)
   app.get("/api/auth/me", requireAuth, async (req, res) => {
@@ -1935,7 +1952,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const csvName = row.productName || row['Product Name'] || row['Title'] || '';
         const itemId = row.itemId || row['Item ID'] || row['ItemID'] || '';
         const ebayUrl = row.ebayUrl || row['eBay URL'] || row['URL'] || '';
-        const imageUrl = row.imageUrls || row['Image URL'] || row['ImageURL'] || '';
+        const imageUrlsString = row.imageUrls || row['Image URL'] || row['ImageURL'] || '';
+        const parsedImageUrls = parseImageUrls(imageUrlsString);
         const quantity = parseInt(row.quantity || row['Quantity'] || '1');
         const price = parseFloat(row.price || row['Price'] || '0');
         
@@ -1954,7 +1972,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             updates: {
               itemId,
               ebayUrl,
-              imageUrls: imageUrl ? [imageUrl] : [],
+              imageUrls: parsedImageUrls,
               quantity,
               price,
             }
@@ -1966,7 +1984,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             updates: {
               itemId,
               ebayUrl,
-              imageUrls: imageUrl ? [imageUrl] : [],
+              imageUrls: parsedImageUrls,
               quantity,
               price,
             }

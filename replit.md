@@ -25,8 +25,8 @@ The backend is built with Node.js and Express.js, using TypeScript and ES Module
 *   **Worker Analytics**: Displays key metrics and cost totals for all users, accurately preserving working minutes across condition transitions. Includes packing statistics showing total orders packed per worker (itemsPacked column), calculated dynamically from ORDER_PACKED event logs. Searchable event history enables easy audit trail lookup by worker name, order number, or barcode to identify who packed specific orders.
 *   **Barcode and QR Code Scanner Workflow**: Supports dual-mode scanning ("Сканер" for USB/keyboard devices and "Камера" for mobile camera via WebSocket). All scanning components support both traditional barcodes and QR codes. Mobile camera mode includes sidebar zoom controls with vertical slider, +/- buttons, and real-time zoom indicator, automatically detecting camera capabilities. Features accessible tooltips, dynamic help text, "zero-leak" routing, explicit confirmation modals, quantity-based bulk barcode creation, and capacity validation.
 *   **Product Testing Workflow**: Optional two-phase system for incoming products. Products can be added directly to inventory without testing, or they can go through the testing workflow tracking items from pending tests to final condition (Used/Exdisplay/New/Parts/Faulty) with working hours analytics for faulty items. Untested products are flagged in event logs with yellow highlighting for administrative review.
-*   **Dispatch Workflow**: Complete order preparation system with 4-phase non-stop barcode scanning. Workers scan products to find orders (prioritizing single-item orders), verify multi-item orders with quantity tracking (Map-based counts ensuring all units scanned), scan shipping labels, and confirm dispatch. Displays product photos and eBay links, tracks scanned quantities with progress bars (e.g., "2/3"), validates against order items, and prevents duplicate scans. Dispatched orders move to Packing queue with verified barcode list.
-*   **Packing Workflow**: Multi-worker order fulfillment with barcode verification against Dispatch data. Workers select ready-to-pack orders (status=DISPATCHED), scan shipping labels to start packing session, verify each product barcode against dispatchedBarcodes array with quantity validation, and complete packing upon full verification. Supports concurrent packing sessions with real-time updates (5-second refetchInterval), shows product photos and eBay links, tracks verification progress per item, and prevents errors (duplicate scans, wrong barcodes, quantity mismatches).
+*   **Dispatch Workflow**: Complete order preparation system with 4-phase non-stop barcode scanning. Workers scan products to find orders (prioritizing single-item orders), verify multi-item orders with quantity tracking (Map-based counts ensuring all units scanned), scan shipping labels, and confirm dispatch. Displays product photos (clickable for gallery view with all product images) and eBay links, tracks scanned quantities with progress bars (e.g., "2/3"), validates against order items, and prevents duplicate scans. Dispatched orders move to Packing queue with verified barcode list.
+*   **Packing Workflow**: Multi-worker order fulfillment with barcode verification against Dispatch data. Workers select ready-to-pack orders (status=DISPATCHED), scan shipping labels to start packing session, verify each product barcode against dispatchedBarcodes array with quantity validation, and complete packing upon full verification. Supports concurrent packing sessions with real-time updates (5-second refetchInterval), shows product photos (clickable for gallery view) and eBay links, tracks verification progress per item, and prevents errors (duplicate scans, wrong barcodes, quantity mismatches).
 
 ### System Design Choices
 The database schema, managed by Drizzle ORM, includes tables for users, inventory, event logs, worker analytics, picking lists, SKU errors, CSV sources, global settings, CSV import sessions, and a dedicated workflow for product testing (pending_tests, tested_items, faulty_stock). UUID primary keys and automatic timestamps are used, with foreign key relationships for data integrity. Product deduplication is achieved by `productId`, and upsert patterns handle bulk inventory updates.
@@ -63,15 +63,19 @@ The CSV import system provides a comprehensive 4-step wizard for bulk inventory 
 - Session status tracking: READY_FOR_REVIEW → RESOLVING → COMMITTED/FAILED
 
 **Enhanced Inventory Display**
-- "Фото" column: Displays product thumbnail (first image from imageUrls array), click to view full-size modal
+- "Фото" column: Displays product thumbnail (first image from imageUrls array), click to open interactive image gallery modal
+- Interactive image gallery (ImageGalleryModal component): Full carousel with prev/next navigation, image counter (e.g., "2 / 5"), and keyboard support
+- Multiple product images support: CSV import parses space/comma/semicolon-separated URLs into array stored as JSON in imageUrls field
+- Visual indicator: Thumbnails display "+N" badge when product has multiple images
 - "eBay" column: External link button if ebayUrl exists
 - Sticky table headers for improved navigation with large datasets
 - Resizable columns with persistent widths saved to localStorage
 
 **Backend Implementation**
-- CSV parsing helpers: parseCsvFile (buffer-based), parseCsvFromUrl (fetch-based), matchProductsByName (similarity scoring)
+- CSV parsing helpers: parseCsvFile (buffer-based), parseCsvFromUrl (fetch-based), parseImageUrls (multi-delimiter URL parsing), matchProductsByName (similarity scoring)
+- Image URL parsing: Supports space, comma, and semicolon separators with automatic trimming and empty value filtering
 - Session management endpoints: GET /api/inventory/import-sessions (list all), GET /:id (fetch specific session), POST /:id/resolve (save conflict resolutions), POST /:id/commit (apply changes)
-- Bulk update method: bulkUpdateInventoryFromCsv handles batch inventory updates
+- Bulk update method: bulkUpdateInventoryFromCsv handles batch inventory updates with proper JSON serialization for imageUrls arrays
 - Error handling: Failed imports mark session status as FAILED with error logging
 
 ## External Dependencies
@@ -86,4 +90,5 @@ The CSV import system provides a comprehensive 4-step wizard for bulk inventory 
 *   **Barcode Scanning**: html5-qrcode.
 *   **CSV Parsing**: fast-csv.
 *   **String Matching**: string-similarity.
+*   **Image Carousel**: embla-carousel-react.
 *   **Build Tools**: Vite, esbuild, TypeScript, Drizzle Kit.
