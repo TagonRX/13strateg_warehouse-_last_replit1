@@ -103,6 +103,32 @@ function parseCSV(text: string): { headers: string[]; rows: any[] } {
   return { headers, rows };
 }
 
+// Helper: Convert headers and rows to CSV text with proper escaping
+function convertToCSVText(headers: string[], rows: Record<string, string>[]): string {
+  // Build header line
+  const headerLine = headers.map(h => {
+    // Escape commas and quotes in header
+    if (h.includes(',') || h.includes('"') || h.includes('\n')) {
+      return `"${h.replace(/"/g, '""')}"`;
+    }
+    return h;
+  }).join(',');
+  
+  // Build data lines
+  const dataLines = rows.map(row => {
+    return headers.map(header => {
+      const value = row[header] || '';
+      // Escape commas and quotes in values
+      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+      return value;
+    }).join(',');
+  });
+  
+  return [headerLine, ...dataLines].join('\n');
+}
+
 // Helper: Check if column should be skipped
 function shouldSkipColumn(csvColumn: string): boolean {
   const lower = csvColumn.toLowerCase();
@@ -127,8 +153,36 @@ function suggestTargetField(csvColumn: string): string {
   if (lower.includes('price') || lower.includes('цена')) return 'price';
   if (lower.includes('itemid') || lower.includes('item id') || lower.includes('item_id')) return 'itemId';
   if (lower.includes('seller_ebay_seller_id') || lower.includes('ebay seller') || lower.includes('seller')) return 'ebaySellerName';
+  
+  // Image URL pattern matching for imageUrl1-24 (MUST come BEFORE general URL check)
+  // Matches patterns like: "Image URLs 1", "image_url_1", "imageurl1", "img1", "photo1", "фото1"
+  if (/image.*url.*\s*1|image_url_1|imageurl\s*1|img\s*1|photo\s*1|фото\s*1/i.test(csvColumn)) return 'imageUrl1';
+  if (/image.*url.*\s*2|image_url_2|imageurl\s*2|img\s*2|photo\s*2|фото\s*2/i.test(csvColumn)) return 'imageUrl2';
+  if (/image.*url.*\s*3|image_url_3|imageurl\s*3|img\s*3|photo\s*3|фото\s*3/i.test(csvColumn)) return 'imageUrl3';
+  if (/image.*url.*\s*4|image_url_4|imageurl\s*4|img\s*4|photo\s*4|фото\s*4/i.test(csvColumn)) return 'imageUrl4';
+  if (/image.*url.*\s*5|image_url_5|imageurl\s*5|img\s*5|photo\s*5|фото\s*5/i.test(csvColumn)) return 'imageUrl5';
+  if (/image.*url.*\s*6|image_url_6|imageurl\s*6|img\s*6|photo\s*6|фото\s*6/i.test(csvColumn)) return 'imageUrl6';
+  if (/image.*url.*\s*7|image_url_7|imageurl\s*7|img\s*7|photo\s*7|фото\s*7/i.test(csvColumn)) return 'imageUrl7';
+  if (/image.*url.*\s*8|image_url_8|imageurl\s*8|img\s*8|photo\s*8|фото\s*8/i.test(csvColumn)) return 'imageUrl8';
+  if (/image.*url.*\s*9|image_url_9|imageurl\s*9|img\s*9|photo\s*9|фото\s*9/i.test(csvColumn)) return 'imageUrl9';
+  if (/image.*url.*\s*10|image_url_10|imageurl\s*10|img\s*10|photo\s*10|фото\s*10/i.test(csvColumn)) return 'imageUrl10';
+  if (/image.*url.*\s*11|image_url_11|imageurl\s*11|img\s*11|photo\s*11|фото\s*11/i.test(csvColumn)) return 'imageUrl11';
+  if (/image.*url.*\s*12|image_url_12|imageurl\s*12|img\s*12|photo\s*12|фото\s*12/i.test(csvColumn)) return 'imageUrl12';
+  if (/image.*url.*\s*13|image_url_13|imageurl\s*13|img\s*13|photo\s*13|фото\s*13/i.test(csvColumn)) return 'imageUrl13';
+  if (/image.*url.*\s*14|image_url_14|imageurl\s*14|img\s*14|photo\s*14|фото\s*14/i.test(csvColumn)) return 'imageUrl14';
+  if (/image.*url.*\s*15|image_url_15|imageurl\s*15|img\s*15|photo\s*15|фото\s*15/i.test(csvColumn)) return 'imageUrl15';
+  if (/image.*url.*\s*16|image_url_16|imageurl\s*16|img\s*16|photo\s*16|фото\s*16/i.test(csvColumn)) return 'imageUrl16';
+  if (/image.*url.*\s*17|image_url_17|imageurl\s*17|img\s*17|photo\s*17|фото\s*17/i.test(csvColumn)) return 'imageUrl17';
+  if (/image.*url.*\s*18|image_url_18|imageurl\s*18|img\s*18|photo\s*18|фото\s*18/i.test(csvColumn)) return 'imageUrl18';
+  if (/image.*url.*\s*19|image_url_19|imageurl\s*19|img\s*19|photo\s*19|фото\s*19/i.test(csvColumn)) return 'imageUrl19';
+  if (/image.*url.*\s*20|image_url_20|imageurl\s*20|img\s*20|photo\s*20|фото\s*20/i.test(csvColumn)) return 'imageUrl20';
+  if (/image.*url.*\s*21|image_url_21|imageurl\s*21|img\s*21|photo\s*21|фото\s*21/i.test(csvColumn)) return 'imageUrl21';
+  if (/image.*url.*\s*22|image_url_22|imageurl\s*22|img\s*22|photo\s*22|фото\s*22/i.test(csvColumn)) return 'imageUrl22';
+  if (/image.*url.*\s*23|image_url_23|imageurl\s*23|img\s*23|photo\s*23|фото\s*23/i.test(csvColumn)) return 'imageUrl23';
+  if (/image.*url.*\s*24|image_url_24|imageurl\s*24|img\s*24|photo\s*24|фото\s*24/i.test(csvColumn)) return 'imageUrl24';
+  
+  // General URL check (less specific, comes AFTER image URL checks)
   if (lower.includes('url') || lower.includes('ссылка') || lower.includes('ebay')) return 'ebayUrl';
-  if (lower.includes('image') || lower.includes('photo') || lower.includes('фото') || lower.includes('image_url')) return 'imageUrls';
   if (lower.includes('condition') || lower.includes('состояние')) return 'condition';
   
   // Dimensions and weight
@@ -222,10 +276,16 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
 
     setLoadProgress({ current: 0, total: validSources.length, errors: [] });
 
-    let mergedHeaders: string[] | null = null;
-    let allRows: any[] = [];
+    interface ParsedCSV {
+      label: string;
+      headers: string[];
+      rows: Record<string, string>[];
+    }
+
+    const parsedCSVs: ParsedCSV[] = [];
     const errors: string[] = [];
 
+    // Load and parse all CSVs
     for (let i = 0; i < validSources.length; i++) {
       const source = validSources[i];
       setLoadProgress({ current: i + 1, total: validSources.length, errors });
@@ -239,24 +299,15 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
         const csvText = await response.text();
         const { headers, rows } = parseCSV(csvText);
 
-        // Validate headers match
-        if (mergedHeaders === null) {
-          mergedHeaders = headers;
-        } else {
-          const headersMatch = 
-            headers.length === mergedHeaders.length &&
-            headers.every((h, idx) => h === mergedHeaders![idx]);
-          
-          if (!headersMatch) {
-            throw new Error('Заголовки CSV не совпадают с первым файлом');
-          }
-        }
-
-        allRows = [...allRows, ...rows];
+        parsedCSVs.push({
+          label: source.label,
+          headers,
+          rows,
+        });
 
         toast({
           title: `${source.label} загружен`,
-          description: `${rows.length} строк добавлено`,
+          description: `${rows.length} строк, ${headers.length} колонок`,
         });
       } catch (error: any) {
         const errorMsg = `${source.label}: ${error.message}`;
@@ -272,20 +323,67 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
 
     setLoadProgress(null);
 
-    if (!mergedHeaders || allRows.length === 0) {
+    if (parsedCSVs.length === 0) {
       throw new Error('Не удалось загрузить ни один CSV файл');
     }
 
-    // Convert merged data back to CSV text
-    const headerLine = mergedHeaders.join(',');
-    const dataLines = allRows.map(row => {
-      return mergedHeaders!.map(header => {
-        const value = row[header] || '';
-        return value.includes(',') ? `"${value}"` : value;
-      }).join(',');
+    // Collect all unique headers from all CSVs
+    const allHeaders = new Set<string>();
+    parsedCSVs.forEach(csv => {
+      csv.headers.forEach(h => allHeaders.add(h));
+    });
+    const mergedHeaders = Array.from(allHeaders);
+
+    // Track which columns are unique to each CSV for warning messages
+    const columnSources = new Map<string, Set<string>>();
+    parsedCSVs.forEach(csv => {
+      csv.headers.forEach(header => {
+        if (!columnSources.has(header)) {
+          columnSources.set(header, new Set());
+        }
+        columnSources.get(header)!.add(csv.label);
+      });
     });
 
-    return [headerLine, ...dataLines].join('\n');
+    // Find columns that don't appear in all CSVs
+    const uniqueColumns = Array.from(columnSources.entries()).filter(
+      ([_, sources]) => sources.size < parsedCSVs.length
+    );
+
+    // Show warning if CSVs have different columns
+    if (uniqueColumns.length > 0) {
+      const warningDetails = uniqueColumns.map(([col, sources]) => {
+        const sourceList = Array.from(sources).join(', ');
+        return `${col} (только в: ${sourceList})`;
+      }).slice(0, 5); // Show first 5 unique columns
+
+      toast({
+        title: "Обнаружены различия в колонках",
+        description: `${uniqueColumns.length} колонок не во всех CSV файлах. ${warningDetails.join('; ')}`,
+        variant: "default",
+      });
+    }
+
+    // Normalize rows to include all merged headers
+    const normalizedRows = parsedCSVs.flatMap(csv => {
+      return csv.rows.map(row => {
+        const normalizedRow: Record<string, string> = {};
+        mergedHeaders.forEach(header => {
+          normalizedRow[header] = row[header] || '';
+        });
+        return normalizedRow;
+      });
+    });
+
+    // Convert back to CSV text using helper function
+    const mergedCsvText = convertToCSVText(mergedHeaders, normalizedRows);
+
+    toast({
+      title: "CSV файлы объединены",
+      description: `Всего ${normalizedRows.length} строк, ${mergedHeaders.length} колонок`,
+    });
+
+    return mergedCsvText;
   };
 
   // Helper: Load saved column mapping from localStorage
@@ -618,7 +716,30 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
     { value: 'itemId', label: 'eBay Item ID' },
     { value: 'ebayUrl', label: 'eBay URL' },
     { value: 'ebaySellerName', label: 'eBay Seller' },
-    { value: 'imageUrls', label: 'Image URLs' },
+    { value: 'imageUrl1', label: 'Image URLs 1' },
+    { value: 'imageUrl2', label: 'Image URLs 2' },
+    { value: 'imageUrl3', label: 'Image URLs 3' },
+    { value: 'imageUrl4', label: 'Image URLs 4' },
+    { value: 'imageUrl5', label: 'Image URLs 5' },
+    { value: 'imageUrl6', label: 'Image URLs 6' },
+    { value: 'imageUrl7', label: 'Image URLs 7' },
+    { value: 'imageUrl8', label: 'Image URLs 8' },
+    { value: 'imageUrl9', label: 'Image URLs 9' },
+    { value: 'imageUrl10', label: 'Image URLs 10' },
+    { value: 'imageUrl11', label: 'Image URLs 11' },
+    { value: 'imageUrl12', label: 'Image URLs 12' },
+    { value: 'imageUrl13', label: 'Image URLs 13' },
+    { value: 'imageUrl14', label: 'Image URLs 14' },
+    { value: 'imageUrl15', label: 'Image URLs 15' },
+    { value: 'imageUrl16', label: 'Image URLs 16' },
+    { value: 'imageUrl17', label: 'Image URLs 17' },
+    { value: 'imageUrl18', label: 'Image URLs 18' },
+    { value: 'imageUrl19', label: 'Image URLs 19' },
+    { value: 'imageUrl20', label: 'Image URLs 20' },
+    { value: 'imageUrl21', label: 'Image URLs 21' },
+    { value: 'imageUrl22', label: 'Image URLs 22' },
+    { value: 'imageUrl23', label: 'Image URLs 23' },
+    { value: 'imageUrl24', label: 'Image URLs 24' },
     { value: 'condition', label: 'Condition' },
     { value: '(skip)', label: '(Пропустить)' },
   ];

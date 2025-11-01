@@ -90,23 +90,6 @@ function matchProductsByName(csvName: string, inventoryItems: any[]): { match: a
   return { match: bestMatch, score: bestScore, conflicts };
 }
 
-// Helper: Parse imageUrls string into array
-// Supports multiple separators: spaces, commas, semicolons
-// Example: "url1.jpg url2.jpg" or "url1.jpg, url2.jpg" → ["url1.jpg", "url2.jpg"]
-function parseImageUrls(imageUrlsString: string): string[] {
-  if (!imageUrlsString || imageUrlsString.trim() === '') {
-    return [];
-  }
-  
-  // Split by spaces, commas, or semicolons
-  const urls = imageUrlsString
-    .split(/[\s,;]+/)
-    .map(url => url.trim())
-    .filter(url => url.length > 0);
-  
-  return urls;
-}
-
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user (check token validity)
   app.get("/api/auth/me", requireAuth, async (req, res) => {
@@ -1949,8 +1932,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Whitelist of allowed target fields for security
           const allowedTargetFields = [
             'productName', 'sku', 'location', 'barcode', 'quantity', 'price', 
-            'itemId', 'ebayUrl', 'ebaySellerName', 'imageUrls', 'condition',
-            'weight', 'width', 'height', 'length' // Размеры и вес
+            'itemId', 'ebayUrl', 'ebaySellerName', 'condition',
+            'weight', 'width', 'height', 'length', // Размеры и вес
+            // Image URL fields (imageUrl1 through imageUrl24)
+            'imageUrl1', 'imageUrl2', 'imageUrl3', 'imageUrl4', 'imageUrl5', 'imageUrl6',
+            'imageUrl7', 'imageUrl8', 'imageUrl9', 'imageUrl10', 'imageUrl11', 'imageUrl12',
+            'imageUrl13', 'imageUrl14', 'imageUrl15', 'imageUrl16', 'imageUrl17', 'imageUrl18',
+            'imageUrl19', 'imageUrl20', 'imageUrl21', 'imageUrl22', 'imageUrl23', 'imageUrl24'
           ];
           
           csvRows = rawRows.map((rawRow: any) => {
@@ -2004,8 +1992,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const itemId = row.itemId || row['Item ID'] || row['ItemID'] || row['item_id'] || '';
         const ebayUrl = row.ebayUrl || row['eBay URL'] || row['URL'] || row['url'] || '';
         const ebaySellerName = row.ebaySellerName || row['eBay Seller'] || row['seller_ebay_seller_id'] || row['Seller'] || '';
-        const imageUrlsString = row.imageUrls || row['Image URL'] || row['ImageURL'] || row['image_url'] || '';
-        const parsedImageUrls = parseImageUrls(imageUrlsString);
+        
+        // Parse individual image URL fields (imageUrl1 through imageUrl24)
+        const imageUrl1 = row.imageUrl1 || undefined;
+        const imageUrl2 = row.imageUrl2 || undefined;
+        const imageUrl3 = row.imageUrl3 || undefined;
+        const imageUrl4 = row.imageUrl4 || undefined;
+        const imageUrl5 = row.imageUrl5 || undefined;
+        const imageUrl6 = row.imageUrl6 || undefined;
+        const imageUrl7 = row.imageUrl7 || undefined;
+        const imageUrl8 = row.imageUrl8 || undefined;
+        const imageUrl9 = row.imageUrl9 || undefined;
+        const imageUrl10 = row.imageUrl10 || undefined;
+        const imageUrl11 = row.imageUrl11 || undefined;
+        const imageUrl12 = row.imageUrl12 || undefined;
+        const imageUrl13 = row.imageUrl13 || undefined;
+        const imageUrl14 = row.imageUrl14 || undefined;
+        const imageUrl15 = row.imageUrl15 || undefined;
+        const imageUrl16 = row.imageUrl16 || undefined;
+        const imageUrl17 = row.imageUrl17 || undefined;
+        const imageUrl18 = row.imageUrl18 || undefined;
+        const imageUrl19 = row.imageUrl19 || undefined;
+        const imageUrl20 = row.imageUrl20 || undefined;
+        const imageUrl21 = row.imageUrl21 || undefined;
+        const imageUrl22 = row.imageUrl22 || undefined;
+        const imageUrl23 = row.imageUrl23 || undefined;
+        const imageUrl24 = row.imageUrl24 || undefined;
+        
         const quantity = parseInt(row.quantity || row['Quantity'] || row['warehouse_inventory'] || '1');
         const price = parseFloat(row.price || row['Price'] || '0');
         
@@ -2075,7 +2088,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
               itemId,
               ebayUrl,
               ebaySellerName,
-              imageUrls: parsedImageUrls,
+              imageUrl1,
+              imageUrl2,
+              imageUrl3,
+              imageUrl4,
+              imageUrl5,
+              imageUrl6,
+              imageUrl7,
+              imageUrl8,
+              imageUrl9,
+              imageUrl10,
+              imageUrl11,
+              imageUrl12,
+              imageUrl13,
+              imageUrl14,
+              imageUrl15,
+              imageUrl16,
+              imageUrl17,
+              imageUrl18,
+              imageUrl19,
+              imageUrl20,
+              imageUrl21,
+              imageUrl22,
+              imageUrl23,
+              imageUrl24,
               quantity,
               price,
               weight: parsedWeight,
@@ -2093,7 +2129,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
               itemId,
               ebayUrl,
               ebaySellerName,
-              imageUrls: parsedImageUrls,
+              imageUrl1,
+              imageUrl2,
+              imageUrl3,
+              imageUrl4,
+              imageUrl5,
+              imageUrl6,
+              imageUrl7,
+              imageUrl8,
+              imageUrl9,
+              imageUrl10,
+              imageUrl11,
+              imageUrl12,
+              imageUrl13,
+              imageUrl14,
+              imageUrl15,
+              imageUrl16,
+              imageUrl17,
+              imageUrl18,
+              imageUrl19,
+              imageUrl20,
+              imageUrl21,
+              imageUrl22,
+              imageUrl23,
+              imageUrl24,
               quantity,
               price,
               weight: parsedWeight,

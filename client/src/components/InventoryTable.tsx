@@ -62,7 +62,30 @@ interface InventoryItem {
   itemId?: string | null; // eBay item ID
   ebayUrl?: string | null; // eBay URL
   ebaySellerName?: string | null; // eBay seller name
-  imageUrls?: string | null; // JSON string array of image URLs
+  imageUrl1?: string | null;
+  imageUrl2?: string | null;
+  imageUrl3?: string | null;
+  imageUrl4?: string | null;
+  imageUrl5?: string | null;
+  imageUrl6?: string | null;
+  imageUrl7?: string | null;
+  imageUrl8?: string | null;
+  imageUrl9?: string | null;
+  imageUrl10?: string | null;
+  imageUrl11?: string | null;
+  imageUrl12?: string | null;
+  imageUrl13?: string | null;
+  imageUrl14?: string | null;
+  imageUrl15?: string | null;
+  imageUrl16?: string | null;
+  imageUrl17?: string | null;
+  imageUrl18?: string | null;
+  imageUrl19?: string | null;
+  imageUrl20?: string | null;
+  imageUrl21?: string | null;
+  imageUrl22?: string | null;
+  imageUrl23?: string | null;
+  imageUrl24?: string | null;
 }
 
 interface InventoryTableProps {
@@ -695,8 +718,15 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       );
     }
 
-    // Parse image URLs
-    const imageUrls = item.imageUrls ? JSON.parse(item.imageUrls) : [];
+    // Collect image URLs from imageUrl1-24 fields
+    const imageUrls = [
+      item.imageUrl1, item.imageUrl2, item.imageUrl3, item.imageUrl4,
+      item.imageUrl5, item.imageUrl6, item.imageUrl7, item.imageUrl8,
+      item.imageUrl9, item.imageUrl10, item.imageUrl11, item.imageUrl12,
+      item.imageUrl13, item.imageUrl14, item.imageUrl15, item.imageUrl16,
+      item.imageUrl17, item.imageUrl18, item.imageUrl19, item.imageUrl20,
+      item.imageUrl21, item.imageUrl22, item.imageUrl23, item.imageUrl24,
+    ].filter((url): url is string => url !== null && url !== undefined && url.trim() !== '');
     const firstImageUrl = imageUrls.length > 0 ? imageUrls[0] : null;
 
     return (
