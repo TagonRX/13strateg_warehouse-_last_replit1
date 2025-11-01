@@ -1900,18 +1900,38 @@ export class DbStorage implements IStorage {
     let success = 0;
     let updated = 0;
 
+    // Step 1: Collect all productIds
+    const productIds = items
+      .map(item => item.productId)
+      .filter((id): id is string => id !== undefined && id !== null);
+
+    if (productIds.length === 0) {
+      return { success, updated };
+    }
+
+    // Step 2: Load all existing items in ONE query using inArray
+    const existingItems = await db.select()
+      .from(inventoryItems)
+      .where(inArray(inventoryItems.productId, productIds));
+
+    const existingByProductId = new Map(
+      existingItems.map(item => [item.productId!, item])
+    );
+
+    // Step 3: Prepare batch updates and creates
+    const itemsToUpdate: Array<{ id: string; updates: any }> = [];
+    const itemsToCreate: any[] = [];
+
     for (const item of items) {
       try {
-        const existing = await this.getInventoryItemByProductId(item.productId!);
+        const existing = existingByProductId.get(item.productId!);
         
         if (existing) {
-          // Update existing item with CSV data
-          // imageUrls is expected to be an array, stringify it for storage
+          // Prepare update
           const imageUrlsJson = item.imageUrls 
             ? (Array.isArray(item.imageUrls) ? JSON.stringify(item.imageUrls) : item.imageUrls)
             : null;
           
-          // Build updates object - only include fields that are present
           const updates: any = {};
           if (item.name !== undefined) updates.name = item.name;
           if (item.itemId !== undefined) updates.itemId = item.itemId;
@@ -1920,30 +1940,60 @@ export class DbStorage implements IStorage {
           if (imageUrlsJson !== null) updates.imageUrls = imageUrlsJson;
           if (item.quantity !== undefined) updates.quantity = item.quantity;
           
-          // Include dimension fields only if they are present in the item
+          // Dimension fields
           if (item.weight !== undefined) updates.weight = item.weight;
           if (item.width !== undefined) updates.width = item.width;
           if (item.height !== undefined) updates.height = item.height;
           if (item.length !== undefined) updates.length = item.length;
           
-          await this.updateInventoryItem(item.productId!, updates);
-          updated++;
+          updates.updatedAt = new Date();
+          
+          itemsToUpdate.push({ id: existing.id, updates });
         } else {
-          // This would be unusual - CSV import should only update existing inventory
-          // But we can handle it if needed
+          // Prepare create (unusual but handle it)
           const imageUrlsJson = item.imageUrls 
             ? (Array.isArray(item.imageUrls) ? JSON.stringify(item.imageUrls) : item.imageUrls)
             : null;
           
-          await this.createInventoryItem({ 
+          itemsToCreate.push({ 
             ...item, 
             imageUrls: imageUrlsJson,
             createdBy: userId 
           });
-          success++;
         }
       } catch (error) {
-        console.error(`Failed to update item ${item.productId}:`, error);
+        console.error(`Failed to process item ${item.productId}:`, error);
+      }
+    }
+
+    // Step 4: Execute batch updates in chunks of 100
+    const CHUNK_SIZE = 100;
+    
+    for (let i = 0; i < itemsToUpdate.length; i += CHUNK_SIZE) {
+      const chunk = itemsToUpdate.slice(i, i + CHUNK_SIZE);
+      
+      // Execute updates in parallel for this chunk
+      await Promise.all(
+        chunk.map(({ id, updates }) =>
+          db.update(inventoryItems)
+            .set(updates)
+            .where(eq(inventoryItems.id, id))
+            .catch(err => console.error(`Failed to update item ${id}:`, err))
+        )
+      );
+      
+      updated += chunk.length;
+    }
+
+    // Step 5: Create new items in batches
+    for (let i = 0; i < itemsToCreate.length; i += CHUNK_SIZE) {
+      const chunk = itemsToCreate.slice(i, i + CHUNK_SIZE);
+      
+      try {
+        await db.insert(inventoryItems).values(chunk);
+        success += chunk.length;
+      } catch (error) {
+        console.error(`Failed to create items batch:`, error);
       }
     }
 
