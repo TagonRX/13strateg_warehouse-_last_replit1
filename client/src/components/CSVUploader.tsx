@@ -46,6 +46,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthToken } from "@/lib/api";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ConflictResolutionDialog } from "@/components/ConflictResolutionDialog";
+import type { CSVConflict } from "@shared/schema";
 
 interface CSVUploaderProps {
   onUpload: (file: File) => Promise<{
@@ -220,6 +222,11 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
   const [csvPreview, setCsvPreview] = useState<{ headers: string[]; rows: any[] } | null>(null);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping[]>([]);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  
+  // Conflict resolution state
+  const [conflicts, setConflicts] = useState<CSVConflict[]>([]);
+  const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
+  const [pendingCsvData, setPendingCsvData] = useState<any[]>([]);
 
   // Load saved sources from localStorage on mount
   useEffect(() => {
@@ -521,7 +528,47 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       const response = await apiRequest("POST", "/api/inventory/sync-from-file");
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      // Check for conflicts
+      if (data.hasConflicts && data.conflicts && data.conflicts.length > 0) {
+        console.log("[FILE SYNC] Found", data.conflicts.length, "conflicts");
+        setConflicts(data.conflicts);
+        
+        // We need to read the CSV file to get the raw data for conflict resolution
+        try {
+          const filePath = "/data/inventory.csv";
+          const csvResponse = await fetch(filePath);
+          if (csvResponse.ok) {
+            const csvText = await csvResponse.text();
+            const lines = csvText.trim().split("\n");
+            if (lines.length > 1) {
+              const delimiter = lines[0].includes(";") ? ";" : ",";
+              const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase());
+              const csvData = lines.slice(1).map(line => {
+                const values = line.split(delimiter).map(v => v.trim());
+                const item: any = {};
+                headers.forEach((header, index) => {
+                  item[header] = values[index];
+                });
+                return item;
+              });
+              setPendingCsvData(csvData);
+            }
+          }
+        } catch (error) {
+          console.error("[FILE SYNC] Failed to read CSV file:", error);
+        }
+        
+        setConflictDialogOpen(true);
+        
+        toast({
+          title: "Обнаружены конфликты",
+          description: `Найдено ${data.conflicts.length} товаров с отличающимися данными. Выберите какие данные использовать.`,
+        });
+        return;
+      }
+      
+      // No conflicts - process as usual
       const deletedCount = data.deleted ?? 0;
       setResult({
         success: data.created ?? 0,
@@ -579,6 +626,34 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       });
     },
   });
+
+  const handleConflictResolution = async (resolutions: Array<{ itemId: string; action: 'accept_csv' | 'keep_existing' }>) => {
+    try {
+      const response = await apiRequest("POST", "/api/inventory/resolve-conflicts", {
+        resolutions,
+        csvData: pendingCsvData,
+      });
+      
+      const data = await response.json();
+      
+      toast({
+        title: "Конфликты разрешены",
+        description: `Обновлено: ${data.updated ?? 0}, Пропущено: ${data.skipped ?? 0}`,
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      setConflictDialogOpen(false);
+      setConflicts([]);
+      setPendingCsvData([]);
+    } catch (error: any) {
+      toast({
+        title: "Ошибка разрешения конфликтов",
+        description: error.message,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1133,6 +1208,13 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConflictResolutionDialog
+        open={conflictDialogOpen}
+        onClose={() => setConflictDialogOpen(false)}
+        conflicts={conflicts}
+        onResolve={handleConflictResolution}
+      />
     </>
   );
 }
