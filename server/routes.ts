@@ -1884,7 +1884,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Whitelist of allowed target fields for security
           const allowedTargetFields = ['productName', 'sku', 'location', 'barcode', 'quantity', 'price', 'itemId', 'ebayUrl', 'imageUrls', 'condition'];
           
-          csvRows = rawRows.map(rawRow => {
+          csvRows = rawRows.map((rawRow: any) => {
             const mappedRow: any = {};
             
             columnMapping.forEach((mapping: any) => {
@@ -2095,7 +2095,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update session status
       await storage.updateCsvImportSession(id, {
         status: 'COMMITTED',
-        committedAt: new Date(),
       });
       
       // Log event
@@ -2113,7 +2112,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Commit import error:", error);
       
       // Mark session as failed
-      await storage.updateCsvImportSession(id, {
+      const { id: sessionId } = req.params;
+      await storage.updateCsvImportSession(sessionId, {
         status: 'FAILED',
         error: error.message,
       });
