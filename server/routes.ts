@@ -1213,8 +1213,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch CSV from URL with redirect protection and optional Basic Auth
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      
       const fetchOptions: RequestInit = {
-        redirect: 'error' // Prevent redirects to bypass SSRF protection
+        redirect: 'error', // Prevent redirects to bypass SSRF protection
+        signal: controller.signal
       };
 
       // Add Basic Auth header if username and password provided
@@ -1225,13 +1229,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       }
 
-      const response = await fetch(url, fetchOptions);
+      // Mask sensitive URL components for logging (query params, userinfo)
+      const maskedUrl = (() => {
+        try {
+          const urlObj = new URL(url);
+          // Remove query parameters (may contain tokens)
+          urlObj.search = urlObj.search ? '?***' : '';
+          // Remove userinfo (username:password@)
+          urlObj.username = '';
+          urlObj.password = '';
+          return urlObj.toString().substring(0, 100);
+        } catch {
+          return url.substring(0, 100);
+        }
+      })();
+      
+      console.log(`[CSV URL Import] Fetching from URL: ${maskedUrl}...`);
+      const fetchStartTime = Date.now();
+      
+      let response;
+      try {
+        response = await fetch(url, fetchOptions);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          console.error(`[CSV URL Import] Timeout after 60s for URL: ${maskedUrl}`);
+          return res.status(408).json({ error: "Превышено время ожидания загрузки файла (60 сек)" });
+        }
+        throw fetchError;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      
+      const fetchDuration = Date.now() - fetchStartTime;
+      console.log(`[CSV URL Import] Fetch completed in ${fetchDuration}ms`);
       
       if (!response.ok) {
         return res.status(400).json({ error: `Не удалось загрузить файл: ${response.statusText}` });
       }
 
+      console.log(`[CSV URL Import] Reading response text...`);
       const csvText = await response.text();
+      console.log(`[CSV URL Import] Response size: ${csvText.length} bytes`);
 
       // Clean up CSV text: remove \r characters
       const cleanedCsvText = csvText.replace(/\r/g, '');
@@ -1304,6 +1343,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const headers = parseCSVLine(lines[0]);
+      console.log(`[CSV URL Import] Detected ${headers.length} columns, ${lines.length - 1} data rows`);
+      console.log(`[CSV URL Import] Headers: ${headers.join(', ')}`);
       
       // If full=true, return all data; otherwise return preview only
       const shouldReturnFull = full === true || full === 'true';
@@ -1311,7 +1352,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const previewRows: Record<string, string>[] = [];
 
       const rowLimit = shouldReturnFull ? lines.length : Math.min(6, lines.length);
+      console.log(`[CSV URL Import] Parsing mode: ${shouldReturnFull ? 'FULL' : 'PREVIEW'}, processing ${rowLimit - 1} rows`);
       
+      const parseStartTime = Date.now();
       for (let i = 1; i < rowLimit; i++) {
         const values = parseCSVLine(lines[i]);
         const row: Record<string, string> = {};
@@ -1326,14 +1369,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           previewRows.push(row);
         }
       }
+      const parseDuration = Date.now() - parseStartTime;
+      console.log(`[CSV URL Import] Parsing completed in ${parseDuration}ms`);
 
-      return res.json({
+      const result = {
         success: true,
         headers,
         preview: shouldReturnFull ? dataRows.slice(0, 5) : previewRows,
         data: shouldReturnFull ? dataRows : undefined,
         totalRows: lines.length - 1 // excluding header
-      });
+      };
+      
+      console.log(`[CSV URL Import] Success! Returning ${shouldReturnFull ? dataRows.length : previewRows.length} rows to client`);
+      return res.json(result);
     } catch (error: any) {
       console.error("Parse CSV URL error:", error);
       return res.status(500).json({ error: "Ошибка при обработке CSV файла" });

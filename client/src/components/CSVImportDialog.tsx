@@ -83,8 +83,19 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
     }
 
     setLoading(true);
+    toast({
+      title: "Загрузка CSV...",
+      description: "Подключение к серверу и загрузка файла",
+    });
+    
     try {
-      const response = await fetch(`/api/picking/parse-csv-url?url=${encodeURIComponent(csvUrl)}`);
+      const response = await fetch('/api/picking/parse-csv-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: csvUrl, full: false }),
+      });
       
       if (!response.ok) {
         const error = await response.json();
@@ -95,8 +106,8 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
       setCsvData(data);
 
       toast({
-        title: "Успешно",
-        description: `Загружено ${data.totalRows} строк`,
+        title: "Успешно загружено!",
+        description: `Обработано ${data.totalRows} строк, ${data.headers.length} колонок`,
       });
 
       // Auto-detect common field mappings
@@ -126,9 +137,18 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
       }));
 
     } catch (error: any) {
+      let errorMessage = error.message;
+      
+      // Provide more helpful error messages
+      if (error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+        errorMessage = "Не удалось подключиться к серверу CSV. Проверьте URL и доступность сервера.";
+      } else if (error.message.includes("timeout") || error.message.includes("60 сек")) {
+        errorMessage = "Превышено время ожидания (60 сек). Файл слишком большой или сервер не отвечает.";
+      }
+      
       toast({
-        title: "Ошибка",
-        description: error.message,
+        title: "Ошибка загрузки",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -150,7 +170,13 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
 
     try {
       // Fetch full CSV data with full=true parameter
-      const response = await fetch(`/api/picking/parse-csv-url?url=${encodeURIComponent(csvUrl)}&full=true`);
+      const response = await fetch('/api/picking/parse-csv-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: csvUrl, full: true }),
+      });
       if (!response.ok) throw new Error("Ошибка загрузки данных");
       
       const fullData: CSVData & { data?: Record<string, string>[] } = await response.json();
