@@ -110,11 +110,12 @@ function suggestTargetField(csvColumn: string): string {
   if (lower.includes('sku') || lower.includes('артикул')) return 'sku';
   if (lower.includes('location') || lower.includes('локация')) return 'location';
   if (lower.includes('barcode') || lower.includes('штрихкод')) return 'barcode';
-  if (lower.includes('quantity') || lower.includes('количество') || lower.includes('qty')) return 'quantity';
+  if (lower.includes('quantity') || lower.includes('количество') || lower.includes('qty') || lower.includes('warehouse_inventory')) return 'quantity';
   if (lower.includes('price') || lower.includes('цена')) return 'price';
-  if (lower.includes('itemid') || lower.includes('item id')) return 'itemId';
+  if (lower.includes('itemid') || lower.includes('item id') || lower.includes('item_id')) return 'itemId';
+  if (lower.includes('seller_ebay_seller_id') || lower.includes('ebay seller') || lower.includes('seller')) return 'ebaySellerName';
   if (lower.includes('url') || lower.includes('ссылка') || lower.includes('ebay')) return 'ebayUrl';
-  if (lower.includes('image') || lower.includes('photo') || lower.includes('фото')) return 'imageUrls';
+  if (lower.includes('image') || lower.includes('photo') || lower.includes('фото') || lower.includes('image_url')) return 'imageUrls';
   if (lower.includes('condition') || lower.includes('состояние')) return 'condition';
   
   // Dimensions and weight
@@ -439,6 +440,7 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
     { value: 'price', label: 'Price' },
     { value: 'itemId', label: 'eBay Item ID' },
     { value: 'ebayUrl', label: 'eBay URL' },
+    { value: 'ebaySellerName', label: 'eBay Seller' },
     { value: 'imageUrls', label: 'Image URLs' },
     { value: 'condition', label: 'Condition' },
     { value: '(skip)', label: '(Пропустить)' },

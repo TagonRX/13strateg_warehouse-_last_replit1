@@ -61,6 +61,7 @@ interface InventoryItem {
   weight?: number;
   itemId?: string | null; // eBay item ID
   ebayUrl?: string | null; // eBay URL
+  ebaySellerName?: string | null; // eBay seller name
   imageUrls?: string | null; // JSON string array of image URLs
 }
 
@@ -194,6 +195,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     dimensions: 180,
     volume: 100,
     weight: 100,
+    itemId: 120,
+    ebaySeller: 120,
     ebay: 80,
   };
 
@@ -769,6 +772,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
           {volume ? volume.toLocaleString() : "-"}
         </TableCell>
         <TableCell style={{ width: `${columnWidths.weight}px`, minWidth: `${columnWidths.weight}px` }} className="text-xs">{item.weight || "-"}</TableCell>
+        <TableCell style={{ width: `${columnWidths.itemId}px`, minWidth: `${columnWidths.itemId}px` }} className="text-xs font-mono" data-testid={`text-itemid-${item.id}`}>{item.itemId || "-"}</TableCell>
+        <TableCell style={{ width: `${columnWidths.ebaySeller}px`, minWidth: `${columnWidths.ebaySeller}px` }} className="text-xs" data-testid={`text-ebayseller-${item.id}`}>{item.ebaySellerName || "-"}</TableCell>
         <TableCell style={{ width: `${columnWidths.ebay}px`, minWidth: `${columnWidths.ebay}px` }} className="text-xs">
           {item.ebayUrl ? (
             <Button 
@@ -878,6 +883,12 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                 <ResizableHeader columnKey="weight" width={columnWidths.weight} onResize={handleResize} className="text-xs">
                   Вес (кг)
                 </ResizableHeader>
+                <ResizableHeader columnKey="itemId" width={columnWidths.itemId} onResize={handleResize} className="text-xs">
+                  Item ID
+                </ResizableHeader>
+                <ResizableHeader columnKey="ebaySeller" width={columnWidths.ebaySeller} onResize={handleResize} className="text-xs">
+                  eBay Seller
+                </ResizableHeader>
                 <ResizableHeader columnKey="ebay" width={columnWidths.ebay} onResize={handleResize} className="text-xs">
                   eBay
                 </ResizableHeader>
@@ -921,6 +932,9 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                         <TableCell style={{ width: `${columnWidths.dimensions}px`, minWidth: `${columnWidths.dimensions}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.volume}px`, minWidth: `${columnWidths.volume}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.weight}px`, minWidth: `${columnWidths.weight}px` }} className="text-xs text-muted-foreground">-</TableCell>
+                        <TableCell style={{ width: `${columnWidths.itemId}px`, minWidth: `${columnWidths.itemId}px` }} className="text-xs text-muted-foreground">-</TableCell>
+                        <TableCell style={{ width: `${columnWidths.ebaySeller}px`, minWidth: `${columnWidths.ebaySeller}px` }} className="text-xs text-muted-foreground">-</TableCell>
+                        <TableCell style={{ width: `${columnWidths.ebay}px`, minWidth: `${columnWidths.ebay}px` }} className="text-xs text-muted-foreground">-</TableCell>
                       </TableRow>
                       {isExpanded && groupItems.map(item => renderRow(item, true))}
                     </Fragment>
