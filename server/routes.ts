@@ -572,27 +572,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get all current inventory items
       const allItems = await storage.getAllInventoryItems();
-      const currentItemsMap = new Map(allItems.map(item => [item.productId, item]));
+      
+      // Create maps for matching: by itemId and by SKU
+      const itemIdMap = new Map(allItems.filter(item => item.itemId).map(item => [item.itemId, item]));
+      const skuMap = new Map(allItems.map(item => [item.sku, item]));
 
       console.log("[FILE SYNC] Current inventory items:", allItems.length);
+      console.log("[FILE SYNC] Items with itemId:", itemIdMap.size);
 
       // Track changes for archive
       const archiveChanges: string[] = [];
-      archiveChanges.push("productId;itemName;action;field;oldValue;newValue;oldSku;oldLocation;oldQuantity;oldPrice;oldLength;oldWidth;oldHeight;oldVolume;oldWeight");
+      archiveChanges.push("identifier;itemName;action;field;oldValue;newValue;oldSku;oldLocation;oldQuantity;oldPrice;oldLength;oldWidth;oldHeight;oldVolume;oldWeight");
 
       // Track changes
       let updated = 0;
       let created = 0;
       let deleted = 0;
       const deletedItems: string[] = [];
+      const processedItems = new Set<string>(); // Track processed database items
 
       // Create/update items from CSV
       for (const csvItem of csvItems) {
-        const productId = csvItem.productid || csvItem.product_id;
+        // Extract identifiers from CSV
+        const itemId = csvItem.itemid || csvItem.item_id || csvItem['item id'] || undefined;
+        const sku = csvItem.sku || undefined;
         const quantity = parseInt(csvItem.quantity) || 0;
         
-        if (!productId || quantity <= 0) {
-          continue; // Skip invalid items
+        // Require either itemId or real SKU (not location)
+        if ((!itemId && !sku) || quantity <= 0) {
+          console.log("[FILE SYNC] Skipping item without itemId/SKU or zero quantity:", { 
+            name: csvItem.name, 
+            itemId, 
+            sku, 
+            quantity 
+          });
+          continue;
         }
 
         const length = csvItem.length ? parseFloat(csvItem.length) : undefined;
@@ -600,11 +614,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const height = csvItem.height ? parseFloat(csvItem.height) : undefined;
         const volume = length && width && height ? length * width * height : undefined;
 
+        // Use itemId as productId if available, otherwise use sku
+        const identifier = itemId || sku!;
+
         const itemData: any = {
-          productId,
+          productId: identifier,
           name: csvItem.name || "",
-          sku: csvItem.sku || csvItem.location || productId,
-          location: csvItem.location || csvItem.sku || productId,
+          sku: sku || itemId || "",
+          location: csvItem.location || sku || "",
           quantity,
           barcode: csvItem.barcode || "",
           price: csvItem.price ? parseInt(csvItem.price) : undefined,
@@ -614,7 +631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           volume,
           weight: csvItem.weight ? parseFloat(csvItem.weight) : undefined,
           condition: csvItem.condition || undefined,
-          itemId: csvItem.itemid || csvItem.item_id || csvItem['item id'] || undefined,
+          itemId: itemId,
           ebayUrl: csvItem.ebayurl || csvItem.ebay_url || csvItem.url || csvItem['ebay url'] || undefined,
           ebaySellerName: csvItem.ebaysellername || csvItem.ebay_seller_name || csvItem['ebay seller'] || csvItem.seller || undefined,
           createdBy: userId,
@@ -634,9 +651,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        if (currentItemsMap.has(productId)) {
+        // Find existing item: first try by itemId, then by SKU
+        let existingItem = itemId ? itemIdMap.get(itemId) : undefined;
+        if (!existingItem && sku) {
+          existingItem = skuMap.get(sku);
+        }
+
+        if (existingItem) {
           // Update existing item
-          const existingItem = currentItemsMap.get(productId)!;
+          processedItems.add(existingItem.id);
           
           // Compare fields and track changes for archive
           const fieldsToCompare = [
@@ -656,7 +679,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (field.old !== field.new) {
               // Record change for archive
               const archiveLine = [
-                productId,
+                identifier,
                 existingItem.name,
                 'UPDATE',
                 field.name,
@@ -676,8 +699,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
-          console.log(`[FILE SYNC] Updating ${productId}:`, {
+          console.log(`[FILE SYNC] Updating ${identifier}:`, {
             id: existingItem.id,
+            itemId: existingItem.itemId,
+            sku: existingItem.sku,
             oldQuantity: existingItem.quantity,
             newQuantity: itemData.quantity,
             oldPrice: existingItem.price,
@@ -686,14 +711,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           await storage.updateInventoryItemById(existingItem.id, itemData);
           updated++;
-          currentItemsMap.delete(productId); // Mark as processed
         } else {
           // Create new item
-          console.log(`[FILE SYNC] Creating ${productId}:`, itemData);
+          console.log(`[FILE SYNC] Creating ${identifier}:`, itemData);
           
           // Record creation for archive
           const archiveLine = [
-            productId,
+            identifier,
             itemData.name,
             'CREATE',
             '',
@@ -718,27 +742,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Track items that would be deleted (not in CSV but in DB)
       // Deletion is DISABLED for safety, but we still record them in archive
-      for (const [productId, item] of Array.from(currentItemsMap.entries())) {
-        // Record deletion for archive (even though we don't actually delete)
-        const archiveLine = [
-          productId,
-          item.name,
-          'DELETED',
-          '',
-          '',
-          '',
-          item.sku,
-          item.location,
-          item.quantity,
-          item.price ?? '',
-          item.length ?? '',
-          item.width ?? '',
-          item.height ?? '',
-          item.volume ?? '',
-          item.weight ?? ''
-        ].join(';');
-        archiveChanges.push(archiveLine);
-        deletedItems.push(`${item.name} (${item.productId})`);
+      for (const item of allItems) {
+        if (!processedItems.has(item.id)) {
+          // Record deletion for archive (even though we don't actually delete)
+          const itemIdentifier = item.itemId || item.sku;
+          const archiveLine = [
+            itemIdentifier,
+            item.name,
+            'DELETED',
+            '',
+            '',
+            '',
+            item.sku,
+            item.location,
+            item.quantity,
+            item.price ?? '',
+            item.length ?? '',
+            item.width ?? '',
+            item.height ?? '',
+            item.volume ?? '',
+            item.weight ?? ''
+          ].join(';');
+          archiveChanges.push(archiveLine);
+          deletedItems.push(`${item.name} (${itemIdentifier})`);
+        }
       }
 
       // Create archive file if there are changes
