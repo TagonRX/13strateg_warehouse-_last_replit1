@@ -1,5 +1,0 @@
-productId;name;sku;location;quantity;barcode;price;length;width;height;weight
-SYNC-001;Test Product A - UPDATED;A100-SYNC;A100;15;SYNC001;200;60;40;25;7
-SYNC-002;Test Product B - UPDATED;B200-SYNC;B200;35;SYNC002;280;70;50;30;12
-SYNC-003;Test Product C - UPDATED;C300-SYNC;C300;18;SYNC003;150;50;40;20;5
-SYNC-005;New Product E;E500-SYNC;E500;10;SYNC005;350;80;60;35;15
