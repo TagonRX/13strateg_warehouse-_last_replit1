@@ -45,10 +45,23 @@ interface ImportSession {
     matched: number;
     conflicts: number;
     unmatched: number;
+    dimensionConflicts: number;
   };
   session: {
     id: string;
     parsedData: string;
+  };
+}
+
+interface DimensionConflict {
+  csvRowIndex: number;
+  productId: string;
+  productName: string;
+  conflicts: {
+    weight?: { csv: number; current: number };
+    width?: { csv: number; current: number };
+    height?: { csv: number; current: number };
+    length?: { csv: number; current: number };
   };
 }
 
@@ -123,6 +136,7 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
   const [csvPreview, setCsvPreview] = useState<{ headers: string[]; rows: any[] } | null>(null);
   const [sessionData, setSessionData] = useState<ImportSession | null>(null);
   const [resolutions, setResolutions] = useState<{ csvRowIndex: number; selectedProductId: string }[]>([]);
+  const [dimensionChoices, setDimensionChoices] = useState<{ productId: string; useCSV: boolean }[]>([]);
   const { toast } = useToast();
 
   // Helper: Load saved column mapping from localStorage
@@ -254,6 +268,17 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
     },
     onSuccess: (data) => {
       setSessionData(data);
+      
+      // Initialize dimension choices with default (keep current values = useCSV: false)
+      const parsedData = JSON.parse(data.session.parsedData);
+      if (parsedData.dimensionConflicts && parsedData.dimensionConflicts.length > 0) {
+        const defaultChoices = parsedData.dimensionConflicts.map((conflict: DimensionConflict) => ({
+          productId: conflict.productId,
+          useCSV: false, // Default: keep current values (safe choice)
+        }));
+        setDimensionChoices(defaultChoices);
+      }
+      
       setStep(3); // Move to matching step
       toast({
         title: "CSV обработан",
@@ -283,10 +308,11 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
         await resolveResponse.json();
       }
       
-      // Then commit the import
+      // Then commit the import with dimensionChoices
       const commitResponse = await apiRequest(
         'POST',
-        `/api/inventory/import-sessions/${sessionData.session.id}/commit`
+        `/api/inventory/import-sessions/${sessionData.session.id}/commit`,
+        { dimensionChoices }
       );
       return commitResponse.json();
     },
@@ -372,6 +398,13 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
     });
   };
 
+  const handleDimensionChoice = (productId: string, useCSV: boolean) => {
+    setDimensionChoices(prev => {
+      const filtered = prev.filter(c => c.productId !== productId);
+      return [...filtered, { productId, useCSV }];
+    });
+  };
+
   const handleCommit = () => {
     setStep(4);
   };
@@ -389,6 +422,7 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
     setCsvPreview(null);
     setSessionData(null);
     setResolutions([]);
+    setDimensionChoices([]);
     setOpen(false);
   };
 
@@ -669,6 +703,106 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
                 </p>
               )}
             </div>
+
+            {/* Dimension Conflicts Section */}
+            {parsedData.dimensionConflicts && parsedData.dimensionConflicts.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 p-4 bg-orange-50 border border-orange-200 rounded-md">
+                  <AlertTriangle className="h-5 w-5 text-orange-600" />
+                  <div>
+                    <p className="font-semibold text-orange-900">Обнаружены конфликты размеров</p>
+                    <p className="text-sm text-orange-700">
+                      Найдено {parsedData.dimensionConflicts.length} товаров с отличающимися размерами. Выберите, какие значения сохранить.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {parsedData.dimensionConflicts.map((dimConflict: DimensionConflict, idx: number) => {
+                    const choice = dimensionChoices.find(c => c.productId === dimConflict.productId);
+                    const useCSV = choice?.useCSV ?? false;
+                    
+                    return (
+                      <Card key={`dim-conflict-${idx}`} className="border-orange-200" data-testid={`card-dimension-conflict-${idx}`}>
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle className="h-4 w-4 text-orange-600" />
+                              <p className="font-medium">{dimConflict.productName}</p>
+                            </div>
+                            
+                            <div className="ml-6 space-y-2">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Поле</TableHead>
+                                    <TableHead>Текущее значение</TableHead>
+                                    <TableHead>Значение из CSV</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {dimConflict.conflicts.weight && (
+                                    <TableRow data-testid={`row-dimension-weight-${idx}`}>
+                                      <TableCell className="font-medium">Вес (кг)</TableCell>
+                                      <TableCell>{dimConflict.conflicts.weight.current}</TableCell>
+                                      <TableCell>{dimConflict.conflicts.weight.csv}</TableCell>
+                                    </TableRow>
+                                  )}
+                                  {dimConflict.conflicts.width && (
+                                    <TableRow data-testid={`row-dimension-width-${idx}`}>
+                                      <TableCell className="font-medium">Ширина (см)</TableCell>
+                                      <TableCell>{dimConflict.conflicts.width.current}</TableCell>
+                                      <TableCell>{dimConflict.conflicts.width.csv}</TableCell>
+                                    </TableRow>
+                                  )}
+                                  {dimConflict.conflicts.height && (
+                                    <TableRow data-testid={`row-dimension-height-${idx}`}>
+                                      <TableCell className="font-medium">Высота (см)</TableCell>
+                                      <TableCell>{dimConflict.conflicts.height.current}</TableCell>
+                                      <TableCell>{dimConflict.conflicts.height.csv}</TableCell>
+                                    </TableRow>
+                                  )}
+                                  {dimConflict.conflicts.length && (
+                                    <TableRow data-testid={`row-dimension-length-${idx}`}>
+                                      <TableCell className="font-medium">Длина (см)</TableCell>
+                                      <TableCell>{dimConflict.conflicts.length.current}</TableCell>
+                                      <TableCell>{dimConflict.conflicts.length.csv}</TableCell>
+                                    </TableRow>
+                                  )}
+                                </TableBody>
+                              </Table>
+                              
+                              <div className="pt-2">
+                                <Label className="text-sm font-medium">Выберите какие значения использовать:</Label>
+                                <RadioGroup
+                                  value={useCSV ? "csv" : "current"}
+                                  onValueChange={(value) => handleDimensionChoice(dimConflict.productId, value === "csv")}
+                                  className="mt-2"
+                                  data-testid={`radio-group-dimension-${idx}`}
+                                >
+                                  <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="current" id={`dim-current-${idx}`} data-testid={`radio-keep-current-${idx}`} />
+                                    <Label htmlFor={`dim-current-${idx}`} className="font-normal cursor-pointer">
+                                      Оставить текущие значения (безопасно)
+                                    </Label>
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="csv" id={`dim-csv-${idx}`} data-testid={`radio-use-csv-${idx}`} />
+                                    <Label htmlFor={`dim-csv-${idx}`} className="font-normal cursor-pointer">
+                                      Использовать значения из CSV
+                                    </Label>
+                                  </div>
+                                </RadioGroup>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-between gap-2">
               <Button variant="outline" onClick={() => setStep(2)} data-testid="button-back">

@@ -54,7 +54,13 @@ The CSV import system provides a comprehensive 4-step wizard for bulk inventory 
 - Automatic matching: Products with ≥90% similarity score and no conflicts are auto-matched (shown in green)
 - Conflict detection: Multiple products with ≥90% similarity require manual selection via dropdown (shown in yellow/amber)
 - Unmatched items: Products with <90% similarity or missing names are skipped (shown in red)
-- Real-time summary displays: total rows, matched items, conflicts requiring resolution, and unmatched/skipped items
+- **Dimension Conflicts (NEW - Nov 2024)**: Detects when CSV contains weight/width/height/length values that differ from existing inventory
+  - Displays warning banner when dimension conflicts are detected
+  - Shows comparison table for each product with conflicting dimensions (Current vs CSV values)
+  - Radio button selection: "Оставить текущие" (default, safe choice) or "Использовать CSV"
+  - Choices are passed to commit endpoint via `dimensionChoices` parameter
+  - If no dimension fields in CSV or values match, no conflicts shown
+- Real-time summary displays: total rows, matched items, conflicts requiring resolution, dimension conflicts, and unmatched/skipped items
 
 **Step 4: Confirmation & Commit**
 - Final summary before applying changes
@@ -74,8 +80,10 @@ The CSV import system provides a comprehensive 4-step wizard for bulk inventory 
 **Backend Implementation**
 - CSV parsing helpers: parseCsvFile (buffer-based), parseCsvFromUrl (fetch-based), parseImageUrls (multi-delimiter URL parsing), matchProductsByName (similarity scoring)
 - Image URL parsing: Supports space, comma, and semicolon separators with automatic trimming and empty value filtering
-- Session management endpoints: GET /api/inventory/import-sessions (list all), GET /:id (fetch specific session), POST /:id/resolve (save conflict resolutions), POST /:id/commit (apply changes)
-- Bulk update method: bulkUpdateInventoryFromCsv handles batch inventory updates with proper JSON serialization for imageUrls arrays
+- Session management endpoints: GET /api/inventory/import-sessions (list all), GET /:id (fetch specific session), POST /:id/resolve (save conflict resolutions), POST /:id/commit (apply changes with optional dimensionChoices)
+- Dimension conflict detection: Compares CSV weight/width/height/length values against existing inventory during matching phase, stores conflicts in session parsedData
+- Dimension parsing: Uses parseFloat for weight/width/height/length fields to preserve decimal precision (e.g., 2.75 kg); parseInt only used for quantity and price fields
+- Bulk update method: bulkUpdateInventoryFromCsv handles batch inventory updates with selective dimension field updates based on dimensionChoices parameter
 - Error handling: Failed imports mark session status as FAILED with error logging
 
 ## External Dependencies

@@ -599,9 +599,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           continue; // Skip invalid items
         }
 
-        const length = csvItem.length ? parseInt(csvItem.length) : undefined;
-        const width = csvItem.width ? parseInt(csvItem.width) : undefined;
-        const height = csvItem.height ? parseInt(csvItem.height) : undefined;
+        const length = csvItem.length ? parseFloat(csvItem.length) : undefined;
+        const width = csvItem.width ? parseFloat(csvItem.width) : undefined;
+        const height = csvItem.height ? parseFloat(csvItem.height) : undefined;
         const volume = length && width && height ? length * width * height : undefined;
 
         const itemData = {
@@ -616,7 +616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           width,
           height,
           volume,
-          weight: csvItem.weight ? parseInt(csvItem.weight) : undefined,
+          weight: csvItem.weight ? parseFloat(csvItem.weight) : undefined,
           createdBy: userId,
         };
 
@@ -1945,9 +1945,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const matched: any[] = [];
       const conflicts: any[] = [];
       const unmatched: any[] = [];
+      const dimensionConflicts: any[] = [];
       
       // Process each CSV row
-      for (const row of csvRows) {
+      for (let csvRowIndex = 0; csvRowIndex < csvRows.length; csvRowIndex++) {
+        const row = csvRows[csvRowIndex];
+        
         // Support both original column names and mapped field names
         const csvName = row.productName || row['Product Name'] || row['Title'] || '';
         const itemId = row.itemId || row['Item ID'] || row['ItemID'] || '';
@@ -1957,6 +1960,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const quantity = parseInt(row.quantity || row['Quantity'] || '1');
         const price = parseFloat(row.price || row['Price'] || '0');
         
+        // Parse dimension fields from CSV
+        const csvWeight = row.weight || row['Weight'] || row['weight'] || row['WEIGHT'];
+        const csvWidth = row.width || row['Width'] || row['width'] || row['WIDTH'];
+        const csvHeight = row.height || row['Height'] || row['height'] || row['HEIGHT'];
+        const csvLength = row.length || row['Length'] || row['length'] || row['LENGTH'];
+        
+        const parsedWeight = csvWeight ? parseFloat(csvWeight) : undefined;
+        const parsedWidth = csvWidth ? parseFloat(csvWidth) : undefined;
+        const parsedHeight = csvHeight ? parseFloat(csvHeight) : undefined;
+        const parsedLength = csvLength ? parseFloat(csvLength) : undefined;
+        
         if (!csvName) {
           unmatched.push({ csvRow: row, reason: 'No product name' });
           continue;
@@ -1965,8 +1979,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { match, score, conflicts: itemConflicts } = matchProductsByName(csvName, inventoryItems);
         
         if (match && itemConflicts.length === 0) {
+          // Check for dimension conflicts
+          const dimConflict: any = {
+            csvRowIndex,
+            productId: match.productId,
+            productName: match.name,
+            conflicts: {}
+          };
+          
+          let hasDimensionConflict = false;
+          
+          // Check weight conflict
+          if (parsedWeight !== undefined && match.weight !== null && match.weight !== undefined && parsedWeight !== match.weight) {
+            dimConflict.conflicts.weight = { csv: parsedWeight, current: match.weight };
+            hasDimensionConflict = true;
+          }
+          
+          // Check width conflict
+          if (parsedWidth !== undefined && match.width !== null && match.width !== undefined && parsedWidth !== match.width) {
+            dimConflict.conflicts.width = { csv: parsedWidth, current: match.width };
+            hasDimensionConflict = true;
+          }
+          
+          // Check height conflict
+          if (parsedHeight !== undefined && match.height !== null && match.height !== undefined && parsedHeight !== match.height) {
+            dimConflict.conflicts.height = { csv: parsedHeight, current: match.height };
+            hasDimensionConflict = true;
+          }
+          
+          // Check length conflict
+          if (parsedLength !== undefined && match.length !== null && match.length !== undefined && parsedLength !== match.length) {
+            dimConflict.conflicts.length = { csv: parsedLength, current: match.length };
+            hasDimensionConflict = true;
+          }
+          
+          if (hasDimensionConflict) {
+            dimensionConflicts.push(dimConflict);
+          }
+          
           matched.push({
             csvRow: row,
+            csvRowIndex,
             inventoryItem: match,
             score,
             updates: {
@@ -1975,11 +2028,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               imageUrls: parsedImageUrls,
               quantity,
               price,
+              weight: parsedWeight,
+              width: parsedWidth,
+              height: parsedHeight,
+              length: parsedLength,
             }
           });
         } else if (match && itemConflicts.length > 0) {
           conflicts.push({
             csvRow: row,
+            csvRowIndex,
             candidates: [match, ...itemConflicts].map(c => ({ ...c, score: compareTwoStrings(csvName.toLowerCase(), c.name.toLowerCase()) })),
             updates: {
               itemId,
@@ -1987,6 +2045,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               imageUrls: parsedImageUrls,
               quantity,
               price,
+              weight: parsedWeight,
+              width: parsedWidth,
+              height: parsedHeight,
+              length: parsedLength,
             }
           });
         } else {
@@ -1999,7 +2061,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sourceType,
         sourceUrl: sourceType === 'url' ? sourceUrl : undefined,
         status: 'READY_FOR_REVIEW',
-        parsedData: JSON.stringify({ matched, conflicts, unmatched }),
+        parsedData: JSON.stringify({ matched, conflicts, unmatched, dimensionConflicts }),
         totalRows: csvRows.length,
         matchedRows: matched.length,
         conflictRows: conflicts.length,
@@ -2013,6 +2075,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           matched: matched.length,
           conflicts: conflicts.length,
           unmatched: unmatched.length,
+          dimensionConflicts: dimensionConflicts.length,
         },
         session,
       });
@@ -2076,6 +2139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/inventory/import-sessions/:id/commit", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
+      const { dimensionChoices } = req.body; // Array of { productId: string, useCSV: boolean }
       const userId = (req as any).userId;
       
       const session = await storage.getCsvImportSession(id);
@@ -2086,12 +2150,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsedData = JSON.parse(session.parsedData as string);
       const itemsToUpdate: any[] = [];
       
+      // Create a map of dimension choices for quick lookup
+      const dimensionChoiceMap = new Map<string, boolean>();
+      if (dimensionChoices && Array.isArray(dimensionChoices)) {
+        dimensionChoices.forEach((choice: { productId: string; useCSV: boolean }) => {
+          dimensionChoiceMap.set(choice.productId, choice.useCSV);
+        });
+      }
+      
       // Collect matched items
       for (const match of parsedData.matched || []) {
+        const productId = match.inventoryItem.productId;
+        const useCSVDimensions = dimensionChoiceMap.get(productId);
+        
+        // If useCSV=false, exclude dimension fields from updates
+        const updates = { ...match.updates };
+        if (useCSVDimensions === false) {
+          delete updates.weight;
+          delete updates.width;
+          delete updates.height;
+          delete updates.length;
+        }
+        
         itemsToUpdate.push({
-          productId: match.inventoryItem.productId,
+          productId,
           name: match.inventoryItem.name,
-          ...match.updates,
+          ...updates,
         });
       }
       
@@ -2102,10 +2186,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (conflict) {
           const selectedItem = conflict.candidates.find((c: any) => c.productId === resolution.selectedProductId);
           if (selectedItem) {
+            const productId = selectedItem.productId;
+            const useCSVDimensions = dimensionChoiceMap.get(productId);
+            
+            // If useCSV=false, exclude dimension fields from updates
+            const updates = { ...conflict.updates };
+            if (useCSVDimensions === false) {
+              delete updates.weight;
+              delete updates.width;
+              delete updates.height;
+              delete updates.length;
+            }
+            
             itemsToUpdate.push({
-              productId: selectedItem.productId,
+              productId,
               name: selectedItem.name,
-              ...conflict.updates,
+              ...updates,
             });
           }
         }

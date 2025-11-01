@@ -1898,13 +1898,21 @@ export class DbStorage implements IStorage {
             ? (Array.isArray(item.imageUrls) ? JSON.stringify(item.imageUrls) : item.imageUrls)
             : null;
           
-          await this.updateInventoryItem(item.productId!, {
-            name: item.name,
-            itemId: item.itemId,
-            ebayUrl: item.ebayUrl,
-            imageUrls: imageUrlsJson,
-            quantity: item.quantity,
-          });
+          // Build updates object - only include fields that are present
+          const updates: any = {};
+          if (item.name !== undefined) updates.name = item.name;
+          if (item.itemId !== undefined) updates.itemId = item.itemId;
+          if (item.ebayUrl !== undefined) updates.ebayUrl = item.ebayUrl;
+          if (imageUrlsJson !== null) updates.imageUrls = imageUrlsJson;
+          if (item.quantity !== undefined) updates.quantity = item.quantity;
+          
+          // Include dimension fields only if they are present in the item
+          if (item.weight !== undefined) updates.weight = item.weight;
+          if (item.width !== undefined) updates.width = item.width;
+          if (item.height !== undefined) updates.height = item.height;
+          if (item.length !== undefined) updates.length = item.length;
+          
+          await this.updateInventoryItem(item.productId!, updates);
           updated++;
         } else {
           // This would be unusual - CSV import should only update existing inventory
