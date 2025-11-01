@@ -8,13 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { FileUp, List, Trash2, CheckCircle2, Circle, Download, Plus, X, ChevronDown, AlertTriangle } from "lucide-react";
+import { FileUp, List, Trash2, CheckCircle2, Circle, Download, Plus, X, ChevronDown, AlertTriangle, ExternalLink, Image as ImageIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { PickingList, PickingTask, InventoryItem } from "@shared/schema";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -37,6 +38,8 @@ export default function DailyPickingView() {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [savedListsOpen, setSavedListsOpen] = useState(false);
   const [createListOpen, setCreateListOpen] = useState(false);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   
   // Load selected list from localStorage on mount
   useEffect(() => {
@@ -202,6 +205,30 @@ export default function DailyPickingView() {
     queryKey: ["/api/inventory"],
     enabled: !!selectedListId,
   });
+
+  // Create SKU -> InventoryItem mapping for quick lookup
+  // Prefer items with imageUrls or ebayUrl if multiple items have same SKU
+  const skuToInventoryMap = useMemo(() => {
+    const map = new Map<string, InventoryItem>();
+    
+    allInventory.forEach(item => {
+      const existing = map.get(item.sku);
+      
+      if (!existing) {
+        map.set(item.sku, item);
+      } else {
+        // Prefer item with imageUrls or ebayUrl
+        const existingHasMedia = existing.imageUrls || existing.ebayUrl;
+        const itemHasMedia = item.imageUrls || item.ebayUrl;
+        
+        if (itemHasMedia && !existingHasMedia) {
+          map.set(item.sku, item);
+        }
+      }
+    });
+    
+    return map;
+  }, [allInventory]);
 
   const createListMutation = useMutation({
     mutationFn: async (data: { name: string; tasks: { sku: string; itemName?: string; requiredQuantity: number }[] }) => {
@@ -904,6 +931,12 @@ export default function DailyPickingView() {
                       ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900' 
                       : '';
                     
+                    // Get inventory item for this task
+                    const inventoryItem = skuToInventoryMap.get(task.sku);
+                    const imageUrls = inventoryItem?.imageUrls ? JSON.parse(inventoryItem.imageUrls) : [];
+                    const firstImageUrl = imageUrls.length > 0 ? imageUrls[0] : null;
+                    const ebayUrl = inventoryItem?.ebayUrl;
+                    
                     return (
                       <div
                         key={task.id}
@@ -916,6 +949,33 @@ export default function DailyPickingView() {
                           ) : (
                             <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                           )}
+                          
+                          {/* Product photo thumbnail */}
+                          {firstImageUrl ? (
+                            <button
+                              onClick={() => {
+                                setSelectedImage(firstImageUrl);
+                                setImageModalOpen(true);
+                              }}
+                              className="flex-shrink-0 rounded overflow-hidden hover-elevate"
+                              data-testid={`button-image-${task.id}`}
+                            >
+                              <img 
+                                src={firstImageUrl} 
+                                alt={task.itemName || task.sku} 
+                                className="w-12 h-12 object-cover"
+                                data-testid={`img-thumbnail-${task.id}`}
+                              />
+                            </button>
+                          ) : (
+                            <div 
+                              className="w-12 h-12 bg-muted rounded flex items-center justify-center flex-shrink-0" 
+                              data-testid={`placeholder-image-${task.id}`}
+                            >
+                              <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                          )}
+                          
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-mono text-base font-semibold flex-shrink-0 whitespace-nowrap">{task.sku}</span>
@@ -949,6 +1009,20 @@ export default function DailyPickingView() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {/* eBay link button */}
+                          {ebayUrl && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => window.open(ebayUrl, '_blank', 'noopener,noreferrer')}
+                              data-testid={`button-ebay-${task.id}`}
+                              title="Открыть на eBay"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                          )}
+                          
                           {task.status !== "COMPLETED" && (
                             <Button
                               data-testid={`button-manual-collect-${task.id}`}
@@ -982,6 +1056,25 @@ export default function DailyPickingView() {
           </CardContent>
         </Card>
       )}
+      
+      {/* Image Modal Dialog */}
+      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Просмотр изображения</DialogTitle>
+          </DialogHeader>
+          {selectedImage && (
+            <div className="flex items-center justify-center p-4">
+              <img 
+                src={selectedImage} 
+                alt="Product full size" 
+                className="max-w-full max-h-[70vh] object-contain"
+                data-testid="img-modal-fullsize"
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

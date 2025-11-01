@@ -1,0 +1,548 @@
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CheckCircle2, Circle, ExternalLink, Image as ImageIcon, Package, Truck, AlertTriangle } from "lucide-react";
+import BarcodeScanner from "@/components/BarcodeScanner";
+import type { Order, InventoryItem } from "@shared/schema";
+import { format } from "date-fns";
+
+type Phase = 'scanning_product' | 'scanning_items' | 'scanning_label' | 'confirming';
+
+interface OrderItem {
+  sku: string;
+  barcode?: string;
+  imageUrl?: string;
+  ebayUrl?: string;
+  itemName?: string;
+  quantity: number;
+}
+
+interface ParsedOrder extends Omit<Order, 'items'> {
+  items: OrderItem[];
+}
+
+export default function Dispatch() {
+  const { toast } = useToast();
+  
+  const [currentPhase, setCurrentPhase] = useState<Phase>('scanning_product');
+  const [currentOrder, setCurrentOrder] = useState<ParsedOrder | null>(null);
+  const [scannedItemBarcodes, setScannedItemBarcodes] = useState<string[]>([]);
+  const [scannedCounts, setScannedCounts] = useState<Map<string, number>>(new Map());
+  const [dispatchedOrders, setDispatchedOrders] = useState<ParsedOrder[]>([]);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [shippingLabel, setShippingLabel] = useState<string>("");
+
+  const { data: currentUser } = useQuery<any>({
+    queryKey: ["/api/auth/me"],
+  });
+
+  const { data: inventory = [] } = useQuery<InventoryItem[]>({
+    queryKey: ["/api/inventory"],
+  });
+
+  const scanOrderMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const response = await apiRequest("POST", "/api/orders/scan", {
+        code,
+        status: "PENDING"
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.multiple) {
+        toast({
+          variant: "destructive",
+          title: "Найдено несколько заказов",
+          description: `Найдено ${data.orders.length} заказов с этим SKU. Отсканируйте конкретный баркод товара.`,
+        });
+        return;
+      }
+
+      const order = data.order;
+      const parsedOrder: ParsedOrder = {
+        ...order,
+        items: order.items ? JSON.parse(order.items) : []
+      };
+
+      enrichOrderWithInventoryData(parsedOrder);
+      setCurrentOrder(parsedOrder);
+      setScannedItemBarcodes([]);
+      setScannedCounts(new Map());
+
+      const totalQuantity = parsedOrder.items.reduce((sum, item) => sum + item.quantity, 0);
+      if (totalQuantity === 1) {
+        setCurrentPhase('scanning_label');
+        toast({
+          title: "Заказ найден",
+          description: `Заказ №${parsedOrder.orderNumber} (1 товар). Отсканируйте лейбл посылки.`,
+        });
+      } else {
+        setCurrentPhase('scanning_items');
+        toast({
+          title: "Заказ найден",
+          description: `Заказ №${parsedOrder.orderNumber} (${totalQuantity} товаров). Отсканируйте все товары.`,
+        });
+      }
+    },
+    onError: (error: any) => {
+      const message = error?.message || "Заказ не найден";
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: message,
+      });
+    },
+  });
+
+  const updateShippingLabelMutation = useMutation({
+    mutationFn: async ({ orderId, label }: { orderId: string; label: string }) => {
+      const response = await apiRequest("PATCH", `/api/orders/${orderId}/shipping-label`, {
+        label
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      setCurrentPhase('confirming');
+      setConfirmDialogOpen(true);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка сохранения лейбла",
+        description: error?.message || "Не удалось сохранить лейбл посылки",
+      });
+    },
+  });
+
+  const dispatchOrderMutation = useMutation({
+    mutationFn: async ({ orderId, barcodes, userId }: { orderId: string; barcodes: string[]; userId: string }) => {
+      const response = await apiRequest("PATCH", `/api/orders/${orderId}/dispatch`, {
+        barcodes,
+        userId
+      });
+      return response.json();
+    },
+    onSuccess: (updatedOrder) => {
+      if (currentOrder) {
+        const parsedOrder: ParsedOrder = {
+          ...updatedOrder,
+          items: updatedOrder.items ? JSON.parse(updatedOrder.items) : []
+        };
+        setDispatchedOrders(prev => [parsedOrder, ...prev]);
+      }
+
+      toast({
+        title: "Заказ отправлен",
+        description: `Заказ №${currentOrder?.orderNumber} успешно обработан`,
+      });
+
+      resetToPhase1();
+      setConfirmDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка отправки заказа",
+        description: error?.message || "Не удалось отправить заказ",
+      });
+    },
+  });
+
+  const enrichOrderWithInventoryData = (order: ParsedOrder) => {
+    order.items = order.items.map(item => {
+      const inventoryItem = inventory.find(inv => inv.sku === item.sku);
+      if (inventoryItem) {
+        const imageUrls = inventoryItem.imageUrls ? JSON.parse(inventoryItem.imageUrls) : [];
+        return {
+          ...item,
+          imageUrl: imageUrls[0] || item.imageUrl,
+          ebayUrl: inventoryItem.ebayUrl || item.ebayUrl,
+          itemName: inventoryItem.name || item.itemName,
+        };
+      }
+      return item;
+    });
+  };
+
+  const handleScan = (code: string) => {
+    if (currentPhase === 'scanning_product') {
+      scanOrderMutation.mutate(code);
+    } else if (currentPhase === 'scanning_items') {
+      handleItemScan(code);
+    } else if (currentPhase === 'scanning_label') {
+      handleLabelScan(code);
+    }
+  };
+
+  const handleItemScan = (code: string) => {
+    if (!currentOrder) return;
+
+    // Check if this exact barcode was already scanned (duplicate scan prevention)
+    if (scannedItemBarcodes.includes(code)) {
+      toast({
+        variant: "destructive",
+        title: "Дубликат баркода",
+        description: "Этот баркод уже был отсканирован",
+      });
+      return;
+    }
+
+    const matchingItem = currentOrder.items.find(item => {
+      if (item.barcode && item.barcode === code) return true;
+      if (item.sku === code) return true;
+      return false;
+    });
+
+    if (!matchingItem) {
+      toast({
+        variant: "destructive",
+        title: "Товар не найден",
+        description: "Этот товар не входит в данный заказ",
+      });
+      return;
+    }
+
+    // Get current count for this SKU
+    const currentCount = scannedCounts.get(matchingItem.sku) || 0;
+
+    // Check if we've already scanned the required quantity for this SKU
+    if (currentCount >= matchingItem.quantity) {
+      toast({
+        variant: "destructive",
+        title: "Превышено количество",
+        description: `SKU ${matchingItem.sku}: уже отсканировано ${currentCount} из ${matchingItem.quantity}`,
+      });
+      return;
+    }
+
+    // Increment counter and add barcode
+    const newCount = currentCount + 1;
+    setScannedCounts(prev => new Map(prev).set(matchingItem.sku, newCount));
+    setScannedItemBarcodes(prev => [...prev, code]);
+
+    // Check if all items are fully scanned
+    const newScannedCounts = new Map(scannedCounts).set(matchingItem.sku, newCount);
+    const allItemsScanned = currentOrder.items.every(item => 
+      (newScannedCounts.get(item.sku) || 0) >= item.quantity
+    );
+
+    if (allItemsScanned) {
+      setCurrentPhase('scanning_label');
+      toast({
+        title: "Все товары отсканированы",
+        description: "Отсканируйте лейбл посылки",
+      });
+    } else {
+      // Calculate total scanned and total required
+      const totalScanned = Array.from(newScannedCounts.values()).reduce((sum, count) => sum + count, 0);
+      const totalRequired = currentOrder.items.reduce((sum, item) => sum + item.quantity, 0);
+      const remaining = totalRequired - totalScanned;
+      
+      toast({
+        title: "Товар отсканирован",
+        description: `${matchingItem.sku}: ${newCount} / ${matchingItem.quantity}. Осталось: ${remaining} товар(ов)`,
+      });
+    }
+  };
+
+  const handleLabelScan = (code: string) => {
+    if (!currentOrder) return;
+    setShippingLabel(code);
+    updateShippingLabelMutation.mutate({
+      orderId: currentOrder.id,
+      label: code
+    });
+  };
+
+  const handleConfirmDispatch = () => {
+    if (!currentOrder || !currentUser) return;
+    dispatchOrderMutation.mutate({
+      orderId: currentOrder.id,
+      barcodes: scannedItemBarcodes,
+      userId: currentUser.id
+    });
+  };
+
+  const handleCancelDispatch = () => {
+    setConfirmDialogOpen(false);
+    resetToPhase1();
+    toast({
+      title: "Отменено",
+      description: "Заказ не отправлен",
+    });
+  };
+
+  const resetToPhase1 = () => {
+    setCurrentPhase('scanning_product');
+    setCurrentOrder(null);
+    setScannedItemBarcodes([]);
+    setScannedCounts(new Map());
+    setShippingLabel("");
+  };
+
+  const openImageModal = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setImageModalOpen(true);
+  };
+
+  const getScannerLabel = () => {
+    if (currentPhase === 'scanning_product') {
+      return "Отсканируйте баркод товара";
+    } else if (currentPhase === 'scanning_items') {
+      return "Отсканируйте следующий товар";
+    } else if (currentPhase === 'scanning_label') {
+      return "Отсканируйте баркод или QR код с лейбла посылки";
+    }
+    return "Штрихкод / QR код";
+  };
+
+  const getProgress = () => {
+    if (!currentOrder || currentOrder.items.length === 0) return 0;
+    const totalScanned = Array.from(scannedCounts.values()).reduce((sum, count) => sum + count, 0);
+    const totalRequired = currentOrder.items.reduce((sum, item) => sum + item.quantity, 0);
+    return totalRequired > 0 ? (totalScanned / totalRequired) * 100 : 0;
+  };
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold" data-testid="text-page-title">Подготовка заказов (Dispatch)</h1>
+        <Badge variant={currentPhase === 'scanning_product' ? 'secondary' : 'default'} data-testid="badge-phase">
+          {currentPhase === 'scanning_product' && 'Ожидание сканирования'}
+          {currentPhase === 'scanning_items' && 'Сканирование товаров'}
+          {currentPhase === 'scanning_label' && 'Сканирование лейбла'}
+          {currentPhase === 'confirming' && 'Подтверждение'}
+        </Badge>
+      </div>
+
+      <BarcodeScanner onScan={handleScan} label={getScannerLabel()} />
+
+      {currentOrder && (
+        <Card data-testid="card-current-order">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Заказ №{currentOrder.orderNumber}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Покупатель:</span>
+                <p className="font-medium" data-testid="text-customer-name">{currentOrder.customerName || 'Не указан'}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Адрес доставки:</span>
+                <p className="font-medium" data-testid="text-shipping-address">{currentOrder.shippingAddress || 'Не указан'}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Дата заказа:</span>
+                <p className="font-medium" data-testid="text-order-date">
+                  {currentOrder.orderDate ? format(new Date(currentOrder.orderDate), "dd.MM.yyyy") : 'Не указана'}
+                </p>
+              </div>
+            </div>
+
+            {currentOrder.items.reduce((sum, item) => sum + item.quantity, 0) > 1 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Прогресс сканирования</span>
+                  <span className="text-sm text-muted-foreground" data-testid="text-progress">
+                    {Array.from(scannedCounts.values()).reduce((sum, count) => sum + count, 0)} / {currentOrder.items.reduce((sum, item) => sum + item.quantity, 0)}
+                  </span>
+                </div>
+                <Progress value={getProgress()} className="h-2" data-testid="progress-scanning" />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <h3 className="font-semibold">Товары в заказе:</h3>
+              <div className="space-y-2">
+                {currentOrder.items.map((item, index) => {
+                  const scannedCount = scannedCounts.get(item.sku) || 0;
+                  const isComplete = scannedCount >= item.quantity;
+                  return (
+                    <div
+                      key={index}
+                      className={`flex items-center gap-3 p-3 rounded-md border ${
+                        isComplete ? 'bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-800' : 'bg-card'
+                      }`}
+                      data-testid={`item-${item.sku}`}
+                    >
+                      <div className="flex-shrink-0">
+                        {isComplete ? (
+                          <CheckCircle2 className="w-5 h-5 text-green-600" data-testid={`icon-scanned-${item.sku}`} />
+                        ) : (
+                          <Circle className="w-5 h-5 text-muted-foreground" data-testid={`icon-pending-${item.sku}`} />
+                        )}
+                      </div>
+
+                      {item.imageUrl && (
+                        <button
+                          onClick={() => openImageModal(item.imageUrl!)}
+                          className="flex-shrink-0 hover-elevate"
+                          data-testid={`button-image-${item.sku}`}
+                        >
+                          <img
+                            src={item.imageUrl}
+                            alt={item.itemName || item.sku}
+                            className="w-12 h-12 object-cover rounded"
+                          />
+                        </button>
+                      )}
+
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate" data-testid={`text-item-name-${item.sku}`}>
+                          {item.itemName || 'Название не указано'}
+                        </p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span data-testid={`text-item-sku-${item.sku}`}>SKU: {item.sku}</span>
+                          {item.quantity > 1 && (
+                            <>
+                              <span>•</span>
+                              <Badge variant={isComplete ? "default" : "secondary"} data-testid={`badge-quantity-${item.sku}`}>
+                                {scannedCount} / {item.quantity}
+                              </Badge>
+                            </>
+                          )}
+                          {item.barcode && (
+                            <>
+                              <span>•</span>
+                              <span data-testid={`text-item-barcode-${item.sku}`}>Баркод: {item.barcode}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {item.ebayUrl && (
+                        <a
+                          href={item.ebayUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-shrink-0"
+                          data-testid={`link-ebay-${item.sku}`}
+                        >
+                          <Button size="sm" variant="outline">
+                            <ExternalLink className="w-4 h-4 mr-1" />
+                            eBay
+                          </Button>
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {currentPhase === 'scanning_label' && (
+              <Alert data-testid="alert-scan-label">
+                <AlertTriangle className="w-4 h-4" />
+                <AlertDescription>
+                  Отсканируйте баркод или QR код с лейбла посылки
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {dispatchedOrders.length > 0 && (
+        <Card data-testid="card-dispatched-orders">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Truck className="w-5 h-5" />
+              Отправленные заказы ({dispatchedOrders.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {dispatchedOrders.map((order, index) => (
+                <div
+                  key={order.id}
+                  className="flex items-center justify-between p-3 rounded-md bg-muted"
+                  data-testid={`dispatched-order-${order.orderNumber}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    <div>
+                      <p className="font-medium">Заказ №{order.orderNumber}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {order.items.length} товар(ов) • {order.customerName}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {order.dispatchedAt ? format(new Date(order.dispatchedAt), "HH:mm") : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Фото товара</DialogTitle>
+          </DialogHeader>
+          {selectedImage && (
+            <div className="flex justify-center">
+              <img
+                src={selectedImage}
+                alt="Product"
+                className="max-w-full max-h-[70vh] object-contain"
+                data-testid="img-modal"
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+        <DialogContent data-testid="dialog-confirm-dispatch">
+          <DialogHeader>
+            <DialogTitle>Отправить заказ?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Вы уверены, что хотите отправить заказ №{currentOrder?.orderNumber}?
+            </p>
+            {currentOrder && (
+              <div className="p-4 rounded-md bg-muted space-y-2">
+                <p className="text-sm"><strong>Товаров:</strong> {currentOrder.items.length}</p>
+                <p className="text-sm"><strong>Покупатель:</strong> {currentOrder.customerName}</p>
+                <p className="text-sm"><strong>Лейбл:</strong> {shippingLabel}</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancelDispatch}
+              data-testid="button-cancel-dispatch"
+            >
+              Отмена
+            </Button>
+            <Button
+              onClick={handleConfirmDispatch}
+              disabled={dispatchOrderMutation.isPending}
+              data-testid="button-confirm-dispatch"
+            >
+              {dispatchOrderMutation.isPending ? 'Отправка...' : 'Отправить заказ'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

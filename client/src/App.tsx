@@ -23,6 +23,8 @@ import ProductTesting from "@/pages/ProductTesting";
 import FaultyStockPage from "@/pages/FaultyStock";
 import ScannerMode from "@/pages/ScannerMode";
 import Placement from "@/pages/Placement";
+import Dispatch from "@/pages/Dispatch";
+import Packing from "@/pages/Packing";
 import NotFound from "@/pages/not-found";
 import * as api from "@/lib/api";
 import type { InventoryItem } from "@shared/schema";
@@ -504,6 +506,12 @@ function AppContent() {
         )}
         <Route path="/scanner-mode">
           <ScannerMode />
+        </Route>
+        <Route path="/dispatch">
+          <Dispatch />
+        </Route>
+        <Route path="/packing">
+          <Packing />
         </Route>
         <Route component={NotFound} />
       </Switch>

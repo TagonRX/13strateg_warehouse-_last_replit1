@@ -16,6 +16,7 @@ import {
   faultyStock,
   pendingPlacements,
   csvImportSessions,
+  orders,
   type User, 
   type InsertUser,
   type InventoryItem,
@@ -45,7 +46,9 @@ import {
   type PendingPlacement,
   type InsertPendingPlacement,
   type CsvImportSession,
-  type InsertCsvImportSession
+  type InsertCsvImportSession,
+  type Order,
+  type InsertOrder
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ilike, getTableColumns } from "drizzle-orm";
 
@@ -181,6 +184,17 @@ export interface IStorage {
   updateCsvImportSession(id: string, updates: Partial<InsertCsvImportSession>): Promise<CsvImportSession>;
   getAllCsvImportSessions(userId?: string): Promise<CsvImportSession[]>;
   bulkUpdateInventoryFromCsv(items: InsertInventoryItem[], userId: string): Promise<{ success: number; updated: number }>;
+
+  // Order methods
+  createOrder(order: InsertOrder): Promise<Order>;
+  getOrders(filters?: { status?: string }): Promise<Order[]>;
+  getOrderById(id: string): Promise<Order | null>;
+  updateOrderStatus(id: string, status: string, userId: string): Promise<Order>;
+  updateShippingLabel(id: string, label: string): Promise<Order>;
+  updateDispatchData(id: string, barcodes: string[], userId: string): Promise<Order>;
+  updatePackingData(id: string, userId: string): Promise<Order>;
+  findOrdersBySku(sku: string, status?: string): Promise<Order[]>;
+  findOrderByBarcode(barcode: string, status?: string): Promise<Order | null>;
 }
 
 export class DbStorage implements IStorage {
@@ -1896,6 +1910,129 @@ export class DbStorage implements IStorage {
     }
 
     return { success, updated };
+  }
+
+  // Order methods
+  async createOrder(order: InsertOrder): Promise<Order> {
+    const result = await db.insert(orders).values(order).returning();
+    return result[0];
+  }
+
+  async getOrders(filters?: { status?: string }): Promise<Order[]> {
+    if (filters?.status) {
+      return await db.select().from(orders)
+        .where(eq(orders.status, filters.status))
+        .orderBy(orders.createdAt);
+    }
+    return await db.select().from(orders).orderBy(orders.createdAt);
+  }
+
+  async getOrderById(id: string): Promise<Order | null> {
+    const result = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+    return result[0] || null;
+  }
+
+  async updateOrderStatus(id: string, status: string, userId: string): Promise<Order> {
+    const updates: any = { 
+      status, 
+      updatedAt: new Date() 
+    };
+
+    if (status === "DISPATCHED") {
+      updates.dispatchedBy = userId;
+      updates.dispatchedAt = new Date();
+    } else if (status === "PACKED") {
+      updates.packedBy = userId;
+      updates.packedAt = new Date();
+    }
+
+    const result = await db.update(orders)
+      .set(updates)
+      .where(eq(orders.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async updateShippingLabel(id: string, label: string): Promise<Order> {
+    const result = await db.update(orders)
+      .set({ 
+        shippingLabel: label,
+        updatedAt: new Date() 
+      })
+      .where(eq(orders.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async updateDispatchData(id: string, barcodes: string[], userId: string): Promise<Order> {
+    const result = await db.update(orders)
+      .set({
+        dispatchedBarcodes: JSON.stringify(barcodes),
+        dispatchedBy: userId,
+        dispatchedAt: new Date(),
+        status: "DISPATCHED",
+        updatedAt: new Date()
+      })
+      .where(eq(orders.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async updatePackingData(id: string, userId: string): Promise<Order> {
+    const result = await db.update(orders)
+      .set({
+        packedBy: userId,
+        packedAt: new Date(),
+        status: "PACKED",
+        updatedAt: new Date()
+      })
+      .where(eq(orders.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async findOrdersBySku(sku: string, status?: string): Promise<Order[]> {
+    let query = db.select().from(orders);
+    
+    if (status) {
+      query = query.where(eq(orders.status, status)) as any;
+    }
+    
+    const allOrders = await query;
+    
+    // Filter orders that have this SKU in their items JSON array
+    return allOrders.filter(order => {
+      if (!order.items) return false;
+      try {
+        const items = JSON.parse(order.items);
+        return Array.isArray(items) && items.some((item: any) => item.sku === sku);
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  async findOrderByBarcode(barcode: string, status?: string): Promise<Order | null> {
+    let query = db.select().from(orders);
+    
+    if (status) {
+      query = query.where(eq(orders.status, status)) as any;
+    }
+    
+    const allOrders = await query;
+    
+    // Find first order that has this barcode in their items JSON array
+    const found = allOrders.find(order => {
+      if (!order.items) return false;
+      try {
+        const items = JSON.parse(order.items);
+        return Array.isArray(items) && items.some((item: any) => item.barcode === barcode);
+      } catch {
+        return false;
+      }
+    });
+    
+    return found || null;
   }
 }
 

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, insertInventoryItemSchema, insertEventLogSchema } from "@shared/schema";
+import { insertUserSchema, insertInventoryItemSchema, insertEventLogSchema, insertOrderSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import { verifyPassword, hashPassword, createSession, requireAuth, requireAdmin } from "./auth";
 import { setupWebSocket } from "./websocket";
@@ -2059,6 +2059,206 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       return res.status(500).json({ error: "Ошибка применения импорта: " + error.message });
+    }
+  });
+
+  // Order routes (all require auth)
+  
+  // Create new order
+  app.post("/api/orders", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      
+      // Validate request body
+      const validation = insertOrderSchema.safeParse(req.body);
+      if (!validation.success) {
+        const error = fromZodError(validation.error);
+        return res.status(400).json({ error: error.message });
+      }
+      
+      const orderData = {
+        ...validation.data,
+        createdBy: userId,
+      };
+      
+      const order = await storage.createOrder(orderData);
+      
+      return res.status(201).json(order);
+    } catch (error: any) {
+      console.error("Create order error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Get all orders (with optional status filter)
+  app.get("/api/orders", requireAuth, async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const filters = status ? { status } : undefined;
+      
+      const orders = await storage.getOrders(filters);
+      
+      return res.json(orders);
+    } catch (error: any) {
+      console.error("Get orders error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Get order by ID
+  app.get("/api/orders/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const order = await storage.getOrderById(id);
+      
+      if (!order) {
+        return res.status(404).json({ error: "Заказ не найден" });
+      }
+      
+      return res.json(order);
+    } catch (error: any) {
+      console.error("Get order by ID error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Update order status
+  app.patch("/api/orders/:id/status", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, userId } = req.body;
+      
+      if (!status) {
+        return res.status(400).json({ error: "Требуется статус" });
+      }
+      
+      if (!userId) {
+        return res.status(400).json({ error: "Требуется userId" });
+      }
+      
+      const order = await storage.getOrderById(id);
+      if (!order) {
+        return res.status(404).json({ error: "Заказ не найден" });
+      }
+      
+      const updatedOrder = await storage.updateOrderStatus(id, status, userId);
+      
+      return res.json(updatedOrder);
+    } catch (error: any) {
+      console.error("Update order status error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Update shipping label
+  app.patch("/api/orders/:id/shipping-label", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { label } = req.body;
+      
+      if (!label) {
+        return res.status(400).json({ error: "Требуется label" });
+      }
+      
+      const order = await storage.getOrderById(id);
+      if (!order) {
+        return res.status(404).json({ error: "Заказ не найден" });
+      }
+      
+      const updatedOrder = await storage.updateShippingLabel(id, label);
+      
+      return res.json(updatedOrder);
+    } catch (error: any) {
+      console.error("Update shipping label error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Update dispatch data
+  app.patch("/api/orders/:id/dispatch", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { barcodes, userId } = req.body;
+      
+      if (!barcodes || !Array.isArray(barcodes)) {
+        return res.status(400).json({ error: "Требуется массив barcodes" });
+      }
+      
+      if (!userId) {
+        return res.status(400).json({ error: "Требуется userId" });
+      }
+      
+      const order = await storage.getOrderById(id);
+      if (!order) {
+        return res.status(404).json({ error: "Заказ не найден" });
+      }
+      
+      const updatedOrder = await storage.updateDispatchData(id, barcodes, userId);
+      
+      return res.json(updatedOrder);
+    } catch (error: any) {
+      console.error("Update dispatch data error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Update packing data
+  app.patch("/api/orders/:id/packing", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { userId } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ error: "Требуется userId" });
+      }
+      
+      const order = await storage.getOrderById(id);
+      if (!order) {
+        return res.status(404).json({ error: "Заказ не найден" });
+      }
+      
+      const updatedOrder = await storage.updatePackingData(id, userId);
+      
+      return res.json(updatedOrder);
+    } catch (error: any) {
+      console.error("Update packing data error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Find order by SKU or barcode
+  app.post("/api/orders/scan", requireAuth, async (req, res) => {
+    try {
+      const { code, status } = req.body;
+      
+      if (!code) {
+        return res.status(400).json({ error: "Требуется code (SKU или barcode)" });
+      }
+      
+      // Try to find by barcode first
+      let order = await storage.findOrderByBarcode(code, status);
+      
+      if (order) {
+        return res.json({ order, matchType: "barcode" });
+      }
+      
+      // Try to find by SKU
+      const orders = await storage.findOrdersBySku(code, status);
+      
+      if (orders.length === 0) {
+        return res.status(404).json({ error: "Заказ не найден по данному коду" });
+      }
+      
+      if (orders.length === 1) {
+        return res.json({ order: orders[0], matchType: "sku" });
+      }
+      
+      // Multiple orders with this SKU
+      return res.json({ orders, matchType: "sku", multiple: true });
+    } catch (error: any) {
+      console.error("Scan order error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
 

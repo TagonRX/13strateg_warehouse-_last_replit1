@@ -28,6 +28,7 @@ import {
   TestTube2,
   AlertTriangle,
   Smartphone,
+  PackageCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -111,6 +112,8 @@ export default function AppLayout({
     { title: "Размещение товара", url: "/placement", icon: Warehouse },
     { title: "Сборка/Списание", url: "/stock-out", icon: PackageMinus },
     { title: "Picking List", url: "/picking", icon: ClipboardList },
+    { title: "Подготовка заказов", url: "/dispatch", icon: Package },
+    { title: "Упаковка заказов", url: "/packing", icon: PackageCheck },
     { title: "Инвентаризация", url: "/inventory", icon: Package },
     { title: "Загрузка склада", url: "/warehouse", icon: Warehouse },
     { title: "Режим сканера", url: "/scanner-mode", icon: Smartphone },

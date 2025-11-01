@@ -223,6 +223,26 @@ export const csvImportSessions = pgTable("csv_import_sessions", {
   committedAt: timestamp("committed_at"),
 });
 
+// Заказы (для Dispatch и Packing workflow)
+export const orders = pgTable("orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderNumber: text("order_number").notNull().unique(), // Уникальный номер заказа
+  customerName: text("customer_name"), // Имя покупателя
+  shippingAddress: text("shipping_address"), // Адрес доставки
+  orderDate: timestamp("order_date"), // Дата заказа
+  status: text("status").notNull().default("PENDING"), // PENDING, DISPATCHED, PACKED, SHIPPED
+  shippingLabel: text("shipping_label"), // Баркод/QR код лейбла посылки
+  items: text("items"), // JSON массив: [{sku, barcode, imageUrl, ebayUrl, itemName, quantity}, ...]
+  dispatchedBy: varchar("dispatched_by").references(() => users.id), // Кто обработал в Dispatch
+  dispatchedAt: timestamp("dispatched_at"), // Когда обработан в Dispatch
+  dispatchedBarcodes: text("dispatched_barcodes"), // JSON массив баркодов отсканированных в Dispatch для верификации в Packing
+  packedBy: varchar("packed_by").references(() => users.id), // Кто упаковал
+  packedAt: timestamp("packed_at"), // Когда упакован
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -307,6 +327,12 @@ export const insertCsvImportSessionSchema = createInsertSchema(csvImportSessions
   committedAt: true,
 });
 
+export const insertOrderSchema = createInsertSchema(orders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -352,3 +378,6 @@ export type PendingPlacement = typeof pendingPlacements.$inferSelect;
 
 export type InsertCsvImportSession = z.infer<typeof insertCsvImportSessionSchema>;
 export type CsvImportSession = typeof csvImportSessions.$inferSelect;
+
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type Order = typeof orders.$inferSelect;
