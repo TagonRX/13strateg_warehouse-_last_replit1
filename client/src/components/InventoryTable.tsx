@@ -14,6 +14,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -23,12 +29,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, ChevronDown, ChevronRight, Pencil, Save, X, Trash2 } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, Pencil, Save, X, Trash2, ExternalLink, Image as ImageIcon } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import * as api from "@/lib/api";
 import BarcodeEditor from "./BarcodeEditor";
+import InventoryCsvImportDialog from "./InventoryCsvImportDialog";
 
 interface BarcodeMapping {
   code: string;
@@ -51,6 +58,9 @@ interface InventoryItem {
   height?: number;
   volume?: number;
   weight?: number;
+  itemId?: string | null; // eBay item ID
+  ebayUrl?: string | null; // eBay URL
+  imageUrls?: string | null; // JSON string array of image URLs
 }
 
 interface InventoryTableProps {
@@ -141,6 +151,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const [editingRow, setEditingRow] = useState<EditingRow | null>(null);
   const [showFaultyDialog, setShowFaultyDialog] = useState(false);
   const [pendingCondition, setPendingCondition] = useState<string>("");
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch tested items for condition display
@@ -171,6 +183,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   // Default column widths
   const defaultWidths = {
     actions: 48,
+    photo: 80,
     name: 250,
     sku: 150,
     quantity: 100,
@@ -180,6 +193,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     dimensions: 180,
     volume: 100,
     weight: 100,
+    ebay: 80,
   };
 
   // Column widths state with localStorage persistence (lazy initialization)
@@ -677,6 +691,10 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       );
     }
 
+    // Parse image URLs
+    const imageUrls = item.imageUrls ? JSON.parse(item.imageUrls) : [];
+    const firstImageUrl = imageUrls.length > 0 ? imageUrls[0] : null;
+
     return (
       <TableRow key={item.id} data-testid={`row-item-${item.id}`}>
         <TableCell style={{ width: `${columnWidths.actions}px`, minWidth: `${columnWidths.actions}px` }}>
@@ -696,6 +714,26 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
               </Button>
             )}
           </div>
+        </TableCell>
+        <TableCell style={{ width: `${columnWidths.photo}px`, minWidth: `${columnWidths.photo}px` }} className="text-xs">
+          {firstImageUrl ? (
+            <button
+              onClick={() => openImageModal(firstImageUrl)}
+              className="hover-elevate rounded overflow-hidden"
+              data-testid={`button-image-${item.id}`}
+            >
+              <img 
+                src={firstImageUrl} 
+                alt={item.name || "Product"} 
+                className="w-12 h-12 object-cover"
+                data-testid={`img-thumbnail-${item.id}`}
+              />
+            </button>
+          ) : (
+            <div className="w-12 h-12 bg-muted rounded flex items-center justify-center" data-testid={`placeholder-image-${item.id}`}>
+              <ImageIcon className="w-4 h-4 text-muted-foreground" />
+            </div>
+          )}
         </TableCell>
         <TableCell style={{ width: `${columnWidths.name}px`, minWidth: `${columnWidths.name}px` }} className="text-xs">{item.name || "-"}</TableCell>
         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="font-mono text-xs">{item.sku}</TableCell>
@@ -725,8 +763,37 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
           {volume ? volume.toLocaleString() : "-"}
         </TableCell>
         <TableCell style={{ width: `${columnWidths.weight}px`, minWidth: `${columnWidths.weight}px` }} className="text-xs">{item.weight || "-"}</TableCell>
+        <TableCell style={{ width: `${columnWidths.ebay}px`, minWidth: `${columnWidths.ebay}px` }} className="text-xs">
+          {item.ebayUrl ? (
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              asChild
+              data-testid={`button-ebay-${item.id}`}
+            >
+              <a href={item.ebayUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </Button>
+          ) : (
+            <span className="text-muted-foreground" data-testid={`text-no-ebay-${item.id}`}>-</span>
+          )}
+        </TableCell>
       </TableRow>
     );
+  };
+
+  const handleRefreshInventory = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+    toast({
+      title: "Обновлено",
+      description: "Инвентарь обновлен",
+    });
+  };
+
+  const openImageModal = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setImageModalOpen(true);
   };
 
   return (
@@ -734,8 +801,13 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       <CardHeader>
         <div className="flex flex-col sm:flex-row justify-between gap-4">
           <CardTitle>Инвентаризация</CardTitle>
-          <div className="text-sm text-muted-foreground">
-            Всего товаров: {items.length}
+          <div className="flex items-center gap-2">
+            <div className="text-sm text-muted-foreground">
+              Всего товаров: {items.length}
+            </div>
+            {userRole === "admin" && (
+              <InventoryCsvImportDialog onSuccess={handleRefreshInventory} />
+            )}
           </div>
         </div>
       </CardHeader>
@@ -767,9 +839,12 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
 
         <div className="border rounded-md overflow-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-12" style={{ width: `${columnWidths.actions}px`, minWidth: `${columnWidths.actions}px` }}></TableHead>
+                <ResizableHeader columnKey="photo" width={columnWidths.photo} onResize={handleResize} className="text-xs">
+                  Фото
+                </ResizableHeader>
                 <ResizableHeader columnKey="name" width={columnWidths.name} onResize={handleResize} className="text-xs">
                   Название
                 </ResizableHeader>
@@ -796,6 +871,9 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                 </ResizableHeader>
                 <ResizableHeader columnKey="weight" width={columnWidths.weight} onResize={handleResize} className="text-xs">
                   Вес (кг)
+                </ResizableHeader>
+                <ResizableHeader columnKey="ebay" width={columnWidths.ebay} onResize={handleResize} className="text-xs">
+                  eBay
                 </ResizableHeader>
               </TableRow>
             </TableHeader>
@@ -872,6 +950,25 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Image Modal Dialog */}
+      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Просмотр изображения</DialogTitle>
+          </DialogHeader>
+          {selectedImage && (
+            <div className="flex items-center justify-center p-4">
+              <img 
+                src={selectedImage} 
+                alt="Product full size" 
+                className="max-w-full max-h-[70vh] object-contain"
+                data-testid="img-modal-fullsize"
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

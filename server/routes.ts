@@ -9,6 +9,9 @@ import fs from "fs/promises";
 import path from "path";
 import { z } from "zod";
 import { promises as dns } from "dns";
+import { compareTwoStrings } from 'string-similarity';
+import { parse } from 'fast-csv';
+import { Readable } from 'stream';
 
 // Helper function to extract location from SKU
 // SKU format examples:
@@ -24,6 +27,57 @@ function extractLocationFromSKU(sku: string): string {
   }
   // If no pattern match, return the full SKU as location
   return sku;
+}
+
+// Helper: Parse CSV from file buffer
+async function parseCsvFile(buffer: Buffer): Promise<any[]> {
+  const rows: any[] = [];
+  return new Promise((resolve, reject) => {
+    Readable.from(buffer)
+      .pipe(parse({ headers: true, trim: true }))
+      .on('data', (row) => rows.push(row))
+      .on('end', () => resolve(rows))
+      .on('error', (error) => reject(error));
+  });
+}
+
+// Helper: Parse CSV from URL
+async function parseCsvFromUrl(url: string): Promise<any[]> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch CSV: ${response.statusText}`);
+  const text = await response.text();
+  const rows: any[] = [];
+  return new Promise((resolve, reject) => {
+    Readable.from(text)
+      .pipe(parse({ headers: true, trim: true }))
+      .on('data', (row) => rows.push(row))
+      .on('end', () => resolve(rows))
+      .on('error', (error) => reject(error));
+  });
+}
+
+// Helper: Match products by name using similarity
+function matchProductsByName(csvName: string, inventoryItems: any[]): { match: any | null; score: number; conflicts: any[] } {
+  let bestMatch = null;
+  let bestScore = 0;
+  const conflicts: any[] = [];
+  
+  for (const item of inventoryItems) {
+    const score = compareTwoStrings(csvName.toLowerCase(), item.name.toLowerCase());
+    if (score >= 0.9) {
+      if (score > bestScore) {
+        if (bestMatch && bestScore >= 0.9) {
+          conflicts.push(bestMatch);
+        }
+        bestMatch = item;
+        bestScore = score;
+      } else {
+        conflicts.push(item);
+      }
+    }
+  }
+  
+  return { match: bestMatch, score: bestScore, conflicts };
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1777,6 +1831,234 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Delete all faulty stock error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // CSV Import endpoints (admin only)
+  
+  // POST /api/inventory/import-csv - Start CSV import process
+  app.post("/api/inventory/import-csv", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { sourceType, sourceUrl } = req.body;
+      const userId = (req as any).userId;
+      
+      let csvRows: any[];
+      
+      // Parse CSV based on source type
+      if (sourceType === 'url') {
+        if (!sourceUrl) {
+          return res.status(400).json({ error: "URL is required for URL source type" });
+        }
+        csvRows = await parseCsvFromUrl(sourceUrl);
+      } else if (sourceType === 'file') {
+        // Handle file upload (req.file from multer or similar)
+        const file = (req as any).file;
+        if (!file) {
+          return res.status(400).json({ error: "File is required for file source type" });
+        }
+        csvRows = await parseCsvFile(file.buffer);
+      } else {
+        return res.status(400).json({ error: "Invalid source type" });
+      }
+      
+      // Get all inventory items for matching
+      const inventoryItems = await storage.getAllInventoryItems();
+      
+      const matched: any[] = [];
+      const conflicts: any[] = [];
+      const unmatched: any[] = [];
+      
+      // Process each CSV row
+      for (const row of csvRows) {
+        const csvName = row['Product Name'] || row['Title'] || '';
+        const itemId = row['Item ID'] || row['ItemID'] || '';
+        const ebayUrl = row['eBay URL'] || row['URL'] || '';
+        const imageUrl = row['Image URL'] || row['ImageURL'] || '';
+        const quantity = parseInt(row['Quantity'] || '1');
+        const price = parseFloat(row['Price'] || '0');
+        
+        if (!csvName) {
+          unmatched.push({ csvRow: row, reason: 'No product name' });
+          continue;
+        }
+        
+        const { match, score, conflicts: itemConflicts } = matchProductsByName(csvName, inventoryItems);
+        
+        if (match && itemConflicts.length === 0) {
+          matched.push({
+            csvRow: row,
+            inventoryItem: match,
+            score,
+            updates: {
+              itemId,
+              ebayUrl,
+              imageUrls: imageUrl ? [imageUrl] : [],
+              quantity,
+            }
+          });
+        } else if (match && itemConflicts.length > 0) {
+          conflicts.push({
+            csvRow: row,
+            candidates: [match, ...itemConflicts].map(c => ({ ...c, score: compareTwoStrings(csvName.toLowerCase(), c.name.toLowerCase()) })),
+            updates: {
+              itemId,
+              ebayUrl,
+              imageUrls: imageUrl ? [imageUrl] : [],
+              quantity,
+            }
+          });
+        } else {
+          unmatched.push({ csvRow: row, reason: 'No match found' });
+        }
+      }
+      
+      // Create import session
+      const session = await storage.createCsvImportSession({
+        sourceType,
+        sourceUrl: sourceType === 'url' ? sourceUrl : undefined,
+        status: 'READY_FOR_REVIEW',
+        parsedData: JSON.stringify({ matched, conflicts, unmatched }),
+        totalRows: csvRows.length,
+        matchedRows: matched.length,
+        conflictRows: conflicts.length,
+        createdBy: userId,
+      });
+      
+      return res.json({
+        sessionId: session.id,
+        summary: {
+          total: csvRows.length,
+          matched: matched.length,
+          conflicts: conflicts.length,
+          unmatched: unmatched.length,
+        },
+        session,
+      });
+    } catch (error: any) {
+      console.error("CSV import error:", error);
+      return res.status(500).json({ error: "Ошибка импорта CSV: " + error.message });
+    }
+  });
+
+  // GET all sessions
+  app.get("/api/inventory/import-sessions", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const sessions = await storage.getAllCsvImportSessions();
+      return res.json(sessions);
+    } catch (error: any) {
+      console.error("Get sessions error:", error);
+      return res.status(500).json({ error: "Ошибка получения сессий" });
+    }
+  });
+
+  // GET specific session
+  app.get("/api/inventory/import-sessions/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const session = await storage.getCsvImportSession(id);
+      if (!session) {
+        return res.status(404).json({ error: "Сессия не найдена" });
+      }
+      return res.json(session);
+    } catch (error: any) {
+      console.error("Get session error:", error);
+      return res.status(500).json({ error: "Ошибка получения сессии" });
+    }
+  });
+
+  // POST resolve conflicts
+  app.post("/api/inventory/import-sessions/:id/resolve", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { resolutions } = req.body; // Array of { csvRowIndex, selectedProductId }
+      
+      const session = await storage.getCsvImportSession(id);
+      if (!session) {
+        return res.status(404).json({ error: "Сессия не найдена" });
+      }
+      
+      // Update session with resolutions
+      const updatedSession = await storage.updateCsvImportSession(id, {
+        resolutions: JSON.stringify(resolutions),
+        status: 'RESOLVING',
+      });
+      
+      return res.json(updatedSession);
+    } catch (error: any) {
+      console.error("Resolve conflicts error:", error);
+      return res.status(500).json({ error: "Ошибка разрешения конфликтов" });
+    }
+  });
+
+  // POST commit import
+  app.post("/api/inventory/import-sessions/:id/commit", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = (req as any).userId;
+      
+      const session = await storage.getCsvImportSession(id);
+      if (!session) {
+        return res.status(404).json({ error: "Сессия не найдена" });
+      }
+      
+      const parsedData = JSON.parse(session.parsedData as string);
+      const itemsToUpdate: any[] = [];
+      
+      // Collect matched items
+      for (const match of parsedData.matched || []) {
+        itemsToUpdate.push({
+          productId: match.inventoryItem.productId,
+          name: match.inventoryItem.name,
+          ...match.updates,
+        });
+      }
+      
+      // Collect resolved conflicts
+      const resolutions = session.resolutions ? JSON.parse(session.resolutions as string) : [];
+      for (const resolution of resolutions) {
+        const conflict = parsedData.conflicts[resolution.csvRowIndex];
+        if (conflict) {
+          const selectedItem = conflict.candidates.find((c: any) => c.productId === resolution.selectedProductId);
+          if (selectedItem) {
+            itemsToUpdate.push({
+              productId: selectedItem.productId,
+              name: selectedItem.name,
+              ...conflict.updates,
+            });
+          }
+        }
+      }
+      
+      // Bulk update inventory
+      const result = await storage.bulkUpdateInventoryFromCsv(itemsToUpdate, userId);
+      
+      // Update session status
+      await storage.updateCsvImportSession(id, {
+        status: 'COMMITTED',
+        committedAt: new Date(),
+      });
+      
+      // Log event
+      await storage.createEventLog({
+        userId,
+        action: 'CSV_IMPORT_COMMITTED',
+        details: `Импортировано ${result.updated} товаров из CSV`,
+      });
+      
+      return res.json({
+        message: `Успешно обновлено ${result.updated} товаров`,
+        result,
+      });
+    } catch (error: any) {
+      console.error("Commit import error:", error);
+      
+      // Mark session as failed
+      await storage.updateCsvImportSession(id, {
+        status: 'FAILED',
+        error: error.message,
+      });
+      
+      return res.status(500).json({ error: "Ошибка применения импорта: " + error.message });
     }
   });
 
