@@ -407,3 +407,26 @@ export type CsvImportSession = typeof csvImportSessions.$inferSelect;
 
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
+
+// CSV Conflict Resolution Types
+export interface CSVConflict {
+  itemId: string;
+  sku: string;
+  name: string;
+  existingData: Partial<InventoryItem>;
+  csvData: Partial<InventoryItem>;
+  conflicts: {
+    field: string;
+    existingValue: any;
+    csvValue: any;
+  }[];
+}
+
+export interface ConflictResolution {
+  itemId: string;
+  action: 'accept_csv' | 'keep_existing';
+}
+
+export interface ResolveConflictsRequest {
+  conflicts: ConflictResolution[];
+}

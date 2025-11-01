@@ -584,12 +584,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const archiveChanges: string[] = [];
       archiveChanges.push("identifier;itemName;action;field;oldValue;newValue;oldSku;oldLocation;oldQuantity;oldPrice;oldLength;oldWidth;oldHeight;oldVolume;oldWeight");
 
-      // Track changes
+      // Track changes and conflicts
       let updated = 0;
       let created = 0;
       let deleted = 0;
       const deletedItems: string[] = [];
       const processedItems = new Set<string>(); // Track processed database items
+      const conflicts: any[] = []; // Track conflicts for user resolution
 
       // Create/update items from CSV
       for (const csvItem of csvItems) {
@@ -658,59 +659,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         if (existingItem) {
-          // Update existing item
+          // Check for conflicts (excluding barcode which is always preserved)
           processedItems.add(existingItem.id);
           
-          // Compare fields and track changes for archive
-          const fieldsToCompare = [
+          const fieldsToCheck = [
+            { name: 'name', old: existingItem.name, new: itemData.name },
             { name: 'quantity', old: existingItem.quantity, new: itemData.quantity },
             { name: 'price', old: existingItem.price, new: itemData.price },
             { name: 'location', old: existingItem.location, new: itemData.location },
             { name: 'sku', old: existingItem.sku, new: itemData.sku },
-            { name: 'barcode', old: existingItem.barcode, new: itemData.barcode },
             { name: 'length', old: existingItem.length, new: itemData.length },
             { name: 'width', old: existingItem.width, new: itemData.width },
             { name: 'height', old: existingItem.height, new: itemData.height },
-            { name: 'volume', old: existingItem.volume, new: itemData.volume },
             { name: 'weight', old: existingItem.weight, new: itemData.weight },
+            { name: 'condition', old: existingItem.condition, new: itemData.condition },
           ];
 
-          for (const field of fieldsToCompare) {
-            if (field.old !== field.new) {
-              // Record change for archive
-              const archiveLine = [
-                identifier,
-                existingItem.name,
-                'UPDATE',
-                field.name,
-                field.old ?? '',
-                field.new ?? '',
-                existingItem.sku,
-                existingItem.location,
-                existingItem.quantity,
-                existingItem.price ?? '',
-                existingItem.length ?? '',
-                existingItem.width ?? '',
-                existingItem.height ?? '',
-                existingItem.volume ?? '',
-                existingItem.weight ?? ''
-              ].join(';');
-              archiveChanges.push(archiveLine);
-            }
-          }
+          const itemConflicts = fieldsToCheck.filter(field => field.old !== field.new);
 
-          console.log(`[FILE SYNC] Updating ${identifier}:`, {
-            id: existingItem.id,
-            itemId: existingItem.itemId,
-            sku: existingItem.sku,
-            oldQuantity: existingItem.quantity,
-            newQuantity: itemData.quantity,
-            oldPrice: existingItem.price,
-            newPrice: itemData.price,
-            dimensions: { length: itemData.length, width: itemData.width, height: itemData.height }
-          });
-          await storage.updateInventoryItemById(existingItem.id, itemData);
-          updated++;
+          if (itemConflicts.length > 0) {
+            // We have conflicts - add to conflicts list for user resolution
+            conflicts.push({
+              itemId: identifier,
+              sku: existingItem.sku,
+              name: existingItem.name,
+              existingData: {
+                id: existingItem.id,
+                name: existingItem.name,
+                sku: existingItem.sku,
+                location: existingItem.location,
+                quantity: existingItem.quantity,
+                price: existingItem.price,
+                length: existingItem.length,
+                width: existingItem.width,
+                height: existingItem.height,
+                weight: existingItem.weight,
+                condition: existingItem.condition,
+                barcode: existingItem.barcode, // Important: preserve existing barcode
+              },
+              csvData: {
+                name: itemData.name,
+                sku: itemData.sku,
+                location: itemData.location,
+                quantity: itemData.quantity,
+                price: itemData.price,
+                length: itemData.length,
+                width: itemData.width,
+                height: itemData.height,
+                weight: itemData.weight,
+                condition: itemData.condition,
+              },
+              conflicts: itemConflicts.map(c => ({
+                field: c.name,
+                existingValue: c.old,
+                csvValue: c.new,
+              })),
+            });
+
+            console.log(`[FILE SYNC] Conflict detected for ${identifier}:`, itemConflicts.length, 'fields differ');
+          } else {
+            // No conflicts - update as normal (but preserve barcode)
+            itemData.barcode = existingItem.barcode || itemData.barcode;
+            
+            console.log(`[FILE SYNC] Updating ${identifier}:`, {
+              id: existingItem.id,
+              itemId: existingItem.itemId,
+              sku: existingItem.sku,
+            });
+            await storage.updateInventoryItemById(existingItem.id, itemData);
+            updated++;
+          }
         } else {
           // Create new item
           console.log(`[FILE SYNC] Creating ${identifier}:`, itemData);
@@ -738,6 +756,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.createInventoryItem(itemData);
           created++;
         }
+      }
+
+      // If there are conflicts, return them for user resolution
+      if (conflicts.length > 0) {
+        console.log("[FILE SYNC] Found", conflicts.length, "conflicts - returning for resolution");
+        return res.json({
+          hasConflicts: true,
+          conflicts,
+          created,
+          updated,
+        });
       }
 
       // Track items that would be deleted (not in CSV but in DB)
@@ -805,6 +834,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("File sync error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Resolve CSV conflicts
+  app.post("/api/inventory/resolve-conflicts", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { resolutions, csvData } = req.body;
+
+      if (!resolutions || !Array.isArray(resolutions)) {
+        return res.status(400).json({ error: "Требуется массив resolutions" });
+      }
+
+      console.log("[RESOLVE CONFLICTS] Processing", resolutions.length, "conflict resolutions");
+
+      let updated = 0;
+      let skipped = 0;
+
+      // Process each resolution
+      for (const resolution of resolutions) {
+        const { itemId, action } = resolution;
+
+        if (action === 'keep_existing') {
+          // Skip - keep existing data
+          skipped++;
+          console.log(`[RESOLVE CONFLICTS] Keeping existing data for ${itemId}`);
+          continue;
+        }
+
+        if (action === 'accept_csv') {
+          // Find the CSV data for this item
+          const csvItem = csvData.find((item: any) => 
+            (item.itemid || item.item_id || item['item id']) === itemId ||
+            item.sku === itemId
+          );
+
+          if (!csvItem) {
+            console.log(`[RESOLVE CONFLICTS] CSV data not found for ${itemId}`);
+            skipped++;
+            continue;
+          }
+
+          // Get existing item from database
+          const allItems = await storage.getAllInventoryItems();
+          const existingItem = allItems.find(item => 
+            item.itemId === itemId || item.sku === itemId
+          );
+
+          if (!existingItem) {
+            console.log(`[RESOLVE CONFLICTS] Existing item not found for ${itemId}`);
+            skipped++;
+            continue;
+          }
+
+          // Parse CSV data
+          const length = csvItem.length ? parseFloat(csvItem.length) : undefined;
+          const width = csvItem.width ? parseFloat(csvItem.width) : undefined;
+          const height = csvItem.height ? parseFloat(csvItem.height) : undefined;
+          const volume = length && width && height ? length * width * height : undefined;
+          const sku = csvItem.sku || undefined;
+
+          const itemData: any = {
+            productId: itemId,
+            name: csvItem.name || existingItem.name,
+            sku: sku || existingItem.sku,
+            location: csvItem.location || existingItem.location,
+            quantity: parseInt(csvItem.quantity) || existingItem.quantity,
+            barcode: existingItem.barcode, // ALWAYS preserve existing barcode
+            price: csvItem.price ? parseInt(csvItem.price) : existingItem.price,
+            length,
+            width,
+            height,
+            volume,
+            weight: csvItem.weight ? parseFloat(csvItem.weight) : existingItem.weight,
+            condition: csvItem.condition || existingItem.condition,
+            itemId: csvItem.itemid || csvItem.item_id || csvItem['item id'] || existingItem.itemId,
+            ebayUrl: csvItem.ebayurl || csvItem.ebay_url || csvItem.url || csvItem['ebay url'] || existingItem.ebayUrl,
+            ebaySellerName: csvItem.ebaysellername || csvItem.ebay_seller_name || csvItem['ebay seller'] || csvItem.seller || existingItem.ebaySellerName,
+            createdBy: userId,
+          };
+
+          // Add imageUrl1-24 fields
+          for (let i = 1; i <= 24; i++) {
+            const key = `imageurl${i}`;
+            const altKey = `imageurl_${i}`;
+            const altKey2 = `image_url_${i}`;
+            const altKey3 = `image url ${i}`;
+            const altKey4 = `image urls ${i}`;
+            
+            const imageUrl = csvItem[key] || csvItem[altKey] || csvItem[altKey2] || csvItem[altKey3] || csvItem[altKey4];
+            if (imageUrl) {
+              itemData[`imageUrl${i}`] = imageUrl;
+            }
+          }
+
+          // Update the item with CSV data (preserving barcode)
+          await storage.updateInventoryItemById(existingItem.id, itemData);
+          updated++;
+
+          console.log(`[RESOLVE CONFLICTS] Updated ${itemId} with CSV data (barcode preserved)`);
+        }
+      }
+
+      // Log the event
+      await storage.createEventLog({
+        userId,
+        action: "CONFLICT_RESOLUTION",
+        details: `Resolved conflicts: ${updated} updated, ${skipped} kept existing`,
+      });
+
+      console.log("[RESOLVE CONFLICTS] Results:", { updated, skipped });
+
+      return res.json({
+        success: true,
+        updated,
+        skipped,
+      });
+    } catch (error: any) {
+      console.error("Resolve conflicts error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
