@@ -632,7 +632,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
               Синхронизация из файла
             </h4>
             <p className="text-sm text-muted-foreground mb-3">
-              Обновите инвентарь из <code className="bg-background px-1 rounded">data/inventory_sync.csv</code>. 
+              Обновите инвентарь из <code className="bg-background px-1 rounded">data/inventory.csv</code>. 
               Позиции, отсутствующие в файле, будут удалены.
             </p>
             <Button

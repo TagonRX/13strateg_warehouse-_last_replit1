@@ -530,7 +530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         fileContent = await fs.readFile(filePath, "utf-8");
       } catch (error) {
-        return res.status(404).json({ error: "CSV файл не найден. Создайте data/inventory_sync.csv" });
+        return res.status(404).json({ error: "CSV файл не найден. Создайте data/inventory.csv" });
       }
 
       const lines = fileContent.trim().split("\n");
@@ -600,7 +600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const height = csvItem.height ? parseFloat(csvItem.height) : undefined;
         const volume = length && width && height ? length * width * height : undefined;
 
-        const itemData = {
+        const itemData: any = {
           productId,
           name: csvItem.name || "",
           sku: csvItem.sku || csvItem.location || productId,
@@ -613,8 +613,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           height,
           volume,
           weight: csvItem.weight ? parseFloat(csvItem.weight) : undefined,
+          condition: csvItem.condition || undefined,
+          itemId: csvItem.itemid || csvItem.item_id || csvItem['item id'] || undefined,
+          ebayUrl: csvItem.ebayurl || csvItem.ebay_url || csvItem.url || csvItem['ebay url'] || undefined,
+          ebaySellerName: csvItem.ebaysellername || csvItem.ebay_seller_name || csvItem['ebay seller'] || csvItem.seller || undefined,
           createdBy: userId,
         };
+
+        // Add imageUrl1-24 fields
+        for (let i = 1; i <= 24; i++) {
+          const key = `imageurl${i}`;
+          const altKey = `imageurl_${i}`;
+          const altKey2 = `image_url_${i}`;
+          const altKey3 = `image url ${i}`;
+          const altKey4 = `image urls ${i}`;
+          
+          const imageUrl = csvItem[key] || csvItem[altKey] || csvItem[altKey2] || csvItem[altKey3] || csvItem[altKey4];
+          if (imageUrl) {
+            itemData[`imageUrl${i}`] = imageUrl;
+          }
+        }
 
         if (currentItemsMap.has(productId)) {
           // Update existing item
