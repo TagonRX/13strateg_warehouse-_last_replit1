@@ -30,6 +30,9 @@ export const inventoryItems = pgTable("inventory_items", {
   volume: integer("volume"), // Объем (перемножение length * width * height)
   weight: integer("weight"), // Вес в кг (до 3 знаков, макс 999)
   price: integer("price"), // Цена товара (целое число)
+  itemId: text("item_id"), // eBay item ID из CSV (например "397123149682")
+  ebayUrl: text("ebay_url"), // Ссылка на страницу товара на eBay
+  imageUrls: text("image_urls"), // JSON массив URL фотографий товара
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -200,6 +203,26 @@ export const pendingPlacements = pgTable("pending_placements", {
   stockInBy: varchar("stock_in_by").references(() => users.id).notNull(), // Кто принял
 });
 
+// Сессии импорта CSV (для массовой загрузки товаров из внешних источников)
+export const csvImportSessions = pgTable("csv_import_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceType: text("source_type").notNull(), // 'url' или 'file'
+  sourceUrl: text("source_url"), // URL если sourceType = 'url'
+  fileName: text("file_name"), // Имя файла если sourceType = 'file'
+  status: text("status").notNull().default("PARSING"), // PARSING, READY_FOR_REVIEW, RESOLVING, COMMITTED, FAILED
+  error: text("error"), // Ошибка если status = FAILED
+  parsedData: text("parsed_data"), // JSON: массив распарсенных строк CSV
+  conflicts: text("conflicts"), // JSON: массив конфликтов для разрешения
+  resolutions: text("resolutions"), // JSON: решения администратора для конфликтов
+  totalRows: integer("total_rows").notNull().default(0),
+  matchedRows: integer("matched_rows").notNull().default(0),
+  conflictRows: integer("conflict_rows").notNull().default(0),
+  createdBy: varchar("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  committedAt: timestamp("committed_at"),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -277,6 +300,13 @@ export const insertPendingPlacementSchema = createInsertSchema(pendingPlacements
   stockInAt: true,
 });
 
+export const insertCsvImportSessionSchema = createInsertSchema(csvImportSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  committedAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -319,3 +349,6 @@ export type FaultyStock = typeof faultyStock.$inferSelect;
 
 export type InsertPendingPlacement = z.infer<typeof insertPendingPlacementSchema>;
 export type PendingPlacement = typeof pendingPlacements.$inferSelect;
+
+export type InsertCsvImportSession = z.infer<typeof insertCsvImportSessionSchema>;
+export type CsvImportSession = typeof csvImportSessions.$inferSelect;

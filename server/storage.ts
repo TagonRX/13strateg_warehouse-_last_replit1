@@ -15,13 +15,13 @@ import {
   testedItems,
   faultyStock,
   pendingPlacements,
+  csvImportSessions,
   type User, 
   type InsertUser,
   type InventoryItem,
   type InsertInventoryItem,
   type InsertEventLog,
   type EventLog,
-  type WorkerAnalytics,
   type PickingList,
   type InsertPickingList,
   type PickingTask,
@@ -43,7 +43,9 @@ import {
   type FaultyStock,
   type InsertFaultyStock,
   type PendingPlacement,
-  type InsertPendingPlacement
+  type InsertPendingPlacement,
+  type CsvImportSession,
+  type InsertCsvImportSession
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ilike, getTableColumns } from "drizzle-orm";
 
@@ -172,6 +174,13 @@ export interface IStorage {
   deletePendingPlacement(id: string): Promise<void>;
   getPendingPlacementByBarcode(barcode: string): Promise<PendingPlacement | undefined>;
   confirmPlacement(placementId: string, location: string, userId: string): Promise<InventoryItem>;
+
+  // CSV Import methods
+  createCsvImportSession(session: InsertCsvImportSession): Promise<CsvImportSession>;
+  getCsvImportSession(id: string): Promise<CsvImportSession | undefined>;
+  updateCsvImportSession(id: string, updates: Partial<InsertCsvImportSession>): Promise<CsvImportSession>;
+  getAllCsvImportSessions(userId?: string): Promise<CsvImportSession[]>;
+  bulkUpdateInventoryFromCsv(items: InsertInventoryItem[], userId: string): Promise<{ success: number; updated: number }>;
 }
 
 export class DbStorage implements IStorage {
@@ -1827,6 +1836,66 @@ export class DbStorage implements IStorage {
     }
 
     return inventoryItem;
+  }
+
+  // CSV Import methods
+  async createCsvImportSession(session: InsertCsvImportSession): Promise<CsvImportSession> {
+    const result = await db.insert(csvImportSessions).values(session).returning();
+    return result[0];
+  }
+
+  async getCsvImportSession(id: string): Promise<CsvImportSession | undefined> {
+    const result = await db.select().from(csvImportSessions).where(eq(csvImportSessions.id, id)).limit(1);
+    return result[0];
+  }
+
+  async updateCsvImportSession(id: string, updates: Partial<InsertCsvImportSession>): Promise<CsvImportSession> {
+    const result = await db.update(csvImportSessions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(csvImportSessions.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async getAllCsvImportSessions(userId?: string): Promise<CsvImportSession[]> {
+    if (userId) {
+      return await db.select().from(csvImportSessions)
+        .where(eq(csvImportSessions.createdBy, userId))
+        .orderBy(csvImportSessions.createdAt);
+    }
+    return await db.select().from(csvImportSessions).orderBy(csvImportSessions.createdAt);
+  }
+
+  async bulkUpdateInventoryFromCsv(items: InsertInventoryItem[], userId: string): Promise<{ success: number; updated: number }> {
+    let success = 0;
+    let updated = 0;
+
+    for (const item of items) {
+      try {
+        const existing = await this.getInventoryItemByProductId(item.productId!);
+        
+        if (existing) {
+          // Update existing item with CSV data
+          await this.updateInventoryItem(item.productId!, {
+            name: item.name,
+            itemId: item.itemId,
+            ebayUrl: item.ebayUrl,
+            imageUrls: item.imageUrls,
+            quantity: item.quantity,
+          });
+          updated++;
+        } else {
+          // This would be unusual - CSV import should only update existing inventory
+          // But we can handle it if needed
+          await this.createInventoryItem({ ...item, createdBy: userId });
+          success++;
+        }
+      } catch (error) {
+        console.error(`Failed to update item ${item.productId}:`, error);
+      }
+    }
+
+    return { success, updated };
   }
 }
 
