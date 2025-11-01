@@ -128,7 +128,7 @@ export interface IStorage {
   clearActiveLocations(): Promise<void>;
 
   // Picking List methods
-  createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }>;
+  createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }>;
   getAllPickingLists(): Promise<PickingList[]>;
   getPickingListWithTasks(listId: string): Promise<{ list: PickingList; tasks: PickingTask[] } | null>;
   scanBarcodeForPickingTask(barcode: string, taskId: string, userId: string): Promise<{
@@ -1068,7 +1068,7 @@ export class DbStorage implements IStorage {
   }
 
   // Daily Picking methods
-  async createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }> {
+  async createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }> {
     // Create the picking list
     const [list] = await db.insert(pickingLists).values({
       name: data.name,
@@ -1076,17 +1076,21 @@ export class DbStorage implements IStorage {
       status: "PENDING",
     }).returning();
 
-    // Get all inventory items to lookup names if needed
+    // Get all inventory items to lookup names and seller info if needed
     const allInventoryItems = await db.select().from(inventoryItems);
     const skuToNameMap = new Map<string, string>();
+    const skuToSellerMap = new Map<string, string>();
     
     for (const item of allInventoryItems) {
       if (!skuToNameMap.has(item.sku) && item.name) {
         skuToNameMap.set(item.sku, item.name);
       }
+      if (!skuToSellerMap.has(item.sku) && item.ebaySellerName) {
+        skuToSellerMap.set(item.sku, item.ebaySellerName);
+      }
     }
 
-    // Create tasks for the picking list with item names
+    // Create tasks for the picking list with item names and seller info
     const tasks = await db.insert(pickingTasks).values(
       data.tasks.map(task => {
         let itemName: string | null;
@@ -1106,6 +1110,14 @@ export class DbStorage implements IStorage {
           itemNameSource = null;
         }
 
+        // Get eBay seller name from CSV or inventory
+        let ebaySellerName: string | null = null;
+        if (task.ebaySellerName) {
+          ebaySellerName = task.ebaySellerName;
+        } else if (skuToSellerMap.has(task.sku)) {
+          ebaySellerName = skuToSellerMap.get(task.sku) || null;
+        }
+
         return {
           listId: list.id,
           sku: task.sku,
@@ -1114,6 +1126,7 @@ export class DbStorage implements IStorage {
           requiredQuantity: task.requiredQuantity,
           pickedQuantity: 0,
           status: "PENDING",
+          ebaySellerName,
         };
       })
     ).returning();

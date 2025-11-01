@@ -30,10 +30,11 @@ interface FieldMapping {
   sku: string;
   name: string;
   quantity: string;
+  ebaySellerName: string;
 }
 
 interface CSVImportDialogProps {
-  onImport: (data: { sku: string; itemName?: string; requiredQuantity: number }[]) => void;
+  onImport: (data: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string }[]) => void;
 }
 
 const MAPPING_STORAGE_KEY = 'csv_field_mapping';
@@ -47,6 +48,7 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
     sku: "",
     name: "",
     quantity: "",
+    ebaySellerName: "",
   });
   const { toast } = useToast();
 
@@ -111,12 +113,16 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
         if (!autoMapping.quantity && (lowerHeader.includes('quantity') || lowerHeader.includes('qty') || lowerHeader === 'transaction_quantity')) {
           autoMapping.quantity = header;
         }
+        if (!autoMapping.ebaySellerName && (lowerHeader.includes('seller_ebay_seller_id') || lowerHeader.includes('ebay seller') || lowerHeader === 'seller')) {
+          autoMapping.ebaySellerName = header;
+        }
       });
 
       setFieldMapping(prev => ({
         sku: autoMapping.sku || prev.sku || "",
         name: autoMapping.name || prev.name || "",
         quantity: autoMapping.quantity || prev.quantity || "",
+        ebaySellerName: autoMapping.ebaySellerName || prev.ebaySellerName || "",
       }));
 
     } catch (error: any) {
@@ -153,13 +159,14 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
       const rows = fullData.data || fullData.preview;
 
       // Parse all rows
-      const tasks: { sku: string; itemName?: string; requiredQuantity: number }[] = [];
-      const skuMap = new Map<string, { name?: string; quantity: number }>();
+      const tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string }[] = [];
+      const skuMap = new Map<string, { name?: string; quantity: number; ebaySellerName?: string }>();
 
       rows.forEach(row => {
         const sku = row[fieldMapping.sku]?.trim();
         const quantity = parseInt(row[fieldMapping.quantity] || "0", 10);
         const name = fieldMapping.name ? row[fieldMapping.name]?.trim() : undefined;
+        const ebaySellerName = fieldMapping.ebaySellerName ? row[fieldMapping.ebaySellerName]?.trim() : undefined;
 
         if (!sku || !quantity) return;
 
@@ -169,8 +176,11 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
           if (name && !existing.name) {
             existing.name = name;
           }
+          if (ebaySellerName && !existing.ebaySellerName) {
+            existing.ebaySellerName = ebaySellerName;
+          }
         } else {
-          skuMap.set(sku, { name, quantity });
+          skuMap.set(sku, { name, quantity, ebaySellerName });
         }
       });
 
@@ -179,6 +189,7 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
           sku,
           itemName: value.name,
           requiredQuantity: value.quantity,
+          ebaySellerName: value.ebaySellerName,
         });
       });
 
@@ -288,7 +299,7 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
               <div className="space-y-4">
                 <h4 className="font-medium">Сопоставление полей</h4>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="mapping-sku">SKU (обязательно)</Label>
                     <Select
@@ -296,6 +307,25 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
                       onValueChange={(value) => setFieldMapping(prev => ({ ...prev, sku: value }))}
                     >
                       <SelectTrigger id="mapping-sku" data-testid="select-mapping-sku">
+                        <SelectValue placeholder="Выберите поле" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {csvData.headers.map(header => (
+                          <SelectItem key={header} value={header}>
+                            {header}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="mapping-quantity">Количество (обязательно)</Label>
+                    <Select
+                      value={fieldMapping.quantity}
+                      onValueChange={(value) => setFieldMapping(prev => ({ ...prev, quantity: value }))}
+                    >
+                      <SelectTrigger id="mapping-quantity" data-testid="select-mapping-quantity">
                         <SelectValue placeholder="Выберите поле" />
                       </SelectTrigger>
                       <SelectContent>
@@ -329,15 +359,16 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="mapping-quantity">Количество (обязательно)</Label>
+                    <Label htmlFor="mapping-seller">eBay Seller (опционально)</Label>
                     <Select
-                      value={fieldMapping.quantity}
-                      onValueChange={(value) => setFieldMapping(prev => ({ ...prev, quantity: value }))}
+                      value={fieldMapping.ebaySellerName}
+                      onValueChange={(value) => setFieldMapping(prev => ({ ...prev, ebaySellerName: value }))}
                     >
-                      <SelectTrigger id="mapping-quantity" data-testid="select-mapping-quantity">
+                      <SelectTrigger id="mapping-seller" data-testid="select-mapping-seller">
                         <SelectValue placeholder="Выберите поле" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">Не использовать</SelectItem>
                         {csvData.headers.map(header => (
                           <SelectItem key={header} value={header}>
                             {header}

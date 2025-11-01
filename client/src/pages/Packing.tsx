@@ -22,6 +22,7 @@ interface OrderItem {
   barcode?: string;
   imageUrls?: string[];
   ebayUrl?: string;
+  ebaySellerName?: string;
   itemName?: string;
   quantity: number;
 }
@@ -166,8 +167,9 @@ export default function Packing() {
         return {
           ...item,
           imageUrls: imageUrls.length > 0 ? imageUrls : item.imageUrls,
-          ebayUrl: inventoryItem.ebayUrl || item.ebayUrl,
-          itemName: inventoryItem.name || item.itemName,
+          ebayUrl: item.ebayUrl || inventoryItem.ebayUrl || undefined,
+          ebaySellerName: item.ebaySellerName || inventoryItem.ebaySellerName || undefined,
+          itemName: item.itemName || inventoryItem.name || undefined,
         };
       }
       return item;
@@ -448,6 +450,12 @@ export default function Packing() {
                                       <span data-testid={`text-item-sku-${order.orderNumber}-${item.sku}`}>
                                         SKU: {item.sku}
                                       </span>
+                                      {item.ebaySellerName && (
+                                        <>
+                                          <span>•</span>
+                                          <span data-testid={`text-item-seller-${order.orderNumber}-${item.sku}`}>Seller: {item.ebaySellerName}</span>
+                                        </>
+                                      )}
                                       {item.barcode && (
                                         <>
                                           <span>•</span>
@@ -587,6 +595,12 @@ export default function Packing() {
                         </p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <span data-testid={`text-packing-item-sku-${item.sku}`}>SKU: {item.sku}</span>
+                          {item.ebaySellerName && (
+                            <>
+                              <span>•</span>
+                              <span data-testid={`text-packing-item-seller-${item.sku}`}>Seller: {item.ebaySellerName}</span>
+                            </>
+                          )}
                           {item.quantity > 1 && (
                             <>
                               <span>•</span>

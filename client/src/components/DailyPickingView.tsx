@@ -303,7 +303,7 @@ export default function DailyPickingView() {
     }
 
     const lines = csvText.split("\n").filter(line => line.trim());
-    const tasksMap = new Map<string, { sku: string; itemName?: string; requiredQuantity: number }>();
+    const tasksMap = new Map<string, { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string }>();
 
     // Auto-detect delimiter: tab, comma, semicolon, or whitespace
     let delimiter = ",";
@@ -327,15 +327,21 @@ export default function DailyPickingView() {
         const sku = parts[0].toUpperCase();
         let itemName: string | undefined;
         let quantity: number;
+        let ebaySellerName: string | undefined;
 
-        // Format: SKU, название (опционально), количество
+        // Format: SKU, название (опционально), количество, ebaySellerName (опционально)
         if (parts.length === 2) {
           // SKU, количество
           quantity = parseInt(parts[1]) || 1;
-        } else {
+        } else if (parts.length === 3) {
           // SKU, название, количество
           itemName = parts[1] || undefined;
           quantity = parseInt(parts[2]) || 1;
+        } else {
+          // SKU, название, количество, ebaySellerName
+          itemName = parts[1] || undefined;
+          quantity = parseInt(parts[2]) || 1;
+          ebaySellerName = parts[3] || undefined;
         }
 
         // Объединяем одинаковые SKU
@@ -346,11 +352,16 @@ export default function DailyPickingView() {
           if (itemName && !existing.itemName) {
             existing.itemName = itemName;
           }
+          // Если новое имя продавца указано, а старого нет - обновляем
+          if (ebaySellerName && !existing.ebaySellerName) {
+            existing.ebaySellerName = ebaySellerName;
+          }
         } else {
           tasksMap.set(sku, {
             sku,
             itemName,
             requiredQuantity: quantity,
+            ebaySellerName,
           });
         }
       }
