@@ -160,6 +160,31 @@ export async function runScheduledImport(): Promise<{ success: boolean; message:
   }
 }
 
+// Helper to get value from CSV row (case-insensitive)
+function getCsvValue(row: any, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    // Try exact match first
+    if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
+      return row[key];
+    }
+    // Try case-insensitive match
+    const lowerKey = key.toLowerCase();
+    for (const rowKey in row) {
+      if (rowKey.toLowerCase() === lowerKey && row[rowKey] !== undefined && row[rowKey] !== null && row[rowKey] !== '') {
+        return row[rowKey];
+      }
+    }
+  }
+  return undefined;
+}
+
+// Safe integer parsing helper - prevents NaN values
+function safeParseInt(value: string | undefined, defaultValue: number = 0): number | undefined {
+  if (!value) return defaultValue === 0 ? 0 : undefined;
+  const parsed = parseInt(value, 10);
+  return !isNaN(parsed) ? parsed : defaultValue === 0 ? 0 : undefined;
+}
+
 function downloadAndParseCsv(url: string): Promise<InsertInventoryItem[]> {
   return new Promise((resolve, reject) => {
     const items: InsertInventoryItem[] = [];
@@ -175,27 +200,61 @@ function downloadAndParseCsv(url: string): Promise<InsertInventoryItem[]> {
       
       parser.on('data', (row: any) => {
         try {
-          // Parse CSV row into InsertInventoryItem
+          // Parse CSV row with case-insensitive column matching
+          const sku = getCsvValue(row, 'sku', 'SKU');
+          const itemId = getCsvValue(row, 'itemId', 'itemid', 'item_id', 'Item ID');
+          const productName = getCsvValue(row, 'name', 'productName', 'productname', 'product_name', 'Product Name');
+          const quantityRaw = getCsvValue(row, 'quantity', 'qty', 'Quantity', 'warehouse_inventory');
+          const priceRaw = getCsvValue(row, 'price', 'Price');
+          const ebayUrl = getCsvValue(row, 'ebayUrl', 'ebayurl', 'ebay_url', 'eBay URL', 'url');
+          const ebaySellerName = getCsvValue(row, 'ebaySellerName', 'ebaysellername', 'ebay_seller_name', 'seller_ebay_seller_id');
+          const condition = getCsvValue(row, 'condition', 'Condition');
+          
+          // Missing fields - now included with case-insensitive matching
+          const location = getCsvValue(row, 'location', 'Location', 'Локация');
+          const barcode = getCsvValue(row, 'barcode', 'Barcode', 'Штрихкод');
+          const lengthRaw = getCsvValue(row, 'length', 'Length', 'Длина');
+          const widthRaw = getCsvValue(row, 'width', 'Width', 'Ширина');
+          const heightRaw = getCsvValue(row, 'height', 'Height', 'Высота');
+          const volumeRaw = getCsvValue(row, 'volume', 'Volume', 'Объем');
+          const weightRaw = getCsvValue(row, 'weight', 'Weight', 'Вес');
+          
+          // Collect image URLs (imageUrl1 - imageUrl24)
+          const imageUrls: string[] = [];
+          for (let i = 1; i <= 24; i++) {
+            const imageUrl = getCsvValue(row, `imageUrl${i}`, `imageurl${i}`, `image_url_${i}`, `ImageURL${i}`);
+            if (imageUrl) {
+              imageUrls.push(imageUrl);
+            }
+          }
+          
+          // Safe parsing of numeric fields to prevent NaN
+          const quantity = safeParseInt(quantityRaw, 0);
+          const price = safeParseInt(priceRaw);
+          const length = safeParseInt(lengthRaw);
+          const width = safeParseInt(widthRaw);
+          const height = safeParseInt(heightRaw);
+          const volume = safeParseInt(volumeRaw);
+          const weight = safeParseInt(weightRaw);
+          
           const item: InsertInventoryItem = {
-            productId: row.productId || null,
-            name: row.name || null,
-            sku: row.sku || row.SKU || '',
-            location: row.location || null,
-            quantity: parseInt(row.quantity) || 0,
-            barcode: row.barcode || null,
-            condition: row.condition || null,
-            length: row.length ? parseFloat(row.length) : null,
-            width: row.width ? parseFloat(row.width) : null,
-            height: row.height ? parseFloat(row.height) : null,
-            volume: row.volume ? parseFloat(row.volume) : null,
-            weight: row.weight ? parseFloat(row.weight) : null,
-            price: row.price ? parseFloat(row.price) : null,
-            itemId: row.itemId || null,
-            ebayUrl: row.ebayUrl || null,
-            imageUrls: row.imageUrls || null,
-            ebaySellerName: row.ebaySellerName || null,
-            createdBy: null,
-          };
+            name: productName || undefined,
+            sku: sku || '',
+            quantity: quantity,
+            price: price,
+            itemId: itemId || undefined,
+            ebayUrl: ebayUrl || undefined,
+            imageUrls: imageUrls.length > 0 ? JSON.stringify(imageUrls) : undefined,
+            ebaySellerName: ebaySellerName || undefined,
+            condition: condition || undefined,
+            location: location || undefined,
+            barcode: barcode || undefined,
+            length: length,
+            width: width,
+            height: height,
+            volume: volume,
+            weight: weight,
+          } as InsertInventoryItem;
           
           if (item.sku) {
             items.push(item);

@@ -1248,30 +1248,30 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
 
               <div>
                 <h4 className="text-sm font-medium mb-2">Превью данных (первые 3 строки)</h4>
-                <ScrollArea className="h-48 border rounded-md">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        {csvPreview.headers.slice(0, 6).map((header, idx) => (
-                          <TableHead key={idx} className="whitespace-nowrap">{header}</TableHead>
-                        ))}
-                        {csvPreview.headers.length > 6 && (
-                          <TableHead className="text-muted-foreground">... еще {csvPreview.headers.length - 6}</TableHead>
-                        )}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {csvPreview.rows.slice(0, 3).map((row, rowIdx) => (
-                        <TableRow key={rowIdx}>
-                          {csvPreview.headers.slice(0, 6).map((header, colIdx) => (
-                            <TableCell key={colIdx} className="text-sm">{row[header] || '-'}</TableCell>
+                <div className="border rounded-md">
+                  <ScrollArea className="h-48 w-full">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            {csvPreview.headers.map((header, idx) => (
+                              <TableHead key={idx} className="whitespace-nowrap">{header}</TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {csvPreview.rows.slice(0, 3).map((row, rowIdx) => (
+                            <TableRow key={rowIdx}>
+                              {csvPreview.headers.map((header, colIdx) => (
+                                <TableCell key={colIdx} className="text-sm whitespace-nowrap">{row[header] || '-'}</TableCell>
+                              ))}
+                            </TableRow>
                           ))}
-                          {csvPreview.headers.length > 6 && <TableCell className="text-muted-foreground">...</TableCell>}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </ScrollArea>
+                </div>
               </div>
             </div>
           )}
