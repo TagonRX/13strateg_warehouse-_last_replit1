@@ -445,7 +445,9 @@ function AppContent() {
                 <RemoteBarcodeScanner />
               </div>
             </div>
-            <InventoryTable items={inventory} userRole={user.role} />
+            <div className="w-full overflow-x-auto">
+              <InventoryTable items={inventory} userRole={user.role} />
+            </div>
           </div>
         </Route>
         <Route path="/warehouse">
