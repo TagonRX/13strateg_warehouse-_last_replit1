@@ -921,38 +921,53 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     itemIds: string[], 
     onProgress?: (current: number, total: number) => void
   ) => {
-    try {
-      // Use batch delete endpoint for faster deletion
-      const result = await api.batchDeleteInventoryItems(itemIds);
+    const allDeleted: string[] = [];
+    const allFailed: Array<{ id: string; error: string }> = [];
+    
+    // Process deletions in chunks of 10 for real-time progress
+    const chunkSize = 10;
+    for (let i = 0; i < itemIds.length; i += chunkSize) {
+      const chunk = itemIds.slice(i, i + chunkSize);
       
-      // Update progress with final result
-      if (onProgress) {
-        onProgress(result.deleted.length, itemIds.length);
+      try {
+        // Use batch delete endpoint for parallel deletion
+        const result = await api.batchDeleteInventoryItems(chunk);
+        
+        // Collect results
+        allDeleted.push(...result.deleted);
+        allFailed.push(...result.failed);
+        
+        // Update progress with real-time count
+        if (onProgress) {
+          onProgress(allDeleted.length, itemIds.length);
+        }
+      } catch (error: any) {
+        // If entire chunk fails, mark all as failed
+        chunk.forEach(id => {
+          allFailed.push({ id, error: error.message || 'Ошибка удаления' });
+        });
       }
-      
-      // Invalidate caches if at least one deletion succeeded
-      if (result.deleted.length > 0) {
-        queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/inventory/duplicates'] });
-      }
-      
-      // Handle different outcomes
-      if (result.failed.length === 0) {
-        // All succeeded - DuplicatesDialog will show success toast and close
-        setDuplicates([]);
-        return;
-      } else if (result.deleted.length === 0) {
-        // All failed - throw error so DuplicatesDialog shows error toast
-        throw new Error(`Не удалось удалить ни один из ${result.failed.length} товаров`);
-      } else {
-        // Partial success - refetch to update dialog, then throw informative error
-        await refetchDuplicates();
-        // Throw error with details to prevent DuplicatesDialog from closing
-        throw new Error(`Удалено ${result.deleted.length} из ${itemIds.length} товаров. ${result.failed.length} не удалось удалить.`);
-      }
-    } catch (error: any) {
-      // If batch delete fails completely, throw error
-      throw new Error(error.message || 'Ошибка удаления');
+    }
+    
+    // Invalidate caches if at least one deletion succeeded
+    if (allDeleted.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/duplicates'] });
+    }
+    
+    // Handle different outcomes
+    if (allFailed.length === 0) {
+      // All succeeded - DuplicatesDialog will show success toast and close
+      setDuplicates([]);
+      return;
+    } else if (allDeleted.length === 0) {
+      // All failed - throw error so DuplicatesDialog shows error toast
+      throw new Error(`Не удалось удалить ни один из ${allFailed.length} товаров`);
+    } else {
+      // Partial success - refetch to update dialog, then throw informative error
+      await refetchDuplicates();
+      // Throw error with details to prevent DuplicatesDialog from closing
+      throw new Error(`Удалено ${allDeleted.length} из ${itemIds.length} товаров. ${allFailed.length} не удалось удалить.`);
     }
   };
 
