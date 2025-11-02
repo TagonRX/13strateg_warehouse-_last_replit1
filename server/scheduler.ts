@@ -230,12 +230,12 @@ function downloadAndParseCsv(url: string): Promise<InsertInventoryItem[]> {
           
           // Safe parsing of numeric fields to prevent NaN
           const quantity = safeParseInt(quantityRaw, 0);
-          const price = safeParseInt(priceRaw);
-          const length = safeParseInt(lengthRaw);
-          const width = safeParseInt(widthRaw);
-          const height = safeParseInt(heightRaw);
-          const volume = safeParseInt(volumeRaw);
-          const weight = safeParseInt(weightRaw);
+          const price = safeParseInt(priceRaw, undefined);
+          const length = safeParseInt(lengthRaw, undefined);
+          const width = safeParseInt(widthRaw, undefined);
+          const height = safeParseInt(heightRaw, undefined);
+          const volume = safeParseInt(volumeRaw, undefined);
+          const weight = safeParseInt(weightRaw, undefined);
           
           const item: InsertInventoryItem = {
             name: productName || undefined,

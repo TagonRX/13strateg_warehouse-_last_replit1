@@ -917,20 +917,33 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     }
   };
 
-  const handleDeleteDuplicates = async (itemIds: string[]) => {
+  const handleDeleteDuplicates = async (
+    itemIds: string[], 
+    onProgress?: (current: number, total: number) => void
+  ) => {
     const results: { id: string; success: boolean; error?: string }[] = [];
+    let successCount = 0;
     
     // Delete items sequentially to catch individual errors
-    for (const itemId of itemIds) {
+    for (let i = 0; i < itemIds.length; i++) {
+      const itemId = itemIds[i];
+      
       try {
         await api.deleteInventoryItem(itemId);
         results.push({ id: itemId, success: true });
+        successCount++;
+        
+        // Update progress AFTER successful deletion with actual success count
+        if (onProgress) {
+          onProgress(successCount, itemIds.length);
+        }
       } catch (error: any) {
         results.push({ 
           id: itemId, 
           success: false, 
           error: error.message || 'Ошибка удаления'
         });
+        // Don't update progress on failure - this shows accurate count
       }
     }
     
@@ -952,16 +965,10 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       // All failed - throw error so DuplicatesDialog shows error toast
       throw new Error(`Не удалось удалить ни один из ${failures.length} товаров`);
     } else {
-      // Partial success - show detailed toast and refetch to update dialog
-      toast({
-        title: "Частичное удаление",
-        description: `Удалено ${successes.length} из ${results.length} товаров. ${failures.length} не удалось удалить.`,
-        variant: "destructive",
-      });
-      // Refetch to show updated duplicate list (dialog stays open)
+      // Partial success - refetch to update dialog, then throw informative error
       await refetchDuplicates();
-      // Throw error to prevent DuplicatesDialog from closing
-      throw new Error("Частичное удаление");
+      // Throw error with details to prevent DuplicatesDialog from closing
+      throw new Error(`Удалено ${successes.length} из ${results.length} товаров. ${failures.length} не удалось удалить.`);
     }
   };
 

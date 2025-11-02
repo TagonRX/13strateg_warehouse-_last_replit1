@@ -42,7 +42,7 @@ interface DuplicatesDialogProps {
   open: boolean;
   onClose: () => void;
   duplicates: DuplicateGroup[];
-  onDelete: (itemIds: string[]) => Promise<void>;
+  onDelete: (itemIds: string[], onProgress?: (current: number, total: number) => void) => Promise<void>;
 }
 
 export function DuplicatesDialog({
@@ -53,6 +53,7 @@ export function DuplicatesDialog({
 }: DuplicatesDialogProps) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletionProgress, setDeletionProgress] = useState<{ current: number; total: number } | null>(null);
   const { toast } = useToast();
 
   const handleSelectItem = (itemId: string, checked: boolean) => {
@@ -79,9 +80,12 @@ export function DuplicatesDialog({
 
   const handleDeleteGroup = async (group: DuplicateGroup) => {
     setIsDeleting(true);
+    setDeletionProgress({ current: 0, total: group.items.length });
     try {
       const itemIds = group.items.map(item => item.id);
-      await onDelete(itemIds);
+      await onDelete(itemIds, (current, total) => {
+        setDeletionProgress({ current, total });
+      });
       
       // Remove deleted items from selection
       const newSelected = new Set(selectedItems);
@@ -100,6 +104,7 @@ export function DuplicatesDialog({
       });
     } finally {
       setIsDeleting(false);
+      setDeletionProgress(null);
     }
   };
 
@@ -127,8 +132,11 @@ export function DuplicatesDialog({
     }
 
     setIsDeleting(true);
+    setDeletionProgress({ current: 0, total: itemsToDelete.length });
     try {
-      await onDelete(itemsToDelete);
+      await onDelete(itemsToDelete, (current, total) => {
+        setDeletionProgress({ current, total });
+      });
       setSelectedItems(new Set());
       toast({
         title: "Дубликаты удалены",
@@ -143,6 +151,7 @@ export function DuplicatesDialog({
       });
     } finally {
       setIsDeleting(false);
+      setDeletionProgress(null);
     }
   };
 
@@ -157,8 +166,11 @@ export function DuplicatesDialog({
     }
 
     setIsDeleting(true);
+    setDeletionProgress({ current: 0, total: selectedItems.size });
     try {
-      await onDelete(Array.from(selectedItems));
+      await onDelete(Array.from(selectedItems), (current, total) => {
+        setDeletionProgress({ current, total });
+      });
       setSelectedItems(new Set());
       toast({
         title: "Дубликаты удалены",
@@ -173,6 +185,7 @@ export function DuplicatesDialog({
       });
     } finally {
       setIsDeleting(false);
+      setDeletionProgress(null);
     }
   };
 
@@ -281,7 +294,13 @@ export function DuplicatesDialog({
         <DialogFooter>
           <div className="flex items-center justify-between w-full">
             <div className="text-sm text-muted-foreground">
-              Выбрано: {selectedItems.size} товар(ов)
+              {deletionProgress ? (
+                <span className="font-medium text-foreground">
+                  Удаление {deletionProgress.current} из {deletionProgress.total}...
+                </span>
+              ) : (
+                `Выбрано: ${selectedItems.size} товар(ов)`
+              )}
             </div>
             <div className="flex gap-2">
               <Button
@@ -299,7 +318,9 @@ export function DuplicatesDialog({
                 data-testid="button-delete-keep-one"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                Удалить дубликаты (оставить по 1)
+                {isDeleting && deletionProgress 
+                  ? `Удаление (${deletionProgress.current}/${deletionProgress.total})...`
+                  : "Удалить дубликаты (оставить по 1)"}
               </Button>
               <Button
                 variant="destructive"
@@ -308,7 +329,9 @@ export function DuplicatesDialog({
                 data-testid="button-delete-selected"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                Удалить выбранные ({selectedItems.size})
+                {isDeleting && deletionProgress
+                  ? `Удаление (${deletionProgress.current}/${deletionProgress.total})...`
+                  : `Удалить выбранные (${selectedItems.size})`}
               </Button>
             </div>
           </div>
