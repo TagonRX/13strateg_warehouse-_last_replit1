@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,11 +7,22 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Usb, Smartphone, Wifi, Check, X, Package } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Usb, Smartphone, Wifi, Check, X, Package, Trash2 } from "lucide-react";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToast } from "@/hooks/use-toast";
 import type { PendingPlacement, InventoryItem, ActiveLocation } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
 
 type ScannerMode = "usb" | "phone";
 type PlacementStep = "scan_item" | "scan_location" | "success" | "error";
@@ -24,9 +35,16 @@ export default function PlacementView() {
   const [targetLocation, setTargetLocation] = useState("");
   const [currentPlacement, setCurrentPlacement] = useState<PendingPlacement | null>(null);
   const [feedback, setFeedback] = useState<"success" | "error" | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [placementToDelete, setPlacementToDelete] = useState<PendingPlacement | null>(null);
 
   const { toast } = useToast();
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
+
+  // Fetch current user
+  const { data: user } = useQuery<{ id: string; name: string; login: string; role: string }>({
+    queryKey: ["/api/auth/me"],
+  });
 
   // Fetch pending placements
   const { data: pendingPlacements = [] } = useQuery<PendingPlacement[]>({
@@ -36,6 +54,30 @@ export default function PlacementView() {
   // Fetch active locations with barcodes
   const { data: activeLocations = [] } = useQuery<ActiveLocation[]>({
     queryKey: ["/api/warehouse/active-locations"],
+  });
+
+  // Delete pending placement mutation
+  const deletePlacementMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("DELETE", `/api/pending-placements/${id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pending-placements"] });
+      toast({
+        title: "Удалено",
+        description: "Pending placement успешно удалён",
+      });
+      setDeleteConfirmOpen(false);
+      setPlacementToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось удалить pending placement",
+        variant: "destructive",
+      });
+    },
   });
 
   // Create barcode-to-location mapping
@@ -201,6 +243,17 @@ export default function PlacementView() {
   const handleLocationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && scannedLocation) {
       handleLocationScanned(scannedLocation);
+    }
+  };
+
+  const handleDeleteClick = (placement: PendingPlacement) => {
+    setPlacementToDelete(placement);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (placementToDelete) {
+      deletePlacementMutation.mutate(placementToDelete.id);
     }
   };
 
@@ -397,6 +450,7 @@ export default function PlacementView() {
                         <TableHead>Название</TableHead>
                         <TableHead>Состояние</TableHead>
                         <TableHead>Локация</TableHead>
+                        {user?.role === "admin" && <TableHead className="w-20">Действия</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -409,6 +463,19 @@ export default function PlacementView() {
                           <TableCell className="font-mono text-sm font-semibold">
                             {placement.location}
                           </TableCell>
+                          {user?.role === "admin" && (
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteClick(placement)}
+                                disabled={deletePlacementMutation.isPending}
+                                data-testid={`button-delete-placement-${placement.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -418,6 +485,38 @@ export default function PlacementView() {
             </Card>
           )}
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Подтвердите удаление</AlertDialogTitle>
+              <AlertDialogDescription>
+                Вы действительно хотите удалить pending placement?
+                {placementToDelete && (
+                  <div className="mt-2 p-2 bg-muted rounded-md">
+                    <div className="text-sm space-y-1">
+                      <div><strong>Штрихкод:</strong> {placementToDelete.barcode}</div>
+                      <div><strong>SKU:</strong> {placementToDelete.sku}</div>
+                      {placementToDelete.name && <div><strong>Название:</strong> {placementToDelete.name}</div>}
+                      <div><strong>Локация:</strong> {placementToDelete.location}</div>
+                    </div>
+                  </div>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="button-cancel-delete">Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                data-testid="button-confirm-delete"
+              >
+                Удалить
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
     </div>
   );
 }

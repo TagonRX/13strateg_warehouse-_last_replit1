@@ -327,6 +327,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete pending placement (admin only)
+  app.delete("/api/pending-placements/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { id } = req.params;
+
+      const deleted = await storage.deletePendingPlacement(id, userId);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Pending placement не найден" });
+      }
+
+      return res.json({ success: true, deleted });
+    } catch (error: any) {
+      console.error("Delete pending placement error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Confirm placement (move from pending to inventory)
   app.post("/api/placements/confirm", requireAuth, async (req, res) => {
     try {

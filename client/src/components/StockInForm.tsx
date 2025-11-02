@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +61,10 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
   // SKU format validation dialog
   const [showSkuFormatError, setShowSkuFormatError] = useState(false);
   
+  // Delete confirmation states
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [placementToDelete, setPlacementToDelete] = useState<PendingPlacement | null>(null);
+  
   const { toast } = useToast();
 
   // WebSocket for phone mode
@@ -79,9 +83,38 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
     }
   }, [externalLocation]);
 
+  // Fetch current user
+  const { data: user } = useQuery<{ id: string; name: string; login: string; role: string }>({
+    queryKey: ["/api/auth/me"],
+  });
+
   // Fetch pending placements
   const { data: pendingPlacements = [], isLoading: loadingPlacements } = useQuery<PendingPlacement[]>({
     queryKey: ["/api/pending-placements"],
+  });
+
+  // Delete pending placement mutation
+  const deletePlacementMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("DELETE", `/api/pending-placements/${id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pending-placements"] });
+      toast({
+        title: "Удалено",
+        description: "Pending placement успешно удалён",
+      });
+      setDeleteConfirmOpen(false);
+      setPlacementToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось удалить pending placement",
+        variant: "destructive",
+      });
+    },
   });
 
   // Строгая маршрутизация: данные со сканера ТОЛЬКО в barcode поле
@@ -358,6 +391,17 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
       description: `Состояние изменено с "${detectedCondition}" на "${newCondition}"`,
       variant: "default",
     });
+  };
+
+  const handleDeleteClick = (placement: PendingPlacement) => {
+    setPlacementToDelete(placement);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (placementToDelete) {
+      deletePlacementMutation.mutate(placementToDelete.id);
+    }
   };
 
   return (
@@ -696,12 +740,13 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
                   <TableHead>Кол-во</TableHead>
                   <TableHead>Локация</TableHead>
                   <TableHead>Принято</TableHead>
+                  {user?.role === "admin" && <TableHead className="w-20">Действия</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loadingPlacements ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={user?.role === "admin" ? 8 : 7} className="text-center py-8 text-muted-foreground">
                       Загрузка...
                     </TableCell>
                   </TableRow>
@@ -722,6 +767,19 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
                           minute: "2-digit"
                         })}
                       </TableCell>
+                      {user?.role === "admin" && (
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteClick(placement)}
+                            disabled={deletePlacementMutation.isPending}
+                            data-testid={`button-delete-pending-${placement.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}
@@ -731,6 +789,38 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
         </CardContent>
       </Card>
     )}
+
+    {/* Delete Confirmation Dialog */}
+    <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Подтвердите удаление</AlertDialogTitle>
+          <AlertDialogDescription>
+            Вы действительно хотите удалить pending placement?
+            {placementToDelete && (
+              <div className="mt-2 p-2 bg-muted rounded-md">
+                <div className="text-sm space-y-1">
+                  <div><strong>Штрихкод:</strong> {placementToDelete.barcode}</div>
+                  <div><strong>SKU:</strong> {placementToDelete.sku}</div>
+                  {placementToDelete.name && <div><strong>Название:</strong> {placementToDelete.name}</div>}
+                  <div><strong>Локация:</strong> {placementToDelete.location}</div>
+                </div>
+              </div>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="button-cancel-delete-pending">Отмена</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDeleteConfirm}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            data-testid="button-confirm-delete-pending"
+          >
+            Удалить
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

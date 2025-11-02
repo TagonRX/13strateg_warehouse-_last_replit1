@@ -1754,8 +1754,32 @@ export class DbStorage implements IStorage {
     return await db.select().from(pendingPlacements).orderBy(pendingPlacements.stockInAt);
   }
 
-  async deletePendingPlacement(id: string): Promise<void> {
+  async deletePendingPlacement(id: string, userId: string): Promise<PendingPlacement | null> {
+    // Get the placement before deleting for logging
+    const placement = await db.select().from(pendingPlacements).where(eq(pendingPlacements.id, id)).limit(1);
+    if (!placement || placement.length === 0) {
+      return null;
+    }
+
+    const deletedPlacement = placement[0];
+
+    // Delete the placement
     await db.delete(pendingPlacements).where(eq(pendingPlacements.id, id));
+
+    // Log the deletion event
+    await db.insert(eventLogs).values({
+      userId,
+      action: "PENDING_PLACEMENT_DELETED",
+      details: `Deleted pending placement: ${deletedPlacement.name || deletedPlacement.sku} (${deletedPlacement.barcode})`,
+      productId: deletedPlacement.productId,
+      itemName: deletedPlacement.name,
+      sku: deletedPlacement.sku,
+      location: deletedPlacement.location,
+      quantity: deletedPlacement.quantity,
+      price: deletedPlacement.price,
+    });
+
+    return deletedPlacement;
   }
 
   async getPendingPlacementByBarcode(barcode: string): Promise<PendingPlacement | undefined> {
