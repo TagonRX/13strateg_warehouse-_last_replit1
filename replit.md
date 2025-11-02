@@ -3,6 +3,14 @@
 ## Overview
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
+## Recent Changes (November 2025)
+- **CSV Import Enhancement**: Added case-insensitive column matching for 3DSellers CSVs (handles lowercase names like itemid, productname, sku)
+- **Data Integrity Fix**: safeParseInt helper now returns undefined for optional numeric fields (price, dimensions, weight, volume) preventing database corruption from blank CSV values
+- **CSV Preview UI**: Removed 6-column limit, added horizontal scroll to display all columns in preview dialog
+- **Duplicate Deletion Progress**: Real-time progress indicator showing accurate count of successful deletions (not attempt index)
+- **Error Handling**: Partial deletion failures display detailed error messages with counts, keep dialog open, and refetch data to show remaining duplicates
+- **Scheduled CSV Import**: Automated scheduler now uses case-insensitive matching and preserves all existing data fields (location, barcode, dimensions, weight, volume) during updates
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
