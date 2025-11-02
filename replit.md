@@ -11,6 +11,7 @@ This project is a comprehensive warehouse management system designed to streamli
 - **Error Handling**: Partial deletion failures display detailed error messages with counts, keep dialog open, and refetch data to show remaining duplicates
 - **Scheduled CSV Import**: Automated scheduler now uses case-insensitive matching and preserves all existing data fields (location, barcode, dimensions, weight, volume) during updates
 - **Batch Delete Optimization with Visual Progress**: Implemented parallel batch deletion endpoint (POST /api/inventory/batch-delete) processing items in groups of 10 for 10x faster duplicate removal. "Delete without Item ID" feature uses batch deletion with highly visible real-time progress UI: large counter showing "X из Y", animated progress bar, and warning text "Пожалуйста, подождите. Не закрывайте это окно." Dialog remains open during entire deletion process and cannot be closed until completion
+- **Horizontal Scroll Fix**: Removed duplicate overflow-x-auto wrapper from inventory page that was causing scrollbar glitches when scrolling right. Single overflow-auto container in InventoryTable now handles all scrolling correctly
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
