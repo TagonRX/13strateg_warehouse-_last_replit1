@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, ChevronDown, ChevronRight, Pencil, Save, X, Trash2, ExternalLink, Image as ImageIcon } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, Pencil, Save, X, Trash2, ExternalLink, Image as ImageIcon, Copy } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +37,7 @@ import * as api from "@/lib/api";
 import BarcodeEditor from "./BarcodeEditor";
 import InventoryCsvImportDialog from "./InventoryCsvImportDialog";
 import ImageGalleryModal from "./ImageGalleryModal";
+import { DuplicatesDialog } from "./DuplicatesDialog";
 
 interface BarcodeMapping {
   code: string;
@@ -179,6 +180,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [selectedImageUrls, setSelectedImageUrls] = useState<string[]>([]);
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
+  const [duplicatesDialogOpen, setDuplicatesDialogOpen] = useState(false);
+  const [duplicates, setDuplicates] = useState<any[]>([]);
   const { toast } = useToast();
 
   // Fetch tested items for condition display
@@ -852,6 +855,91 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     setImageModalOpen(true);
   };
 
+  // Find duplicates query - enabled manually on button click
+  const {
+    data: duplicatesData,
+    refetch: refetchDuplicates,
+    isLoading: isLoadingDuplicates,
+  } = useQuery<{ duplicates: any[] }>({
+    queryKey: ['/api/inventory/duplicates'],
+    enabled: false, // Don't auto-fetch, only on manual trigger
+  });
+
+  // Handle duplicates data changes
+  useEffect(() => {
+    if (duplicatesData) {
+      setDuplicates(duplicatesData.duplicates || []);
+      setDuplicatesDialogOpen(true);
+      if (duplicatesData.duplicates.length === 0) {
+        toast({
+          title: "Дубликаты не найдены",
+          description: "В инвентаре нет дубликатов",
+        });
+      }
+    }
+  }, [duplicatesData]);
+
+  // Trigger function for button click
+  const handleFindDuplicates = async () => {
+    try {
+      await refetchDuplicates();
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось загрузить дубликаты",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteDuplicates = async (itemIds: string[]) => {
+    const results: { id: string; success: boolean; error?: string }[] = [];
+    
+    // Delete items sequentially to catch individual errors
+    for (const itemId of itemIds) {
+      try {
+        await api.deleteInventoryItem(itemId);
+        results.push({ id: itemId, success: true });
+      } catch (error: any) {
+        results.push({ 
+          id: itemId, 
+          success: false, 
+          error: error.message || 'Ошибка удаления'
+        });
+      }
+    }
+    
+    const failures = results.filter(r => !r.success);
+    const successes = results.filter(r => r.success);
+    
+    // Invalidate caches if at least one deletion succeeded
+    if (successes.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/duplicates'] });
+    }
+    
+    // Handle different outcomes
+    if (failures.length === 0) {
+      // All succeeded - DuplicatesDialog will show success toast and close
+      setDuplicates([]);
+      return;
+    } else if (successes.length === 0) {
+      // All failed - throw error so DuplicatesDialog shows error toast
+      throw new Error(`Не удалось удалить ни один из ${failures.length} товаров`);
+    } else {
+      // Partial success - show detailed toast and refetch to update dialog
+      toast({
+        title: "Частичное удаление",
+        description: `Удалено ${successes.length} из ${results.length} товаров. ${failures.length} не удалось удалить.`,
+        variant: "destructive",
+      });
+      // Refetch to show updated duplicate list (dialog stays open)
+      await refetchDuplicates();
+      // Throw error to prevent DuplicatesDialog from closing
+      throw new Error("Частичное удаление");
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -862,7 +950,19 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
               Всего товаров: {items.length}
             </div>
             {userRole === "admin" && (
-              <InventoryCsvImportDialog onSuccess={handleRefreshInventory} />
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFindDuplicates}
+                  disabled={isLoadingDuplicates}
+                  data-testid="button-find-duplicates"
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  {isLoadingDuplicates ? "Поиск..." : "Найти дубликаты"}
+                </Button>
+                <InventoryCsvImportDialog onSuccess={handleRefreshInventory} />
+              </>
             )}
           </div>
         </div>
@@ -1043,6 +1143,14 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Duplicates Management Dialog */}
+      <DuplicatesDialog
+        open={duplicatesDialogOpen}
+        onClose={() => setDuplicatesDialogOpen(false)}
+        duplicates={duplicates}
+        onDelete={handleDeleteDuplicates}
+      />
     </Card>
   );
 }

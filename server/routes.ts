@@ -171,6 +171,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Find duplicates in inventory
+  app.get("/api/inventory/duplicates", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const allItems = await storage.getAllInventoryItems();
+      
+      // Group by itemId (exclude nulls/empty)
+      const itemIdGroups = new Map<string, typeof allItems>();
+      // Group by SKU
+      const skuGroups = new Map<string, typeof allItems>();
+      
+      allItems.forEach(item => {
+        // Group by itemId if it exists
+        if (item.itemId && item.itemId.trim()) {
+          const existing = itemIdGroups.get(item.itemId) || [];
+          existing.push(item);
+          itemIdGroups.set(item.itemId, existing);
+        }
+        
+        // Group by SKU
+        if (item.sku && item.sku.trim()) {
+          const existing = skuGroups.get(item.sku) || [];
+          existing.push(item);
+          skuGroups.set(item.sku, existing);
+        }
+      });
+      
+      // Find duplicates (groups with more than 1 item)
+      const duplicates: {
+        type: 'itemId' | 'sku';
+        key: string;
+        items: typeof allItems;
+      }[] = [];
+      
+      itemIdGroups.forEach((items, itemId) => {
+        if (items.length > 1) {
+          duplicates.push({
+            type: 'itemId',
+            key: itemId,
+            items,
+          });
+        }
+      });
+      
+      skuGroups.forEach((items, sku) => {
+        if (items.length > 1) {
+          // Always add SKU duplicates - admin needs to see all items with same SKU
+          // even if some are already shown in itemId duplicate groups
+          duplicates.push({
+            type: 'sku',
+            key: sku,
+            items,
+          });
+        }
+      });
+      
+      console.log(`[DUPLICATES] Found ${duplicates.length} duplicate groups`);
+      return res.json({ duplicates });
+    } catch (error: any) {
+      console.error("Get duplicates error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   app.post("/api/inventory", requireAuth, async (req, res) => {
     try {
       const userId = (req as any).userId;
