@@ -77,6 +77,32 @@ export function DuplicatesDialog({
     setSelectedItems(newSelected);
   };
 
+  const handleDeleteGroup = async (group: DuplicateGroup) => {
+    setIsDeleting(true);
+    try {
+      const itemIds = group.items.map(item => item.id);
+      await onDelete(itemIds);
+      
+      // Remove deleted items from selection
+      const newSelected = new Set(selectedItems);
+      itemIds.forEach(id => newSelected.delete(id));
+      setSelectedItems(newSelected);
+      
+      toast({
+        title: "Группа удалена",
+        description: `Удалено ${itemIds.length} записей из ${group.type === 'sku' ? 'SKU' : 'Item ID'}: ${group.key}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ошибка удаления",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (selectedItems.size === 0) {
       toast({
@@ -148,9 +174,21 @@ export function DuplicatesDialog({
                         </Badge>
                       </div>
                     </div>
-                    <Badge variant="destructive">
-                      {group.items.length} записей
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="destructive">
+                        {group.items.length} записей
+                      </Badge>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteGroup(group)}
+                        disabled={isDeleting}
+                        data-testid={`button-delete-group-${groupIndex}`}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Удалить все
+                      </Button>
+                    </div>
                   </div>
 
                   <Table>
