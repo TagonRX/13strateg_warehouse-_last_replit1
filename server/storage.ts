@@ -543,23 +543,30 @@ export class DbStorage implements IStorage {
       }
     }
 
-    // Batch update items
+    // Batch update items (parallel chunks for speed)
     console.log(`[BULK UPSERT] Updating ${itemsToUpdate.length} existing items...`);
-    let updateCount = 0;
-    for (const { id, updates } of itemsToUpdate) {
-      try {
-        await db
-          .update(inventoryItems)
-          .set({ ...updates, updatedAt: new Date() })
-          .where(eq(inventoryItems.id, id));
-        updated++;
-        updateCount++;
-        if (updateCount % 1000 === 0 || updateCount === itemsToUpdate.length) {
-          console.log(`[BULK UPSERT] Updated ${updateCount}/${itemsToUpdate.length} items...`);
+    if (itemsToUpdate.length > 0) {
+      const chunkSize = 10; // Process 10 updates in parallel
+      for (let i = 0; i < itemsToUpdate.length; i += chunkSize) {
+        const chunk = itemsToUpdate.slice(i, i + chunkSize);
+        
+        // Process updates in parallel
+        await Promise.all(chunk.map(async ({ id, updates }) => {
+          try {
+            await db
+              .update(inventoryItems)
+              .set({ ...updates, updatedAt: new Date() })
+              .where(eq(inventoryItems.id, id));
+            updated++;
+          } catch (error) {
+            console.error(`Update error:`, error);
+            errors++;
+          }
+        }));
+        
+        if ((i + chunkSize) % 1000 === 0 || i + chunkSize >= itemsToUpdate.length) {
+          console.log(`[BULK UPSERT] Updated ${Math.min(i + chunkSize, itemsToUpdate.length)}/${itemsToUpdate.length} items...`);
         }
-      } catch (error) {
-        console.error(`Update error:`, error);
-        errors++;
       }
     }
 

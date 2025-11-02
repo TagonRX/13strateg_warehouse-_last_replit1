@@ -626,6 +626,12 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
     setProgress(0);
     setResult(null);
 
+    // Show "Processing..." toast immediately
+    toast({
+      title: "Обработка началась",
+      description: "Пожалуйста подождите. Обработка большого CSV может занять несколько минут...",
+    });
+
     const interval = setInterval(() => {
       setProgress((prev) => Math.min(prev + 10, 90));
     }, 200);
@@ -634,8 +640,19 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       const uploadResult = await onUpload(transformedFile);
       setProgress(100);
       setResult(uploadResult);
+      
+      // Show detailed result toast
+      toast({
+        title: "✅ Загрузка завершена",
+        description: `Создано: ${uploadResult.success} | Обновлено: ${uploadResult.updated} | Ошибок: ${uploadResult.errors}`,
+      });
     } catch (error) {
       console.error('Upload error:', error);
+      toast({
+        title: "Ошибка",
+        description: "Произошла ошибка при загрузке",
+        variant: "destructive",
+      });
     } finally {
       clearInterval(interval);
       setUploading(false);
