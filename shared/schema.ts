@@ -413,6 +413,7 @@ export interface CSVConflict {
   itemId: string;
   sku: string;
   name: string;
+  conflictType: 'data_mismatch' | 'duplicate_item_id'; // data_mismatch = обычный конфликт данных, duplicate_item_id = дубликат itemId с другой SKU
   existingData: Partial<InventoryItem>;
   csvData: Partial<InventoryItem>;
   conflicts: {
@@ -424,7 +425,13 @@ export interface CSVConflict {
 
 export interface ConflictResolution {
   itemId: string;
-  action: 'accept_csv' | 'keep_existing';
+  sku: string; // SKU для идентификации конкретной записи
+  action: 'accept_csv' | 'keep_existing' | 'create_duplicate' | 'replace_existing' | 'skip';
+  // accept_csv - обновить существующую запись данными из CSV
+  // keep_existing - оставить существующие данные без изменений
+  // create_duplicate - создать новую запись (дубликат itemId в другой локации)
+  // replace_existing - удалить старую запись и создать новую
+  // skip - пропустить эту запись
 }
 
 export interface ResolveConflictsRequest {

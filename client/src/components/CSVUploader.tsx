@@ -529,21 +529,15 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       return response.json();
     },
     onSuccess: async (data) => {
-      console.log("[FILE SYNC] Response data:", data);
-      console.log("[FILE SYNC] hasConflicts:", data.hasConflicts);
-      console.log("[FILE SYNC] conflicts length:", data.conflicts?.length);
-      
       // Check for conflicts
       if (data.hasConflicts && data.conflicts && data.conflicts.length > 0) {
-        console.log("[FILE SYNC] Found", data.conflicts.length, "conflicts - opening dialog");
-        console.log("[FILE SYNC] conflicts:", data.conflicts);
         setConflicts(data.conflicts);
         setPendingCsvData(data.csvData || []);
         setConflictDialogOpen(true);
         
         toast({
           title: "Обнаружены конфликты",
-          description: `Найдено ${data.conflicts.length} товаров с отличающимися данными. Выберите какие данные использовать.`,
+          description: `Найдено ${data.conflicts.length} товаров с отличающимися данными или дубликатами. Выберите действия.`,
         });
         return;
       }
@@ -607,7 +601,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
     },
   });
 
-  const handleConflictResolution = async (resolutions: Array<{ itemId: string; action: 'accept_csv' | 'keep_existing' }>) => {
+  const handleConflictResolution = async (resolutions: Array<{ itemId: string; sku: string; action: 'accept_csv' | 'keep_existing' | 'create_duplicate' | 'replace_existing' | 'skip' }>) => {
     try {
       const response = await apiRequest("POST", "/api/inventory/resolve-conflicts", {
         resolutions,
@@ -618,7 +612,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       
       toast({
         title: "Конфликты разрешены",
-        description: `Обновлено: ${data.updated ?? 0}, Пропущено: ${data.skipped ?? 0}`,
+        description: `Обновлено/Создано: ${data.updated ?? 0}, Пропущено: ${data.skipped ?? 0}`,
       });
       
       queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });

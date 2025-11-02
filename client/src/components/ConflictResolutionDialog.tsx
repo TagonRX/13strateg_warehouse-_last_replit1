@@ -25,7 +25,7 @@ interface ConflictResolutionDialogProps {
   open: boolean;
   onClose: () => void;
   conflicts: CSVConflict[];
-  onResolve: (resolutions: Array<{ itemId: string; action: 'accept_csv' | 'keep_existing' }>) => Promise<void>;
+  onResolve: (resolutions: Array<{ itemId: string; sku: string; action: 'accept_csv' | 'keep_existing' | 'create_duplicate' | 'replace_existing' | 'skip' }>) => Promise<void>;
 }
 
 export function ConflictResolutionDialog({
@@ -34,21 +34,18 @@ export function ConflictResolutionDialog({
   conflicts,
   onResolve,
 }: ConflictResolutionDialogProps) {
-  console.log("[CONFLICT DIALOG] Render - open:", open, "conflicts length:", conflicts?.length);
-  
-  // Track individual decisions: itemId -> 'accept_csv' | 'keep_existing' | undefined
-  const [decisions, setDecisions] = useState<Record<string, 'accept_csv' | 'keep_existing'>>({});
+  // Track individual decisions: itemId -> action
+  const [decisions, setDecisions] = useState<Record<string, 'accept_csv' | 'keep_existing' | 'create_duplicate' | 'replace_existing' | 'skip'>>({});
   const [isResolving, setIsResolving] = useState(false);
 
   // Reset decisions when dialog opens or conflicts change
   useEffect(() => {
-    console.log("[CONFLICT DIALOG] useEffect triggered - open:", open, "conflicts:", conflicts?.length);
     if (open) {
       setDecisions({});
     }
   }, [open, conflicts]);
 
-  const handleDecision = (itemId: string, action: 'accept_csv' | 'keep_existing') => {
+  const handleDecision = (itemId: string, action: 'accept_csv' | 'keep_existing' | 'create_duplicate' | 'replace_existing' | 'skip') => {
     setDecisions(prev => ({
       ...prev,
       [itemId]: action,
@@ -56,34 +53,49 @@ export function ConflictResolutionDialog({
   };
 
   const handleAcceptAll = () => {
-    const allDecisions: Record<string, 'accept_csv' | 'keep_existing'> = {};
+    const allDecisions: Record<string, 'accept_csv' | 'keep_existing' | 'create_duplicate' | 'replace_existing' | 'skip'> = {};
     conflicts.forEach(conflict => {
-      allDecisions[conflict.itemId] = 'accept_csv';
+      // For duplicate_item_id conflicts, default to skip
+      if (conflict.conflictType === 'duplicate_item_id') {
+        allDecisions[conflict.itemId] = 'skip';
+      } else {
+        allDecisions[conflict.itemId] = 'accept_csv';
+      }
     });
     setDecisions(allDecisions);
   };
 
   const handleKeepAll = () => {
-    const allDecisions: Record<string, 'accept_csv' | 'keep_existing'> = {};
+    const allDecisions: Record<string, 'accept_csv' | 'keep_existing' | 'create_duplicate' | 'replace_existing' | 'skip'> = {};
     conflicts.forEach(conflict => {
-      allDecisions[conflict.itemId] = 'keep_existing';
+      // For duplicate_item_id conflicts, default to skip
+      if (conflict.conflictType === 'duplicate_item_id') {
+        allDecisions[conflict.itemId] = 'skip';
+      } else {
+        allDecisions[conflict.itemId] = 'keep_existing';
+      }
     });
     setDecisions(allDecisions);
   };
 
   const handleSubmit = async () => {
     // Convert decisions to resolutions array
-    const resolutions = Object.entries(decisions).map(([itemId, action]) => ({
-      itemId,
-      action,
-    }));
+    const resolutions = Object.entries(decisions).map(([itemId, action]) => {
+      const conflict = conflicts.find(c => c.itemId === itemId);
+      return {
+        itemId,
+        sku: conflict?.sku || '',
+        action,
+      };
+    });
 
-    // For items without explicit decision, default to keep_existing
+    // For items without explicit decision, default to keep_existing or skip
     conflicts.forEach(conflict => {
       if (!decisions[conflict.itemId]) {
         resolutions.push({
           itemId: conflict.itemId,
-          action: 'keep_existing',
+          sku: conflict.sku,
+          action: conflict.conflictType === 'duplicate_item_id' ? 'skip' : 'keep_existing',
         });
       }
     });
@@ -152,37 +164,85 @@ export function ConflictResolutionDialog({
                       <h4 className="font-medium text-base" data-testid={`text-conflict-name-${conflict.itemId}`}>
                         {conflict.name}
                       </h4>
-                      <div className="flex gap-2 mt-1">
+                      <div className="flex gap-2 mt-1 flex-wrap">
                         <Badge variant="outline" className="text-xs">
                           SKU: {conflict.sku}
                         </Badge>
                         <Badge variant="outline" className="text-xs">
                           Item ID: {conflict.itemId}
                         </Badge>
+                        {conflict.conflictType === 'duplicate_item_id' && (
+                          <Badge variant="destructive" className="text-xs">
+                            Дубликат ID товара
+                          </Badge>
+                        )}
                       </div>
+                      {conflict.conflictType === 'duplicate_item_id' && (
+                        <p className="text-sm text-muted-foreground mt-2">
+                          ⚠️ Item ID <strong>{conflict.itemId}</strong> уже существует с SKU <strong>{conflict.existingData.sku}</strong>.
+                          Выберите действие: создать новую запись (дубликат), заменить существующую или пропустить.
+                        </p>
+                      )}
                     </div>
                     
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant={decision === 'accept_csv' ? 'default' : 'outline'}
-                        onClick={() => handleDecision(conflict.itemId, 'accept_csv')}
-                        data-testid={`button-accept-csv-${conflict.itemId}`}
-                        className="whitespace-nowrap"
-                      >
-                        {decision === 'accept_csv' && <CheckCircle className="h-4 w-4 mr-1" />}
-                        Принять из файла
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={decision === 'keep_existing' ? 'default' : 'outline'}
-                        onClick={() => handleDecision(conflict.itemId, 'keep_existing')}
-                        data-testid={`button-keep-existing-${conflict.itemId}`}
-                        className="whitespace-nowrap"
-                      >
-                        {decision === 'keep_existing' && <CheckCircle className="h-4 w-4 mr-1" />}
-                        Оставить существующие
-                      </Button>
+                    <div className="flex gap-2 flex-wrap">
+                      {conflict.conflictType === 'duplicate_item_id' ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant={decision === 'create_duplicate' ? 'default' : 'outline'}
+                            onClick={() => handleDecision(conflict.itemId, 'create_duplicate')}
+                            data-testid={`button-create-duplicate-${conflict.itemId}`}
+                            className="whitespace-nowrap"
+                          >
+                            {decision === 'create_duplicate' && <CheckCircle className="h-4 w-4 mr-1" />}
+                            Создать дубликат
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={decision === 'replace_existing' ? 'default' : 'outline'}
+                            onClick={() => handleDecision(conflict.itemId, 'replace_existing')}
+                            data-testid={`button-replace-existing-${conflict.itemId}`}
+                            className="whitespace-nowrap"
+                          >
+                            {decision === 'replace_existing' && <CheckCircle className="h-4 w-4 mr-1" />}
+                            Заменить
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={decision === 'skip' ? 'default' : 'outline'}
+                            onClick={() => handleDecision(conflict.itemId, 'skip')}
+                            data-testid={`button-skip-${conflict.itemId}`}
+                            className="whitespace-nowrap"
+                          >
+                            {decision === 'skip' && <XCircle className="h-4 w-4 mr-1" />}
+                            Пропустить
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            variant={decision === 'accept_csv' ? 'default' : 'outline'}
+                            onClick={() => handleDecision(conflict.itemId, 'accept_csv')}
+                            data-testid={`button-accept-csv-${conflict.itemId}`}
+                            className="whitespace-nowrap"
+                          >
+                            {decision === 'accept_csv' && <CheckCircle className="h-4 w-4 mr-1" />}
+                            Принять из файла
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={decision === 'keep_existing' ? 'default' : 'outline'}
+                            onClick={() => handleDecision(conflict.itemId, 'keep_existing')}
+                            data-testid={`button-keep-existing-${conflict.itemId}`}
+                            className="whitespace-nowrap"
+                          >
+                            {decision === 'keep_existing' && <CheckCircle className="h-4 w-4 mr-1" />}
+                            Оставить существующие
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
 

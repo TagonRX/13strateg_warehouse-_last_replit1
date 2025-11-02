@@ -654,8 +654,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Find existing item: first try by itemId, then by SKU
         let existingItem = itemId ? itemIdMap.get(itemId) : undefined;
-        if (!existingItem && sku) {
-          existingItem = skuMap.get(sku);
+        let existingBySku = sku ? skuMap.get(sku) : undefined;
+
+        // Check for duplicate itemId with different SKU
+        if (existingItem && sku && existingItem.sku !== sku) {
+          // Дубликат: itemId существует, но SKU разные
+          // Это требует решения администратора
+          console.log(`[FILE SYNC] Duplicate itemId detected: ${itemId} exists with SKU ${existingItem.sku}, but CSV has SKU ${sku}`);
+          
+          conflicts.push({
+            itemId: itemId!,
+            sku: sku,
+            name: itemData.name,
+            conflictType: 'duplicate_item_id',
+            existingData: {
+              id: existingItem.id,
+              name: existingItem.name,
+              sku: existingItem.sku,
+              location: existingItem.location,
+              quantity: existingItem.quantity,
+              price: existingItem.price,
+              length: existingItem.length,
+              width: existingItem.width,
+              height: existingItem.height,
+              weight: existingItem.weight,
+              condition: existingItem.condition,
+              barcode: existingItem.barcode,
+              itemId: existingItem.itemId,
+            },
+            csvData: {
+              name: itemData.name,
+              sku: itemData.sku,
+              location: itemData.location,
+              quantity: itemData.quantity,
+              price: itemData.price,
+              length: itemData.length,
+              width: itemData.width,
+              height: itemData.height,
+              weight: itemData.weight,
+              condition: itemData.condition,
+              itemId: itemData.itemId,
+            },
+            conflicts: [
+              {
+                field: 'sku',
+                existingValue: existingItem.sku,
+                csvValue: sku,
+              }
+            ],
+          });
+          continue; // Пропускаем дальнейшую обработку, ждем решения администратора
+        }
+
+        // Используем найденную запись (по itemId или SKU)
+        if (!existingItem && existingBySku) {
+          existingItem = existingBySku;
         }
 
         if (existingItem) {
@@ -683,6 +736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               itemId: identifier,
               sku: existingItem.sku,
               name: existingItem.name,
+              conflictType: 'data_mismatch',
               existingData: {
                 id: existingItem.id,
                 name: existingItem.name,
@@ -696,6 +750,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 weight: existingItem.weight,
                 condition: existingItem.condition,
                 barcode: existingItem.barcode, // Important: preserve existing barcode
+                itemId: existingItem.itemId,
               },
               csvData: {
                 name: itemData.name,
@@ -708,6 +763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 height: itemData.height,
                 weight: itemData.weight,
                 condition: itemData.condition,
+                itemId: itemData.itemId,
               },
               conflicts: itemConflicts.map(c => ({
                 field: c.name,
@@ -716,7 +772,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               })),
             });
 
-            console.log(`[FILE SYNC] Conflict detected for ${identifier}:`, itemConflicts.length, 'fields differ');
+            console.log(`[FILE SYNC] Data conflict detected for ${identifier}:`, itemConflicts.length, 'fields differ');
           } else {
             // No conflicts - update as normal (but preserve barcode)
             itemData.barcode = existingItem.barcode || itemData.barcode;
@@ -856,64 +912,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Process each resolution
       for (const resolution of resolutions) {
-        const { itemId, action } = resolution;
+        const { itemId, sku, action } = resolution;
 
-        if (action === 'keep_existing') {
+        if (action === 'keep_existing' || action === 'skip') {
           // Skip - keep existing data
           skipped++;
-          console.log(`[RESOLVE CONFLICTS] Keeping existing data for ${itemId}`);
+          console.log(`[RESOLVE CONFLICTS] Skipping ${itemId} (${sku})`);
           continue;
         }
 
-        if (action === 'accept_csv') {
-          // Find the CSV data for this item
-          const csvItem = csvData.find((item: any) => 
-            (item.itemid || item.item_id || item['item id']) === itemId ||
-            item.sku === itemId
-          );
+        // Find the CSV data for this item
+        const csvItem = csvData.find((item: any) => {
+          const csvItemId = item.itemid || item.item_id || item['item id'];
+          const csvSku = item.sku;
+          return (csvItemId === itemId && csvSku === sku) || 
+                 (csvItemId === itemId && !sku) ||
+                 (csvSku === itemId);
+        });
 
-          if (!csvItem) {
-            console.log(`[RESOLVE CONFLICTS] CSV data not found for ${itemId}`);
-            skipped++;
-            continue;
+        if (!csvItem) {
+          console.log(`[RESOLVE CONFLICTS] CSV data not found for ${itemId} (${sku})`);
+          skipped++;
+          continue;
+        }
+
+        // Get existing item from database
+        const allItems = await storage.getAllInventoryItems();
+        const existingItem = allItems.find(item => 
+          (item.itemId === itemId && item.sku === sku) ||
+          (item.itemId === itemId && !sku) ||
+          item.sku === itemId
+        );
+
+        if (action === 'replace_existing') {
+          // Delete existing item and create new one
+          if (existingItem) {
+            console.log(`[RESOLVE CONFLICTS] Deleting existing item ${existingItem.id} (${existingItem.itemId}/${existingItem.sku})`);
+            await storage.deleteInventoryItem(existingItem.id, userId);
           }
+          // Fall through to create new item
+        }
 
-          // Get existing item from database
-          const allItems = await storage.getAllInventoryItems();
-          const existingItem = allItems.find(item => 
-            item.itemId === itemId || item.sku === itemId
-          );
-
-          if (!existingItem) {
-            console.log(`[RESOLVE CONFLICTS] Existing item not found for ${itemId}`);
-            skipped++;
-            continue;
-          }
-
+        if (action === 'accept_csv' || action === 'create_duplicate' || action === 'replace_existing') {
           // Parse CSV data
           const length = csvItem.length ? parseFloat(csvItem.length) : undefined;
           const width = csvItem.width ? parseFloat(csvItem.width) : undefined;
           const height = csvItem.height ? parseFloat(csvItem.height) : undefined;
           const volume = length && width && height ? length * width * height : undefined;
-          const sku = csvItem.sku || undefined;
+          const csvSku = csvItem.sku || undefined;
+          const csvItemId = csvItem.itemid || csvItem.item_id || csvItem['item id'];
 
           const itemData: any = {
-            productId: itemId,
-            name: csvItem.name || existingItem.name,
-            sku: sku || existingItem.sku,
-            location: csvItem.location || existingItem.location,
-            quantity: parseInt(csvItem.quantity) || existingItem.quantity,
-            barcode: existingItem.barcode, // ALWAYS preserve existing barcode
-            price: csvItem.price ? parseInt(csvItem.price) : existingItem.price,
+            productId: csvItemId || csvSku!,
+            name: csvItem.name || (existingItem?.name ?? ""),
+            sku: csvSku || csvItemId || (existingItem?.sku ?? ""),
+            location: csvItem.location || csvSku || (existingItem?.location ?? ""),
+            quantity: parseInt(csvItem.quantity) || (existingItem?.quantity ?? 0),
+            barcode: existingItem?.barcode || csvItem.barcode || "", // Preserve existing barcode if exists
+            price: csvItem.price ? parseInt(csvItem.price) : (existingItem?.price ?? undefined),
             length,
             width,
             height,
             volume,
-            weight: csvItem.weight ? parseFloat(csvItem.weight) : existingItem.weight,
-            condition: csvItem.condition || existingItem.condition,
-            itemId: csvItem.itemid || csvItem.item_id || csvItem['item id'] || existingItem.itemId,
-            ebayUrl: csvItem.ebayurl || csvItem.ebay_url || csvItem.url || csvItem['ebay url'] || existingItem.ebayUrl,
-            ebaySellerName: csvItem.ebaysellername || csvItem.ebay_seller_name || csvItem['ebay seller'] || csvItem.seller || existingItem.ebaySellerName,
+            weight: csvItem.weight ? parseFloat(csvItem.weight) : (existingItem?.weight ?? undefined),
+            condition: csvItem.condition || (existingItem?.condition ?? undefined),
+            itemId: csvItemId,
+            ebayUrl: csvItem.ebayurl || csvItem.ebay_url || csvItem.url || csvItem['ebay url'] || (existingItem?.ebayUrl ?? undefined),
+            ebaySellerName: csvItem.ebaysellername || csvItem.ebay_seller_name || csvItem['ebay seller'] || csvItem.seller || (existingItem?.ebaySellerName ?? undefined),
             createdBy: userId,
           };
 
@@ -931,11 +996,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
-          // Update the item with CSV data (preserving barcode)
-          await storage.updateInventoryItemById(existingItem.id, itemData);
+          if (action === 'accept_csv') {
+            // Update existing item
+            if (!existingItem) {
+              console.log(`[RESOLVE CONFLICTS] Cannot update - existing item not found for ${itemId}`);
+              skipped++;
+              continue;
+            }
+            await storage.updateInventoryItemById(existingItem.id, itemData);
+            console.log(`[RESOLVE CONFLICTS] Updated ${itemId} (${sku}) with CSV data (barcode preserved)`);
+          } else if (action === 'create_duplicate' || action === 'replace_existing') {
+            // Create new item
+            await storage.createInventoryItem(itemData);
+            console.log(`[RESOLVE CONFLICTS] Created new item ${csvItemId} (${csvSku}) - duplicate of ${itemId}`);
+          }
+          
           updated++;
-
-          console.log(`[RESOLVE CONFLICTS] Updated ${itemId} with CSV data (barcode preserved)`);
         }
       }
 
