@@ -6,6 +6,7 @@ import { InsertInventoryItem } from '@shared/schema';
 import { parse } from 'fast-csv';
 
 let cronTask: ScheduledTask | null = null;
+let archiveCronTask: ScheduledTask | null = null;
 let isRunning = false;
 
 export async function startScheduler() {
@@ -15,35 +16,42 @@ export async function startScheduler() {
   const settings = await storage.getSchedulerSettings();
   
   if (!settings) {
-    console.log('[SCHEDULER] No settings found, scheduler not started');
-    return;
+    console.log('[SCHEDULER] No settings found, CSV scheduler not started');
+  } else if (!settings.enabled) {
+    console.log('[SCHEDULER] CSV scheduler is disabled');
+  } else {
+    console.log(`[SCHEDULER] Scheduling CSV import with cron: ${settings.cronExpression}`);
+    
+    // Stop existing task if any
+    if (cronTask) {
+      cronTask.stop();
+      cronTask = null;
+    }
+    
+    // Validate cron expression
+    if (!cron.validate(settings.cronExpression)) {
+      console.error('[SCHEDULER] Invalid cron expression:', settings.cronExpression);
+    } else {
+      // Create new cron task
+      cronTask = cron.schedule(settings.cronExpression, async () => {
+        await runScheduledImport();
+      });
+      
+      console.log('[SCHEDULER] CSV scheduler started successfully');
+    }
   }
   
-  if (!settings.enabled) {
-    console.log('[SCHEDULER] Scheduler is disabled');
-    return;
+  // Start archive cleanup task (runs daily at 2 AM) - INDEPENDENT of CSV scheduler
+  if (archiveCronTask) {
+    archiveCronTask.stop();
+    archiveCronTask = null;
   }
-  
-  console.log(`[SCHEDULER] Scheduling with cron: ${settings.cronExpression}`);
-  
-  // Stop existing task if any
-  if (cronTask) {
-    cronTask.stop();
-    cronTask = null;
-  }
-  
-  // Validate cron expression
-  if (!cron.validate(settings.cronExpression)) {
-    console.error('[SCHEDULER] Invalid cron expression:', settings.cronExpression);
-    return;
-  }
-  
-  // Create new cron task
-  cronTask = cron.schedule(settings.cronExpression, async () => {
-    await runScheduledImport();
+
+  archiveCronTask = cron.schedule('0 2 * * *', async () => {
+    await runScheduledArchiveCleanup();
   });
-  
-  console.log('[SCHEDULER] Scheduler started successfully');
+
+  console.log('[SCHEDULER] Archive cleanup task scheduled (daily at 2 AM)');
 }
 
 export async function stopScheduler() {
@@ -52,6 +60,11 @@ export async function stopScheduler() {
   if (cronTask) {
     cronTask.stop();
     cronTask = null;
+  }
+  
+  if (archiveCronTask) {
+    archiveCronTask.stop();
+    archiveCronTask = null;
   }
   
   console.log('[SCHEDULER] Scheduler stopped');
@@ -205,4 +218,15 @@ function downloadAndParseCsv(url: string): Promise<InsertInventoryItem[]> {
       reject(error);
     });
   });
+}
+
+export async function runScheduledArchiveCleanup(): Promise<void> {
+  console.log('[ARCHIVE-CLEANUP] Starting scheduled archive cleanup...');
+  
+  try {
+    const archivedCount = await storage.archiveExpiredZeroQuantityItems();
+    console.log(`[ARCHIVE-CLEANUP] Archived ${archivedCount} expired items`);
+  } catch (error: any) {
+    console.error('[ARCHIVE-CLEANUP] Archive cleanup failed:', error);
+  }
 }

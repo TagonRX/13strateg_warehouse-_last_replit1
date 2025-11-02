@@ -200,6 +200,7 @@ export interface IStorage {
   getArchivedItems(filters?: { sku?: string; itemId?: string; limit?: number }): Promise<ArchivedInventoryItem[]>;
   restoreFromArchive(archivedItemId: string, userId: string): Promise<InventoryItem>;
   findDuplicateSkus(): Promise<{ sku: string; items: InventoryItem[] }[]>;
+  archiveExpiredZeroQuantityItems(): Promise<number>;
   
   // Scheduler Settings methods
   getSchedulerSettings(): Promise<SchedulerSetting | undefined>;
@@ -2602,6 +2603,28 @@ export class DbStorage implements IStorage {
     });
     
     return duplicates;
+  }
+
+  async archiveExpiredZeroQuantityItems(): Promise<number> {
+    // Find all items with quantity <= 0 AND zeroQuantitySince older than 4 days
+    const expiredItems = await db
+      .select()
+      .from(inventoryItems)
+      .where(
+        and(
+          sql`${inventoryItems.quantity} <= 0`,
+          sql`${inventoryItems.zeroQuantitySince} IS NOT NULL`,
+          sql`${inventoryItems.zeroQuantitySince} <= NOW() - INTERVAL '4 days'`
+        )
+      );
+
+    console.log(`[AUTO-ARCHIVE] Found ${expiredItems.length} items with expired zero quantity period`);
+
+    for (const item of expiredItems) {
+      await this.moveToArchive(item.id, 'system', '4-day zero quantity period expired');
+    }
+
+    return expiredItems.length;
   }
 
   // Scheduler Settings methods
