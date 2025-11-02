@@ -498,6 +498,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Batch delete inventory items (POST)
+  app.post("/api/inventory/batch-delete", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { ids } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "Массив ID обязателен" });
+      }
+
+      const result = await storage.batchDeleteInventoryItems(ids, userId);
+
+      return res.json(result);
+    } catch (error: any) {
+      console.error("Batch delete inventory error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Delete all inventory items
   app.delete("/api/inventory/all/items", requireAuth, requireAdmin, async (req, res) => {
     try {

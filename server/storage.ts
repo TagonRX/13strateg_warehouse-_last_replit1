@@ -882,6 +882,66 @@ export class DbStorage implements IStorage {
     return count;
   }
 
+  async batchDeleteInventoryItems(ids: string[], userId: string): Promise<{
+    deleted: string[];
+    failed: Array<{ id: string; error: string }>;
+  }> {
+    const deleted: string[] = [];
+    const failed: Array<{ id: string; error: string }> = [];
+
+    // Process deletions in parallel batches of 10
+    const batchSize = 10;
+    for (let i = 0; i < ids.length; i += batchSize) {
+      const batch = ids.slice(i, i + batchSize);
+      
+      const results = await Promise.allSettled(
+        batch.map(async (id) => {
+          // Get item for logging before deletion
+          const items = await db
+            .select()
+            .from(inventoryItems)
+            .where(eq(inventoryItems.id, id));
+
+          if (items.length === 0) {
+            throw new Error("Товар не найден");
+          }
+
+          const item = items[0];
+
+          // Delete item
+          await db
+            .delete(inventoryItems)
+            .where(eq(inventoryItems.id, id));
+
+          // Log the deletion
+          await this.createEventLog({
+            userId,
+            action: "DELETE_ITEM",
+            details: `Deleted item: ${item.name} (${item.sku})`,
+            productId: item.productId || null,
+            itemName: item.name || null,
+            sku: item.sku,
+            location: item.location,
+          });
+
+          return id;
+        })
+      );
+
+      // Collect results
+      results.forEach((result, index) => {
+        const id = batch[index];
+        if (result.status === "fulfilled") {
+          deleted.push(id);
+        } else {
+          failed.push({ id, error: result.reason?.message || "Ошибка удаления" });
+        }
+      });
+    }
+
+    return { deleted, failed };
+  }
+
   async updateItemCondition(itemId: string, condition: string, userId: string): Promise<void> {
     // Get the inventory item
     const item = await this.getInventoryItemById(itemId);

@@ -187,6 +187,24 @@ export async function deleteInventoryItem(id: string): Promise<void> {
   }
 }
 
+export async function batchDeleteInventoryItems(ids: string[]): Promise<{
+  deleted: string[];
+  failed: Array<{ id: string; error: string }>;
+}> {
+  const response = await fetch("/api/inventory/batch-delete", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ ids }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to batch delete items");
+  }
+
+  return response.json();
+}
+
 export async function deleteLocation(location: string): Promise<{ deleted: number }> {
   const response = await fetch(`/api/inventory/location/${encodeURIComponent(location)}`, {
     method: "DELETE",
