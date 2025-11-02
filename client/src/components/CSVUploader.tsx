@@ -529,9 +529,14 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       return response.json();
     },
     onSuccess: async (data) => {
+      console.log("[FILE SYNC] Response data:", data);
+      console.log("[FILE SYNC] hasConflicts:", data.hasConflicts);
+      console.log("[FILE SYNC] conflicts length:", data.conflicts?.length);
+      
       // Check for conflicts
       if (data.hasConflicts && data.conflicts && data.conflicts.length > 0) {
-        console.log("[FILE SYNC] Found", data.conflicts.length, "conflicts");
+        console.log("[FILE SYNC] Found", data.conflicts.length, "conflicts - opening dialog");
+        console.log("[FILE SYNC] conflicts:", data.conflicts);
         setConflicts(data.conflicts);
         setPendingCsvData(data.csvData || []);
         setConflictDialogOpen(true);

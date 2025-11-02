@@ -34,12 +34,15 @@ export function ConflictResolutionDialog({
   conflicts,
   onResolve,
 }: ConflictResolutionDialogProps) {
+  console.log("[CONFLICT DIALOG] Render - open:", open, "conflicts length:", conflicts?.length);
+  
   // Track individual decisions: itemId -> 'accept_csv' | 'keep_existing' | undefined
   const [decisions, setDecisions] = useState<Record<string, 'accept_csv' | 'keep_existing'>>({});
   const [isResolving, setIsResolving] = useState(false);
 
   // Reset decisions when dialog opens or conflicts change
   useEffect(() => {
+    console.log("[CONFLICT DIALOG] useEffect triggered - open:", open, "conflicts:", conflicts?.length);
     if (open) {
       setDecisions({});
     }
