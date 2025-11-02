@@ -103,6 +103,49 @@ export function DuplicatesDialog({
     }
   };
 
+  const handleDeleteDuplicatesKeepOne = async () => {
+    // Из каждой группы оставляем первую запись, остальные удаляем
+    const itemsToDelete: string[] = [];
+    let totalGroups = 0;
+    
+    duplicates.forEach(group => {
+      if (group.items.length > 1) {
+        // Оставляем первую запись, удаляем остальные
+        const toDelete = group.items.slice(1).map(item => item.id);
+        itemsToDelete.push(...toDelete);
+        totalGroups++;
+      }
+    });
+
+    if (itemsToDelete.length === 0) {
+      toast({
+        title: "Нет дубликатов",
+        description: "Нет записей для удаления",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await onDelete(itemsToDelete);
+      setSelectedItems(new Set());
+      toast({
+        title: "Дубликаты удалены",
+        description: `Удалено ${itemsToDelete.length} записей из ${totalGroups} групп. По одной записи оставлено в каждой группе.`,
+      });
+      onClose();
+    } catch (error: any) {
+      toast({
+        title: "Ошибка удаления",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (selectedItems.size === 0) {
       toast({
@@ -248,6 +291,15 @@ export function DuplicatesDialog({
                 data-testid="button-cancel"
               >
                 Отмена
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteDuplicatesKeepOne}
+                disabled={isDeleting || duplicates.length === 0}
+                data-testid="button-delete-keep-one"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Удалить дубликаты (оставить по 1)
               </Button>
               <Button
                 variant="destructive"
