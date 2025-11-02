@@ -136,8 +136,8 @@ export function ConflictResolutionDialog({
 
   return (
     <Dialog open={open} onOpenChange={() => !isResolving && onClose()}>
-      <DialogContent className="max-w-6xl max-h-[90vh]" data-testid="dialog-conflict-resolution">
-        <DialogHeader>
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col overflow-hidden" data-testid="dialog-conflict-resolution">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-warning" />
             Обнаружены конфликты данных
@@ -148,7 +148,7 @@ export function ConflictResolutionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh]">
+        <ScrollArea className="flex-1 overflow-auto">
           <div className="space-y-6 pr-4">
             {conflicts.map((conflict, index) => {
               const decision = decisions[conflict.itemId];
@@ -287,7 +287,7 @@ export function ConflictResolutionDialog({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
+        <DialogFooter className="flex-shrink-0 flex-col sm:flex-row gap-2 mt-4">
           <div className="flex gap-2 flex-1">
             <Button
               variant="outline"

@@ -289,15 +289,19 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
   // Run scheduler manually mutation
   const runSchedulerMutation = useMutation({
     mutationFn: async () => {
+      toast({
+        title: "Загрузка началась",
+        description: "Выполняется автоматическая загрузка CSV файлов...",
+      });
       const response = await apiRequest('POST', '/api/scheduler/run');
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/scheduler/settings'] });
       queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
       toast({
-        title: "Запущено",
-        description: "Планировщик запущен вручную",
+        title: "Загрузка завершена",
+        description: `Создано: ${data.created || 0}, Обновлено: ${data.updated || 0}, Ошибок: ${data.errors || 0}`,
       });
     },
     onError: (error: any) => {
