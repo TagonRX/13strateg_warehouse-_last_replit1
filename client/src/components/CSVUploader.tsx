@@ -39,15 +39,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Upload, FileText, CheckCircle, RefreshCw, Plus, Trash2, Link as LinkIcon, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { Upload, FileText, CheckCircle, RefreshCw, Plus, Trash2, Link as LinkIcon, ChevronLeft, ChevronRight, RotateCcw, Clock, Play } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthToken } from "@/lib/api";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConflictResolutionDialog } from "@/components/ConflictResolutionDialog";
 import type { CSVConflict } from "@shared/schema";
+import { Switch } from "@/components/ui/switch";
+import { useForm } from "react-hook-form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 interface CSVUploaderProps {
   onUpload: (file: File) => Promise<{
@@ -228,6 +231,91 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
   const [conflicts, setConflicts] = useState<CSVConflict[]>([]);
   const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
   const [pendingCsvData, setPendingCsvData] = useState<any[]>([]);
+
+  // Scheduler settings query
+  const { data: schedulerSettings, isLoading: loadingScheduler } = useQuery<{
+    enabled: boolean;
+    cronExpression: string;
+    lastRunAt: string | null;
+    lastRunStatus: string | null;
+    lastRunError: string | null;
+  }>({
+    queryKey: ['/api/scheduler/settings'],
+  });
+
+  // Scheduler settings form
+  const schedulerForm = useForm<{
+    enabled: boolean;
+    cronExpression: string;
+  }>({
+    defaultValues: {
+      enabled: schedulerSettings?.enabled || false,
+      cronExpression: schedulerSettings?.cronExpression || "0 6 * * *",
+    },
+  });
+
+  // Update form when scheduler settings are loaded
+  useEffect(() => {
+    if (schedulerSettings) {
+      schedulerForm.reset({
+        enabled: schedulerSettings.enabled,
+        cronExpression: schedulerSettings.cronExpression,
+      });
+    }
+  }, [schedulerSettings, schedulerForm]);
+
+  // Save scheduler settings mutation
+  const saveSchedulerMutation = useMutation({
+    mutationFn: async (data: { enabled: boolean; cronExpression: string }) => {
+      const response = await apiRequest('PUT', '/api/scheduler/settings', data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduler/settings'] });
+      toast({
+        title: "Настройки сохранены",
+        description: "Настройки планировщика успешно обновлены",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось сохранить настройки",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Run scheduler manually mutation
+  const runSchedulerMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/scheduler/run');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduler/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      toast({
+        title: "Запущено",
+        description: "Планировщик запущен вручную",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось запустить планировщик",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSaveScheduler = schedulerForm.handleSubmit((data) => {
+    saveSchedulerMutation.mutate(data);
+  });
+
+  const handleRunSchedulerNow = () => {
+    runSchedulerMutation.mutate();
+  };
 
   // Load saved sources from localStorage on mount
   useEffect(() => {
@@ -743,6 +831,120 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
 
   return (
     <>
+      {/* Scheduler Settings Card */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="w-5 h-5" />
+            Автоматическая загрузка CSV
+          </CardTitle>
+          <CardDescription>
+            Настройте автоматическую загрузку CSV файлов по расписанию
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingScheduler ? (
+            <div className="text-sm text-muted-foreground">Загрузка настроек...</div>
+          ) : (
+            <Form {...schedulerForm}>
+              <form onSubmit={handleSaveScheduler} className="space-y-4">
+                <FormField
+                  control={schedulerForm.control}
+                  name="enabled"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Включить планировщик</FormLabel>
+                        <FormDescription>
+                          Автоматически загружать CSV файлы по расписанию
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-scheduler-enabled"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={schedulerForm.control}
+                  name="cronExpression"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cron выражение</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="0 6 * * *"
+                          className="font-mono"
+                          data-testid="input-cron-expression"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Формат: минута час день месяц день_недели (например, "0 6 * * *" = каждый день в 6:00)
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {schedulerSettings && (
+                  <div className="space-y-2 rounded-md border p-4">
+                    <div className="text-sm font-medium">Статус последнего запуска</div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="text-muted-foreground">Время запуска:</div>
+                      <div data-testid="text-last-run-at">
+                        {schedulerSettings.lastRunAt
+                          ? new Date(schedulerSettings.lastRunAt).toLocaleString('ru-RU')
+                          : "Еще не запускался"}
+                      </div>
+                      <div className="text-muted-foreground">Статус:</div>
+                      <div data-testid="text-last-run-status">
+                        {schedulerSettings.lastRunStatus || "—"}
+                      </div>
+                      {schedulerSettings.lastRunError && (
+                        <>
+                          <div className="text-muted-foreground">Ошибка:</div>
+                          <div className="text-destructive text-xs" data-testid="text-last-run-error">
+                            {schedulerSettings.lastRunError}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    disabled={saveSchedulerMutation.isPending}
+                    data-testid="button-save-scheduler"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    {saveSchedulerMutation.isPending ? "Сохранение..." : "Сохранить настройки"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleRunSchedulerNow}
+                    disabled={runSchedulerMutation.isPending}
+                    data-testid="button-run-scheduler"
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    {runSchedulerMutation.isPending ? "Запуск..." : "Запустить сейчас"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* CSV Upload Card */}
       <Card>
         <CardHeader>
           <CardTitle>Массовая загрузка CSV</CardTitle>

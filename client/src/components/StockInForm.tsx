@@ -93,6 +93,37 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
     queryKey: ["/api/pending-placements"],
   });
 
+  // Query archived items based on current SKU
+  const { data: archivedItems = [], isLoading: loadingArchived } = useQuery<any[]>({
+    queryKey: ["/api/archived-items", { sku }],
+    enabled: sku.length >= 3,
+  });
+
+  // Restore archived item mutation
+  const restoreArchivedMutation = useMutation({
+    mutationFn: async (archivedItemId: string) => {
+      const response = await apiRequest("POST", `/api/archived-items/${archivedItemId}/restore`, {
+        userId: user?.id,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/archived-items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      toast({
+        title: "Восстановлено",
+        description: "Товар успешно восстановлен из архива",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось восстановить товар",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Delete pending placement mutation
   const deletePlacementMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -626,6 +657,51 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
         )}
       </CardContent>
     </Card>
+
+    {/* Archived Items Card */}
+    {archivedItems.length > 0 && (
+      <Card className="mt-4 border-amber-500 bg-amber-50 dark:bg-amber-950/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="w-5 h-5" />
+            Найдены архивные товары
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Для SKU "{sku}" найдены товары в архиве. Вы можете восстановить их вместо создания новых записей.
+          </p>
+          <div className="space-y-2">
+            {archivedItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between p-3 border rounded-md bg-background"
+                data-testid={`archived-item-${item.id}`}
+              >
+                <div className="flex-1">
+                  <div className="font-medium">{item.name || "Без названия"}</div>
+                  <div className="text-sm text-muted-foreground">
+                    Локация: {item.location} | Количество: {item.quantity} | 
+                    Архивировано: {new Date(item.archivedAt).toLocaleString('ru-RU')}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => restoreArchivedMutation.mutate(item.id)}
+                  disabled={restoreArchivedMutation.isPending}
+                  data-testid={`button-restore-${item.id}`}
+                  className="ml-4"
+                >
+                  <Package className="w-4 h-4 mr-1" />
+                  {restoreArchivedMutation.isPending ? "Восстановление..." : "Восстановить"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )}
 
     {/* Диалог предупреждения о Faulty товаре */}
     <AlertDialog open={showFaultyWarning} onOpenChange={setShowFaultyWarning}>

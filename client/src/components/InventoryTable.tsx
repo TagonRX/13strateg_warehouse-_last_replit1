@@ -184,11 +184,17 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const [duplicates, setDuplicates] = useState<any[]>([]);
   const [deleteNoItemIdDialogOpen, setDeleteNoItemIdDialogOpen] = useState(false);
   const [isDeletingNoItemId, setIsDeletingNoItemId] = useState(false);
+  const [showDuplicatesFilter, setShowDuplicatesFilter] = useState(false);
   const { toast } = useToast();
 
   // Fetch tested items for condition display
   const { data: testedItems = [] } = useQuery<any[]>({
     queryKey: ['/api/tested-items'],
+  });
+
+  // Fetch duplicate SKUs
+  const { data: duplicateSkuGroups = [] } = useQuery<any[]>({
+    queryKey: ['/api/duplicate-skus'],
   });
 
   // Helper function to get condition color classes
@@ -271,18 +277,35 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     });
   }, [items]);
 
+  // Get set of duplicate SKUs for filtering
+  const duplicateSkuSet = useMemo(() => {
+    const skus = new Set<string>();
+    duplicateSkuGroups.forEach((group: any) => {
+      if (group.sku) {
+        skus.add(group.sku);
+      }
+    });
+    return skus;
+  }, [duplicateSkuGroups]);
+
   // Filter and paginate items (memoized to prevent lag on search input)
   const filteredItems = useMemo(() => {
     const searchLower = search.toLowerCase();
-    return sortedItems
+    let filtered = sortedItems
       .filter(
         (item) =>
           (item.name || "").toLowerCase().includes(searchLower) ||
           item.sku.toLowerCase().includes(searchLower) ||
           (item.barcode || "").toLowerCase().includes(searchLower)
-      )
-      .slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit));
-  }, [sortedItems, search, pageLimit]);
+      );
+    
+    // Apply duplicate SKU filter if enabled
+    if (showDuplicatesFilter) {
+      filtered = filtered.filter((item) => duplicateSkuSet.has(item.sku));
+    }
+    
+    return filtered.slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit));
+  }, [sortedItems, search, pageLimit, showDuplicatesFilter, duplicateSkuSet]);
 
   // Cache parsed barcode mappings to avoid repeated JSON.parse on each render
   const parsedMappingsCache = useMemo(() => {
@@ -1059,7 +1082,28 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
               <SelectItem value="all">Все</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            variant={showDuplicatesFilter ? "default" : "outline"}
+            size="default"
+            onClick={() => setShowDuplicatesFilter(!showDuplicatesFilter)}
+            data-testid="button-filter-duplicates"
+            className="whitespace-nowrap"
+          >
+            <Copy className="w-4 h-4 mr-2" />
+            {showDuplicatesFilter ? "Все товары" : "Дубликаты SKU"}
+            {showDuplicatesFilter && duplicateSkuGroups.length > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {duplicateSkuGroups.length}
+              </Badge>
+            )}
+          </Button>
         </div>
+
+        {showDuplicatesFilter && duplicateSkuGroups.length > 0 && (
+          <div className="text-sm text-muted-foreground" data-testid="text-duplicates-count">
+            Показано SKU с дубликатами: {duplicateSkuGroups.length}
+          </div>
+        )}
 
         <div className="border rounded-md overflow-auto">
           <Table>
