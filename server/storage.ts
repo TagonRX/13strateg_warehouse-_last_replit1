@@ -354,8 +354,11 @@ export class DbStorage implements IStorage {
     let success = 0;
     let updated = 0;
     let errors = 0;
+    
+    console.log(`[BULK UPSERT] Starting process for ${items.length} items...`);
 
     // Load all existing items ONCE at the start (optimized)
+    console.log('[BULK UPSERT] Loading existing inventory...');
     const allExistingItems = await this.getAllInventoryItems();
     const existingByItemId = new Map(
       allExistingItems
@@ -370,6 +373,7 @@ export class DbStorage implements IStorage {
         existingBySku.set(item.sku, existing);
       }
     }
+    console.log(`[BULK UPSERT] Loaded ${allExistingItems.length} existing items (${existingByItemId.size} with Item ID)`);
 
     const itemsToCreate: InsertInventoryItem[] = [];
     const itemsToUpdate: { id: string; updates: Partial<InsertInventoryItem> }[] = [];
@@ -379,7 +383,13 @@ export class DbStorage implements IStorage {
     const createdItemIds = new Set<string>();
 
     // Process all items in memory first
+    console.log('[BULK UPSERT] Analyzing items...');
+    let processedCount = 0;
     for (const item of items) {
+      processedCount++;
+      if (processedCount % 1000 === 0) {
+        console.log(`[BULK UPSERT] Analyzed ${processedCount}/${items.length} items...`);
+      }
       try {
         // Extract location from SKU if not provided
         const location = item.location || this.extractLocation(item.sku);
@@ -506,6 +516,7 @@ export class DbStorage implements IStorage {
     }
 
     // Batch insert new items (chunks of 100) with fallback to individual inserts on error
+    console.log(`[BULK UPSERT] Creating ${itemsToCreate.length} new items...`);
     if (itemsToCreate.length > 0) {
       const chunkSize = 100;
       for (let i = 0; i < itemsToCreate.length; i += chunkSize) {
@@ -513,20 +524,8 @@ export class DbStorage implements IStorage {
         try {
           await db.insert(inventoryItems).values(chunk);
           success += chunk.length;
-          
-          // Log CSV_UPLOAD event for each created item
-          for (const item of chunk) {
-            await this.createEventLog({
-              userId: null,
-              action: "CSV_UPLOAD",
-              details: `CSV Import: Created new item ${item.name || item.sku}`,
-              productId: item.productId || null,
-              itemName: item.name || null,
-              sku: item.sku,
-              location: item.location,
-              quantity: item.quantity,
-              price: item.price || null,
-            });
+          if ((i + chunkSize) % 1000 === 0 || i + chunkSize >= itemsToCreate.length) {
+            console.log(`[BULK UPSERT] Created ${Math.min(i + chunkSize, itemsToCreate.length)}/${itemsToCreate.length} items...`);
           }
         } catch (error) {
           console.error(`Batch insert error, retrying item-by-item:`, error);
@@ -535,18 +534,6 @@ export class DbStorage implements IStorage {
             try {
               await db.insert(inventoryItems).values(item);
               success++;
-              
-              await this.createEventLog({
-                userId: null,
-                action: "CSV_UPLOAD",
-                details: `CSV Import: Created new item ${item.name || item.sku}`,
-                productId: item.productId || null,
-                itemName: item.name || null,
-                sku: item.sku,
-                location: item.location,
-                quantity: item.quantity,
-                price: item.price || null,
-              });
             } catch (itemError) {
               console.error(`Individual insert error for ${item.itemId || item.sku}:`, itemError);
               errors++;
@@ -557,27 +544,19 @@ export class DbStorage implements IStorage {
     }
 
     // Batch update items
+    console.log(`[BULK UPSERT] Updating ${itemsToUpdate.length} existing items...`);
+    let updateCount = 0;
     for (const { id, updates } of itemsToUpdate) {
       try {
-        const [updatedItem] = await db
+        await db
           .update(inventoryItems)
           .set({ ...updates, updatedAt: new Date() })
-          .where(eq(inventoryItems.id, id))
-          .returning();
+          .where(eq(inventoryItems.id, id));
         updated++;
-        
-        // Log CSV_UPLOAD_UPDATE event for each updated item
-        await this.createEventLog({
-          userId: null,
-          action: "CSV_UPLOAD_UPDATE",
-          details: `CSV Import: Updated item ${updatedItem.name || updatedItem.sku} (quantity: ${updatedItem.quantity}, price: ${updatedItem.price || 0})`,
-          productId: updatedItem.productId || null,
-          itemName: updatedItem.name || null,
-          sku: updatedItem.sku,
-          location: updatedItem.location,
-          quantity: updatedItem.quantity,
-          price: updatedItem.price || null,
-        });
+        updateCount++;
+        if (updateCount % 1000 === 0 || updateCount === itemsToUpdate.length) {
+          console.log(`[BULK UPSERT] Updated ${updateCount}/${itemsToUpdate.length} items...`);
+        }
       } catch (error) {
         console.error(`Update error:`, error);
         errors++;
@@ -600,6 +579,7 @@ export class DbStorage implements IStorage {
     // NOTE: Automatic archiving of missing items disabled - it could archive legitimate inventory
     // that was added manually or from other sources. This feature requires proper source tracking.
     
+    console.log(`[BULK UPSERT] ✅ Complete: ${success} created, ${updated} updated, ${errors} errors`);
     return { success, updated, errors };
   }
 
