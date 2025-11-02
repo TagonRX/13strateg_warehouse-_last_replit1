@@ -1232,19 +1232,19 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
               <div className="grid grid-cols-3 gap-4">
                 <Card>
                   <CardContent className="pt-6">
-                    <div className="text-2xl font-bold">{csvPreview.rows.length}</div>
+                    <div className="text-2xl font-bold break-all">{csvPreview.rows.length}</div>
                     <div className="text-sm text-muted-foreground">Строк данных</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="pt-6">
-                    <div className="text-2xl font-bold">{csvPreview.headers.length}</div>
+                    <div className="text-2xl font-bold break-all">{csvPreview.headers.length}</div>
                     <div className="text-sm text-muted-foreground">Колонок</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="pt-6">
-                    <div className="text-2xl font-bold">{columnMapping.filter(m => m.enabled).length}</div>
+                    <div className="text-2xl font-bold break-all">{columnMapping.filter(m => m.enabled).length}</div>
                     <div className="text-sm text-muted-foreground">Активных</div>
                   </CardContent>
                 </Card>

@@ -14,6 +14,7 @@ This project is a comprehensive warehouse management system designed to streamli
 - **Horizontal Scroll Fix**: Removed duplicate overflow-x-auto wrapper from inventory page that was causing scrollbar glitches when scrolling right. Single overflow-auto container in InventoryTable now handles all scrolling correctly
 - **Conflict Dialog Overflow Fix**: Fixed ConflictResolutionDialog layout using flex-column structure with flex-shrink-0 header/footer and flex-1 ScrollArea, ensuring "Применить" button is always visible even with large conflict lists
 - **Scheduler Progress Feedback**: Added visual toast notifications for "Запустить сейчас" button showing "Загрузка началась" at start and completion results (created/updated/errors count) at finish
+- **CSV Preview Dialog Overflow Fix**: Added break-all class to large numbers in preview statistics cards preventing text overflow when row counts exceed card width
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
