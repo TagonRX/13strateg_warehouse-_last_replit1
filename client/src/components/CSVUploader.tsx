@@ -216,8 +216,18 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
   
   const [sourceType, setSourceType] = useState<'file' | 'url' | 'multiple-urls'>('file');
   const [sourceUrl, setSourceUrl] = useState("");
-  const [savedSources, setSavedSources] = useState<SavedSource[]>([]);
   const [loadProgress, setLoadProgress] = useState<LoadProgress | null>(null);
+  
+  // Fetch CSV sources from database
+  const { data: savedSources = [] } = useQuery<Array<{
+    id: string;
+    name: string;
+    url: string;
+    enabled: boolean;
+    sortOrder: number;
+  }>>({
+    queryKey: ['/api/csv-sources'],
+  });
   
   // Column mapping dialog state
   const [mappingDialogOpen, setMappingDialogOpen] = useState(false);
@@ -322,26 +332,48 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
   };
 
   // Load saved sources from localStorage on mount
+  // Migrations: Load sources from localStorage and save to database (one-time)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('csvImportSources');
-      if (saved) {
-        const sources: SavedSource[] = JSON.parse(saved);
-        setSavedSources(sources);
+    const migrateFromLocalStorage = async () => {
+      try {
+        const saved = localStorage.getItem('csvImportSources');
+        if (!saved || !savedSources) return;
+        
+        const localSources: SavedSource[] = JSON.parse(saved);
+        if (localSources.length === 0) return;
+        
+        // Only migrate if database is empty
+        if (savedSources.length > 0) {
+          localStorage.removeItem('csvImportSources');
+          return;
+        }
+        
+        // Migrate each source to database
+        for (const source of localSources) {
+          await apiRequest("POST", "/api/csv-sources", {
+            name: source.label,
+            url: source.url,
+            enabled: true,
+            sortOrder: 0
+          });
+        }
+        
+        toast({
+          title: "Миграция завершена",
+          description: `Перенесено ${localSources.length} источников в базу данных`,
+        });
+        
+        localStorage.removeItem('csvImportSources');
+        queryClient.invalidateQueries({ queryKey: ['/api/csv-sources'] });
+      } catch (e) {
+        console.error('Failed to migrate sources:', e);
       }
-    } catch (e) {
-      console.error('Failed to load saved sources:', e);
+    };
+    
+    if (savedSources !== undefined) {
+      migrateFromLocalStorage();
     }
-  }, []);
-
-  // Helper: Save sources to localStorage
-  const saveSourcesToLocalStorage = (sources: SavedSource[]) => {
-    try {
-      localStorage.setItem('csvImportSources', JSON.stringify(sources));
-    } catch (e) {
-      console.error('Failed to save sources:', e);
-    }
-  };
+  }, [savedSources]);
 
   // Helper: Save column mapping to localStorage
   const saveColumnMapping = (mapping: ColumnMapping[]) => {
