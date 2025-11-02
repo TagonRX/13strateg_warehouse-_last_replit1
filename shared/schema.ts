@@ -21,6 +21,7 @@ export const inventoryItems = pgTable("inventory_items", {
   sku: text("sku").notNull(), // SKU = Локация (обязательно)
   location: text("location").notNull(), // Автоматически извлекается из SKU
   quantity: integer("quantity").notNull().default(1),
+  zeroQuantitySince: timestamp("zero_quantity_since"), // Дата, когда quantity стало <= 0 (для 4-дневной задержки архивации)
   barcode: text("barcode"), // Опционально (устаревшее - используется для обратной совместимости)
   barcodeMappings: text("barcode_mappings"), // JSON массив: [{ code: "123", qty: 2 }, { code: "456", qty: 3 }]
   condition: text("condition"), // Состояние товара: New, Used, Exdisplay, Parts, Faulty (для товаров без штрихкода)

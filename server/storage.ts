@@ -196,7 +196,7 @@ export interface IStorage {
   bulkUpdateInventoryFromCsv(items: InsertInventoryItem[], userId: string): Promise<{ success: number; updated: number }>;
 
   // Archived Inventory methods
-  moveToArchive(inventoryItemId: string, userId?: string): Promise<ArchivedInventoryItem>;
+  moveToArchive(inventoryItemId: string, userId?: string, reason?: string): Promise<ArchivedInventoryItem>;
   getArchivedItems(filters?: { sku?: string; itemId?: string; limit?: number }): Promise<ArchivedInventoryItem[]>;
   restoreFromArchive(archivedItemId: string, userId: string): Promise<InventoryItem>;
   findDuplicateSkus(): Promise<{ sku: string; items: InventoryItem[] }[]>;
@@ -386,13 +386,26 @@ export class DbStorage implements IStorage {
         // SMART UPDATE LOGIC: If itemId exists in database, update ONLY quantity and price
         if (item.itemId && existingByItemId.has(item.itemId)) {
           const existing = existingByItemId.get(item.itemId)!;
+          const newQuantity = item.quantity ?? existing.quantity;
+          const oldQuantity = existing.quantity;
+          
+          // Determine zeroQuantitySince based on quantity transition
+          let zeroQuantitySince = existing.zeroQuantitySince;
+          if (oldQuantity > 0 && newQuantity <= 0) {
+            // Quantity went from positive to zero or negative
+            zeroQuantitySince = new Date();
+          } else if (oldQuantity <= 0 && newQuantity > 0) {
+            // Quantity went from zero/negative to positive
+            zeroQuantitySince = null;
+          }
+          // If both positive or both non-positive, keep existing zeroQuantitySince
           
           itemsToUpdate.push({
             id: existing.id,
             updates: {
-              quantity: item.quantity,
+              quantity: newQuantity,
               price: item.price,
-              updatedAt: new Date(),
+              zeroQuantitySince,
             }
           });
           
@@ -416,10 +429,21 @@ export class DbStorage implements IStorage {
           
           if (existingWithData) {
             // Enrich existing item with new data (name, itemId, etc.) without overwriting barcode/dimensions
+            const newQuantity = item.quantity || existingWithData.quantity;
+            const oldQuantity = existingWithData.quantity;
+            
+            // Determine zeroQuantitySince based on quantity transition
+            let zeroQuantitySince = existingWithData.zeroQuantitySince;
+            if (oldQuantity > 0 && newQuantity <= 0) {
+              zeroQuantitySince = new Date();
+            } else if (oldQuantity <= 0 && newQuantity > 0) {
+              zeroQuantitySince = null;
+            }
+            
             const updates: Partial<InsertInventoryItem> = {
-              quantity: item.quantity || existingWithData.quantity,
+              quantity: newQuantity,
               price: item.price || existingWithData.price,
-              updatedAt: new Date(),
+              zeroQuantitySince,
             };
             
             // Only update name/itemId if they are missing in existing item
@@ -446,16 +470,27 @@ export class DbStorage implements IStorage {
           } else {
             // No existing item with barcode/dimensions, update first match
             const firstMatch = skuMatches[0];
+            const newQuantity = item.quantity || firstMatch.quantity;
+            const oldQuantity = firstMatch.quantity;
+            
+            // Determine zeroQuantitySince based on quantity transition
+            let zeroQuantitySince = firstMatch.zeroQuantitySince;
+            if (oldQuantity > 0 && newQuantity <= 0) {
+              zeroQuantitySince = new Date();
+            } else if (oldQuantity <= 0 && newQuantity > 0) {
+              zeroQuantitySince = null;
+            }
+            
             itemsToUpdate.push({
               id: firstMatch.id,
               updates: {
-                quantity: item.quantity || firstMatch.quantity,
+                quantity: newQuantity,
                 price: item.price || firstMatch.price,
                 name: item.name || firstMatch.name,
                 itemId: item.itemId || firstMatch.itemId,
                 barcode: item.barcode || firstMatch.barcode,
                 location: location,
-                updatedAt: new Date(),
+                zeroQuantitySince,
               }
             });
           }
@@ -559,6 +594,39 @@ export class DbStorage implements IStorage {
           console.error(`SKU errors batch insert error:`, error);
         }
       }
+    }
+
+    // Archive items missing from CSV import
+    const csvItemIds = new Set(
+      items
+        .filter(i => i.itemId)
+        .map(i => i.itemId!)
+    );
+    const csvSkus = new Set(items.map(i => i.sku));
+    
+    let archivedCount = 0;
+    for (const existing of allExistingItems) {
+      const missingFromCsv = existing.itemId 
+        ? !csvItemIds.has(existing.itemId)
+        : !csvSkus.has(existing.sku);
+      
+      if (missingFromCsv) {
+        try {
+          await this.moveToArchive(existing.id, 'system', 'Item missing from CSV import');
+          archivedCount++;
+        } catch (error) {
+          console.error(`Error archiving missing item ${existing.id}:`, error);
+        }
+      }
+    }
+    
+    // Log CSV_ITEM_ARCHIVED_MISSING event if any items were archived
+    if (archivedCount > 0) {
+      await this.createEventLog({
+        userId: null,
+        action: "CSV_ITEM_ARCHIVED_MISSING",
+        details: `CSV Import: Archived ${archivedCount} items missing from CSV`,
+      });
     }
 
     return { success, updated, errors };
@@ -1286,16 +1354,21 @@ export class DbStorage implements IStorage {
       return { success: false, message: "Task already completed" };
     }
 
-    // Decrease item quantity by 1 or archive if quantity reaches 0
+    // Decrease item quantity by 1 and set zeroQuantitySince if reaching 0
     const newQuantity = item.quantity - 1;
-    if (newQuantity <= 0) {
-      // Auto-archive instead of delete
-      await this.moveToArchive(item.id, userId);
-    } else {
-      await db.update(inventoryItems)
-        .set({ quantity: newQuantity, updatedAt: new Date() })
-        .where(eq(inventoryItems.id, item.id));
+    const updates: any = { 
+      quantity: newQuantity, 
+      updatedAt: new Date() 
+    };
+    
+    // Set zeroQuantitySince when quantity reaches 0
+    if (newQuantity <= 0 && item.quantity > 0) {
+      updates.zeroQuantitySince = new Date();
     }
+    
+    await db.update(inventoryItems)
+      .set(updates)
+      .where(eq(inventoryItems.id, item.id));
 
     // Update task progress
     const pickedIds = task.pickedItemIds || [];
@@ -1356,16 +1429,21 @@ export class DbStorage implements IStorage {
       .limit(1);
 
     if (item) {
-      // Decrease item quantity by 1 or archive if quantity reaches 0
+      // Decrease item quantity by 1 and set zeroQuantitySince if reaching 0
       const newQuantity = item.quantity - 1;
-      if (newQuantity <= 0) {
-        // Auto-archive instead of delete
-        await this.moveToArchive(item.id, userId);
-      } else {
-        await db.update(inventoryItems)
-          .set({ quantity: newQuantity, updatedAt: new Date() })
-          .where(eq(inventoryItems.id, item.id));
+      const updates: any = { 
+        quantity: newQuantity, 
+        updatedAt: new Date() 
+      };
+      
+      // Set zeroQuantitySince when quantity reaches 0
+      if (newQuantity <= 0 && item.quantity > 0) {
+        updates.zeroQuantitySince = new Date();
       }
+      
+      await db.update(inventoryItems)
+        .set(updates)
+        .where(eq(inventoryItems.id, item.id));
 
       // Update task progress with item ID
       const pickedIds = task.pickedItemIds || [];
@@ -2306,7 +2384,7 @@ export class DbStorage implements IStorage {
   }
 
   // Archived Inventory methods
-  async moveToArchive(inventoryItemId: string, userId?: string): Promise<ArchivedInventoryItem> {
+  async moveToArchive(inventoryItemId: string, userId?: string, reason?: string): Promise<ArchivedInventoryItem> {
     // Get the inventory item
     const item = await this.getInventoryItemById(inventoryItemId);
     if (!item) {
@@ -2368,10 +2446,14 @@ export class DbStorage implements IStorage {
 
     // Create event log
     if (userId) {
+      const details = reason 
+        ? `Item archived: ${item.name || item.sku} - ${reason}`
+        : `Item archived: ${item.name || item.sku} (quantity: ${item.quantity})`;
+        
       await this.createEventLog({
-        userId,
+        userId: userId === 'system' ? null : userId,
         action: "ITEM_ARCHIVED",
-        details: `Item archived: ${item.name || item.sku} (quantity: ${item.quantity})`,
+        details,
         productId: item.productId || null,
         itemName: item.name || null,
         sku: item.sku,
