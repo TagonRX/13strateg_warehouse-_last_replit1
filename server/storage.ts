@@ -17,6 +17,8 @@ import {
   pendingPlacements,
   csvImportSessions,
   orders,
+  archivedInventoryItems,
+  schedulerSettings,
   type User, 
   type InsertUser,
   type InventoryItem,
@@ -48,9 +50,15 @@ import {
   type CsvImportSession,
   type InsertCsvImportSession,
   type Order,
-  type InsertOrder
+  type InsertOrder,
+  type ArchivedInventoryItem,
+  type InsertArchivedInventoryItem,
+  type SchedulerSetting,
+  type InsertSchedulerSetting
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ilike, getTableColumns } from "drizzle-orm";
+import fs from "fs/promises";
+import path from "path";
 
 export interface IStorage {
   // User methods
@@ -186,6 +194,16 @@ export interface IStorage {
   updateCsvImportSession(id: string, updates: Partial<InsertCsvImportSession>): Promise<CsvImportSession>;
   getAllCsvImportSessions(userId?: string): Promise<CsvImportSession[]>;
   bulkUpdateInventoryFromCsv(items: InsertInventoryItem[], userId: string): Promise<{ success: number; updated: number }>;
+
+  // Archived Inventory methods
+  moveToArchive(inventoryItemId: string, userId?: string): Promise<ArchivedInventoryItem>;
+  getArchivedItems(filters?: { sku?: string; itemId?: string; limit?: number }): Promise<ArchivedInventoryItem[]>;
+  restoreFromArchive(archivedItemId: string, userId: string): Promise<InventoryItem>;
+  findDuplicateSkus(): Promise<{ sku: string; items: InventoryItem[] }[]>;
+  
+  // Scheduler Settings methods
+  getSchedulerSettings(): Promise<SchedulerSetting | undefined>;
+  updateSchedulerSettings(updates: Partial<InsertSchedulerSetting>): Promise<SchedulerSetting>;
 
   // Order methods
   createOrder(order: InsertOrder): Promise<Order>;
@@ -338,18 +356,26 @@ export class DbStorage implements IStorage {
 
     // Load all existing items ONCE at the start (optimized)
     const allExistingItems = await this.getAllInventoryItems();
-    const existingByProductId = new Map(
+    const existingByItemId = new Map(
       allExistingItems
-        .filter(i => i.productId)
-        .map(i => [i.productId!, i])
+        .filter(i => i.itemId)
+        .map(i => [i.itemId!, i])
     );
+    const existingBySku = new Map<string, InventoryItem[]>();
+    for (const item of allExistingItems) {
+      if (item.sku) {
+        const existing = existingBySku.get(item.sku) || [];
+        existing.push(item);
+        existingBySku.set(item.sku, existing);
+      }
+    }
 
     const itemsToCreate: InsertInventoryItem[] = [];
     const itemsToUpdate: { id: string; updates: Partial<InsertInventoryItem> }[] = [];
     const skuErrorsToCreate: InsertSkuError[] = [];
     
     // Track items being created to avoid duplicates within same upload
-    const createdProductIds = new Set<string>();
+    const createdItemIds = new Set<string>();
 
     // Process all items in memory first
     for (const item of items) {
@@ -357,74 +383,85 @@ export class DbStorage implements IStorage {
         // Extract location from SKU if not provided
         const location = item.location || this.extractLocation(item.sku);
         
-        // If productId provided, check by productId
-        if (item.productId && existingByProductId.has(item.productId)) {
-          const existing = existingByProductId.get(item.productId)!;
+        // SMART UPDATE LOGIC: If itemId exists in database, update ONLY quantity and price
+        if (item.itemId && existingByItemId.has(item.itemId)) {
+          const existing = existingByItemId.get(item.itemId)!;
           
-          // Check if SKU matches
-          if (existing.sku === item.sku) {
-            // SKU matches - prepare update
+          itemsToUpdate.push({
+            id: existing.id,
+            updates: {
+              quantity: item.quantity,
+              price: item.price,
+              updatedAt: new Date(),
+            }
+          });
+          
+        } else if (item.itemId) {
+          // ItemId provided but not found in database - create new item
+          if (!createdItemIds.has(item.itemId)) {
+            itemsToCreate.push({ ...item, location });
+            createdItemIds.add(item.itemId);
+          } else {
+            // Duplicate itemId in same upload - skip with error
+            errors++;
+            console.warn(`Duplicate itemId in CSV: ${item.itemId}`);
+          }
+          
+        } else if (existingBySku.has(item.sku)) {
+          // ENRICH MISSING DATA: If SKU exists with barcode/dimensions, add missing fields without overwriting
+          const skuMatches = existingBySku.get(item.sku)!;
+          
+          // Find item with barcode/dimensions (prefer first one)
+          const existingWithData = skuMatches.find(i => i.barcode || i.length || i.width || i.height);
+          
+          if (existingWithData) {
+            // Enrich existing item with new data (name, itemId, etc.) without overwriting barcode/dimensions
+            const updates: Partial<InsertInventoryItem> = {
+              quantity: item.quantity || existingWithData.quantity,
+              price: item.price || existingWithData.price,
+              updatedAt: new Date(),
+            };
+            
+            // Only update name/itemId if they are missing in existing item
+            if (!existingWithData.name && item.name) {
+              updates.name = item.name;
+            }
+            if (!existingWithData.itemId && item.itemId) {
+              updates.itemId = item.itemId;
+            }
+            if (!existingWithData.ebayUrl && item.ebayUrl) {
+              updates.ebayUrl = item.ebayUrl;
+            }
+            if (!existingWithData.ebaySellerName && item.ebaySellerName) {
+              updates.ebaySellerName = item.ebaySellerName;
+            }
+            
+            // Preserve existing barcode/dimensions, don't overwrite
+            // (no updates for barcode, length, width, height, weight, volume)
+            
             itemsToUpdate.push({
-              id: existing.id,
+              id: existingWithData.id,
+              updates
+            });
+          } else {
+            // No existing item with barcode/dimensions, update first match
+            const firstMatch = skuMatches[0];
+            itemsToUpdate.push({
+              id: firstMatch.id,
               updates: {
-                quantity: item.quantity,
-                barcode: item.barcode,
-                name: item.name,
+                quantity: item.quantity || firstMatch.quantity,
+                price: item.price || firstMatch.price,
+                name: item.name || firstMatch.name,
+                itemId: item.itemId || firstMatch.itemId,
+                barcode: item.barcode || firstMatch.barcode,
                 location: location,
+                updatedAt: new Date(),
               }
             });
-          } else {
-            // SKU mismatch - prepare SKU error record
-            skuErrorsToCreate.push({
-              productId: item.productId,
-              name: item.name || "",
-              csvSku: item.sku,
-              existingSku: existing.sku,
-              quantity: item.quantity,
-              barcode: item.barcode,
-              status: "PENDING",
-            });
-          }
-        } else if (item.productId) {
-          // ProductId provided but not found
-          // Check for duplicates within this upload
-          if (!createdProductIds.has(item.productId)) {
-            itemsToCreate.push({ ...item, location });
-            createdProductIds.add(item.productId);
-          } else {
-            // Duplicate productId in same upload - skip with error
-            errors++;
-            console.warn(`Duplicate productId in CSV: ${item.productId}`);
           }
         } else {
-          // No productId - try to find by SKU and name
-          const matchBySku = allExistingItems.find(i => i.sku === item.sku && i.name === item.name);
-          const matchBySkuOnly = allExistingItems.find(i => i.sku === item.sku && !i.productId);
-
-          if (matchBySku && !matchBySku.productId) {
-            itemsToUpdate.push({
-              id: matchBySku.id,
-              updates: {
-                quantity: matchBySku.quantity + (item.quantity || 1),
-                name: item.name || matchBySku.name,
-                barcode: item.barcode || matchBySku.barcode,
-                location: location,
-              }
-            });
-          } else if (matchBySkuOnly) {
-            itemsToUpdate.push({
-              id: matchBySkuOnly.id,
-              updates: {
-                quantity: matchBySkuOnly.quantity + (item.quantity || 1),
-                name: item.name || matchBySkuOnly.name,
-                barcode: item.barcode || matchBySkuOnly.barcode,
-                location: location,
-              }
-            });
-          } else {
-            // Create new item
-            itemsToCreate.push({ ...item, location });
-          }
+          // No matching SKU or itemId - create new item
+          itemsToCreate.push({ ...item, location });
         }
       } catch (error) {
         console.error(`Error processing item:`, error);
@@ -439,7 +476,22 @@ export class DbStorage implements IStorage {
         const chunk = itemsToCreate.slice(i, i + chunkSize);
         try {
           await db.insert(inventoryItems).values(chunk);
-          success += chunk.length; // Count success AFTER successful insert
+          success += chunk.length;
+          
+          // Log CSV_UPLOAD event for each created item
+          for (const item of chunk) {
+            await this.createEventLog({
+              userId: null,
+              action: "CSV_UPLOAD",
+              details: `CSV Import: Created new item ${item.name || item.sku}`,
+              productId: item.productId || null,
+              itemName: item.name || null,
+              sku: item.sku,
+              location: item.location,
+              quantity: item.quantity,
+              price: item.price || null,
+            });
+          }
         } catch (error) {
           console.error(`Batch insert error, retrying item-by-item:`, error);
           // Fallback: insert one by one to avoid losing entire chunk
@@ -447,8 +499,20 @@ export class DbStorage implements IStorage {
             try {
               await db.insert(inventoryItems).values(item);
               success++;
+              
+              await this.createEventLog({
+                userId: null,
+                action: "CSV_UPLOAD",
+                details: `CSV Import: Created new item ${item.name || item.sku}`,
+                productId: item.productId || null,
+                itemName: item.name || null,
+                sku: item.sku,
+                location: item.location,
+                quantity: item.quantity,
+                price: item.price || null,
+              });
             } catch (itemError) {
-              console.error(`Individual insert error for ${item.productId}:`, itemError);
+              console.error(`Individual insert error for ${item.itemId || item.sku}:`, itemError);
               errors++;
             }
           }
@@ -459,11 +523,25 @@ export class DbStorage implements IStorage {
     // Batch update items
     for (const { id, updates } of itemsToUpdate) {
       try {
-        await db
+        const [updatedItem] = await db
           .update(inventoryItems)
           .set({ ...updates, updatedAt: new Date() })
-          .where(eq(inventoryItems.id, id));
-        updated++; // Count AFTER successful update
+          .where(eq(inventoryItems.id, id))
+          .returning();
+        updated++;
+        
+        // Log CSV_UPLOAD_UPDATE event for each updated item
+        await this.createEventLog({
+          userId: null,
+          action: "CSV_UPLOAD_UPDATE",
+          details: `CSV Import: Updated item ${updatedItem.name || updatedItem.sku} (quantity: ${updatedItem.quantity}, price: ${updatedItem.price || 0})`,
+          productId: updatedItem.productId || null,
+          itemName: updatedItem.name || null,
+          sku: updatedItem.sku,
+          location: updatedItem.location,
+          quantity: updatedItem.quantity,
+          price: updatedItem.price || null,
+        });
       } catch (error) {
         console.error(`Update error:`, error);
         errors++;
@@ -1208,11 +1286,11 @@ export class DbStorage implements IStorage {
       return { success: false, message: "Task already completed" };
     }
 
-    // Decrease item quantity by 1 or delete if quantity reaches 0
+    // Decrease item quantity by 1 or archive if quantity reaches 0
     const newQuantity = item.quantity - 1;
     if (newQuantity <= 0) {
-      await db.delete(inventoryItems)
-        .where(eq(inventoryItems.id, item.id));
+      // Auto-archive instead of delete
+      await this.moveToArchive(item.id, userId);
     } else {
       await db.update(inventoryItems)
         .set({ quantity: newQuantity, updatedAt: new Date() })
@@ -1278,11 +1356,11 @@ export class DbStorage implements IStorage {
       .limit(1);
 
     if (item) {
-      // Decrease item quantity by 1 or delete if quantity reaches 0
+      // Decrease item quantity by 1 or archive if quantity reaches 0
       const newQuantity = item.quantity - 1;
       if (newQuantity <= 0) {
-        await db.delete(inventoryItems)
-          .where(eq(inventoryItems.id, item.id));
+        // Auto-archive instead of delete
+        await this.moveToArchive(item.id, userId);
       } else {
         await db.update(inventoryItems)
           .set({ quantity: newQuantity, updatedAt: new Date() })
@@ -2225,6 +2303,329 @@ export class DbStorage implements IStorage {
     });
     
     return found || null;
+  }
+
+  // Archived Inventory methods
+  async moveToArchive(inventoryItemId: string, userId?: string): Promise<ArchivedInventoryItem> {
+    // Get the inventory item
+    const item = await this.getInventoryItemById(inventoryItemId);
+    if (!item) {
+      throw new Error("Inventory item not found");
+    }
+
+    // Create archived item with all data preserved
+    const [archivedItem] = await db.insert(archivedInventoryItems).values({
+      originalId: item.id,
+      productId: item.productId,
+      name: item.name,
+      sku: item.sku,
+      location: item.location,
+      quantity: item.quantity,
+      barcode: item.barcode,
+      barcodeMappings: item.barcodeMappings,
+      condition: item.condition,
+      length: item.length,
+      width: item.width,
+      height: item.height,
+      volume: item.volume,
+      weight: item.weight,
+      price: item.price,
+      itemId: item.itemId,
+      ebayUrl: item.ebayUrl,
+      imageUrls: item.imageUrls,
+      ebaySellerName: item.ebaySellerName,
+      imageUrl1: item.imageUrl1,
+      imageUrl2: item.imageUrl2,
+      imageUrl3: item.imageUrl3,
+      imageUrl4: item.imageUrl4,
+      imageUrl5: item.imageUrl5,
+      imageUrl6: item.imageUrl6,
+      imageUrl7: item.imageUrl7,
+      imageUrl8: item.imageUrl8,
+      imageUrl9: item.imageUrl9,
+      imageUrl10: item.imageUrl10,
+      imageUrl11: item.imageUrl11,
+      imageUrl12: item.imageUrl12,
+      imageUrl13: item.imageUrl13,
+      imageUrl14: item.imageUrl14,
+      imageUrl15: item.imageUrl15,
+      imageUrl16: item.imageUrl16,
+      imageUrl17: item.imageUrl17,
+      imageUrl18: item.imageUrl18,
+      imageUrl19: item.imageUrl19,
+      imageUrl20: item.imageUrl20,
+      imageUrl21: item.imageUrl21,
+      imageUrl22: item.imageUrl22,
+      imageUrl23: item.imageUrl23,
+      imageUrl24: item.imageUrl24,
+      archivedBy: userId || null,
+      originalCreatedAt: item.createdAt,
+      originalUpdatedAt: item.updatedAt,
+    }).returning();
+
+    // Delete from inventory
+    await db.delete(inventoryItems).where(eq(inventoryItems.id, inventoryItemId));
+
+    // Create event log
+    if (userId) {
+      await this.createEventLog({
+        userId,
+        action: "ITEM_ARCHIVED",
+        details: `Item archived: ${item.name || item.sku} (quantity: ${item.quantity})`,
+        productId: item.productId || null,
+        itemName: item.name || null,
+        sku: item.sku,
+        location: item.location,
+        quantity: item.quantity,
+        price: item.price || null,
+      });
+    }
+
+    // Append to OLD-inventory.csv
+    await this.appendToOldInventoryCsv(archivedItem);
+
+    return archivedItem;
+  }
+
+  async getArchivedItems(filters?: { sku?: string; itemId?: string; limit?: number }): Promise<ArchivedInventoryItem[]> {
+    let query = db.select().from(archivedInventoryItems);
+    const conditions = [];
+
+    if (filters?.sku) {
+      conditions.push(eq(archivedInventoryItems.sku, filters.sku));
+    }
+
+    if (filters?.itemId) {
+      conditions.push(eq(archivedInventoryItems.itemId, filters.itemId));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    query = query.orderBy(sql`${archivedInventoryItems.archivedAt} DESC`) as any;
+
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as any;
+    }
+
+    return await query;
+  }
+
+  async restoreFromArchive(archivedItemId: string, userId: string): Promise<InventoryItem> {
+    // Get archived item
+    const [archivedItem] = await db.select().from(archivedInventoryItems)
+      .where(eq(archivedInventoryItems.id, archivedItemId))
+      .limit(1);
+
+    if (!archivedItem) {
+      throw new Error("Archived item not found");
+    }
+
+    // Restore to inventory
+    const [restoredItem] = await db.insert(inventoryItems).values({
+      productId: archivedItem.productId,
+      name: archivedItem.name,
+      sku: archivedItem.sku,
+      location: archivedItem.location,
+      quantity: archivedItem.quantity,
+      barcode: archivedItem.barcode,
+      barcodeMappings: archivedItem.barcodeMappings,
+      condition: archivedItem.condition,
+      length: archivedItem.length,
+      width: archivedItem.width,
+      height: archivedItem.height,
+      volume: archivedItem.volume,
+      weight: archivedItem.weight,
+      price: archivedItem.price,
+      itemId: archivedItem.itemId,
+      ebayUrl: archivedItem.ebayUrl,
+      imageUrls: archivedItem.imageUrls,
+      ebaySellerName: archivedItem.ebaySellerName,
+      imageUrl1: archivedItem.imageUrl1,
+      imageUrl2: archivedItem.imageUrl2,
+      imageUrl3: archivedItem.imageUrl3,
+      imageUrl4: archivedItem.imageUrl4,
+      imageUrl5: archivedItem.imageUrl5,
+      imageUrl6: archivedItem.imageUrl6,
+      imageUrl7: archivedItem.imageUrl7,
+      imageUrl8: archivedItem.imageUrl8,
+      imageUrl9: archivedItem.imageUrl9,
+      imageUrl10: archivedItem.imageUrl10,
+      imageUrl11: archivedItem.imageUrl11,
+      imageUrl12: archivedItem.imageUrl12,
+      imageUrl13: archivedItem.imageUrl13,
+      imageUrl14: archivedItem.imageUrl14,
+      imageUrl15: archivedItem.imageUrl15,
+      imageUrl16: archivedItem.imageUrl16,
+      imageUrl17: archivedItem.imageUrl17,
+      imageUrl18: archivedItem.imageUrl18,
+      imageUrl19: archivedItem.imageUrl19,
+      imageUrl20: archivedItem.imageUrl20,
+      imageUrl21: archivedItem.imageUrl21,
+      imageUrl22: archivedItem.imageUrl22,
+      imageUrl23: archivedItem.imageUrl23,
+      imageUrl24: archivedItem.imageUrl24,
+      createdBy: userId,
+    }).returning();
+
+    // Delete from archive
+    await db.delete(archivedInventoryItems).where(eq(archivedInventoryItems.id, archivedItemId));
+
+    // Create event log
+    await this.createEventLog({
+      userId,
+      action: "ITEM_RESTORED",
+      details: `Item restored from archive: ${restoredItem.name || restoredItem.sku}`,
+      productId: restoredItem.productId || null,
+      itemName: restoredItem.name || null,
+      sku: restoredItem.sku,
+      location: restoredItem.location,
+      quantity: restoredItem.quantity,
+      price: restoredItem.price || null,
+    });
+
+    return restoredItem;
+  }
+
+  async findDuplicateSkus(): Promise<{ sku: string; items: InventoryItem[] }[]> {
+    const allItems = await db.select().from(inventoryItems);
+    
+    // Group by SKU
+    const skuGroups = new Map<string, InventoryItem[]>();
+    
+    allItems.forEach(item => {
+      if (item.sku && item.sku.trim()) {
+        const existing = skuGroups.get(item.sku) || [];
+        existing.push(item);
+        skuGroups.set(item.sku, existing);
+      }
+    });
+    
+    // Find SKUs with multiple different itemIds
+    const duplicates: { sku: string; items: InventoryItem[] }[] = [];
+    
+    skuGroups.forEach((items, sku) => {
+      // Get unique itemIds for this SKU
+      const uniqueItemIds = new Set(
+        items
+          .filter(item => item.itemId && item.itemId.trim())
+          .map(item => item.itemId!)
+      );
+      
+      // If more than one unique itemId, it's a duplicate
+      if (uniqueItemIds.size > 1) {
+        duplicates.push({ sku, items });
+      }
+    });
+    
+    return duplicates;
+  }
+
+  // Scheduler Settings methods
+  async getSchedulerSettings(): Promise<SchedulerSetting | undefined> {
+    const [setting] = await db.select().from(schedulerSettings).limit(1);
+    
+    // Create default if none exists
+    if (!setting) {
+      const [newSetting] = await db.insert(schedulerSettings).values({
+        enabled: false,
+        cronExpression: "0 6 * * *", // 6:00 AM every day
+      }).returning();
+      return newSetting;
+    }
+    
+    return setting;
+  }
+
+  async updateSchedulerSettings(updates: Partial<InsertSchedulerSetting>): Promise<SchedulerSetting> {
+    const existing = await this.getSchedulerSettings();
+    
+    if (!existing) {
+      // Should not happen because getSchedulerSettings creates default
+      const [newSetting] = await db.insert(schedulerSettings).values({
+        enabled: updates.enabled ?? false,
+        cronExpression: updates.cronExpression ?? "0 6 * * *",
+        lastRunAt: updates.lastRunAt || null,
+        lastRunStatus: updates.lastRunStatus || null,
+        lastRunError: updates.lastRunError || null,
+      }).returning();
+      return newSetting;
+    }
+    
+    const [updatedSetting] = await db.update(schedulerSettings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schedulerSettings.id, existing.id))
+      .returning();
+    
+    return updatedSetting;
+  }
+
+  // Helper: Append archived item to OLD-inventory.csv
+  private async appendToOldInventoryCsv(item: ArchivedInventoryItem): Promise<void> {
+    try {
+      const dataDir = path.join(process.cwd(), 'data');
+      const csvPath = path.join(dataDir, 'OLD-inventory.csv');
+      
+      // Ensure data directory exists
+      try {
+        await fs.access(dataDir);
+      } catch {
+        await fs.mkdir(dataDir, { recursive: true });
+      }
+      
+      // Format CSV row (same as inventory.csv)
+      const imageUrls = item.imageUrls || '[]';
+      const row = [
+        item.productId || '',
+        item.name || '',
+        item.sku || '',
+        item.location || '',
+        item.quantity || 0,
+        item.barcode || '',
+        item.condition || '',
+        item.length || '',
+        item.width || '',
+        item.height || '',
+        item.volume || '',
+        item.weight || '',
+        item.price || '',
+        item.itemId || '',
+        item.ebayUrl || '',
+        imageUrls,
+        item.ebaySellerName || '',
+      ].map(field => {
+        // Escape quotes and wrap in quotes if contains comma
+        const str = String(field);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      }).join(',');
+      
+      // Check if file exists
+      let fileExists = false;
+      try {
+        await fs.access(csvPath);
+        fileExists = true;
+      } catch {
+        fileExists = false;
+      }
+      
+      // If file doesn't exist, write header first
+      if (!fileExists) {
+        const header = 'productId,name,sku,location,quantity,barcode,condition,length,width,height,volume,weight,price,itemId,ebayUrl,imageUrls,ebaySellerName\n';
+        await fs.writeFile(csvPath, header, 'utf8');
+      }
+      
+      // Append the row
+      await fs.appendFile(csvPath, row + '\n', 'utf8');
+      
+      console.log(`[ARCHIVE] Appended item to OLD-inventory.csv: ${item.sku}`);
+    } catch (error) {
+      console.error('[ARCHIVE] Failed to append to OLD-inventory.csv:', error);
+      // Don't throw - archiving to file is not critical
+    }
   }
 }
 

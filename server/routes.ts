@@ -3033,6 +3033,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Scheduler endpoints
+  app.get("/api/scheduler/settings", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getSchedulerSettings();
+      return res.json(settings);
+    } catch (error: any) {
+      console.error("[SCHEDULER] Get settings error:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/scheduler/settings", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { enabled, cronExpression } = req.body;
+      
+      // Validate cron expression if provided
+      if (cronExpression) {
+        const cron = await import('node-cron');
+        if (!cron.validate(cronExpression)) {
+          return res.status(400).json({ error: "Invalid cron expression" });
+        }
+      }
+      
+      const settings = await storage.updateSchedulerSettings({
+        enabled,
+        cronExpression,
+      });
+      
+      // Restart scheduler to apply new settings
+      const { restartScheduler } = await import('./scheduler');
+      await restartScheduler();
+      
+      return res.json(settings);
+    } catch (error: any) {
+      console.error("[SCHEDULER] Update settings error:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/scheduler/run", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { runScheduledImport } = await import('./scheduler');
+      const result = await runScheduledImport();
+      
+      if (result.success) {
+        return res.json(result);
+      } else {
+        return res.status(500).json(result);
+      }
+    } catch (error: any) {
+      console.error("[SCHEDULER] Manual run error:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // Setup WebSocket server for remote scanning

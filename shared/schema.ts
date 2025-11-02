@@ -32,6 +32,7 @@ export const inventoryItems = pgTable("inventory_items", {
   price: integer("price"), // Цена товара (целое число)
   itemId: text("item_id"), // eBay item ID из CSV (например "397123149682")
   ebayUrl: text("ebay_url"), // Ссылка на страницу товара на eBay
+  imageUrls: text("image_urls"), // JSON массив URL-ов изображений (старая версия, для обратной совместимости)
   ebaySellerName: text("ebay_seller_name"), // Имя продавца eBay (например "toponesale")
   imageUrl1: text("image_url_1"),
   imageUrl2: text("image_url_2"),
@@ -269,6 +270,69 @@ export const orders = pgTable("orders", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Архивные товары (товары с quantity <= 0, удаленные из основного инвентаря)
+export const archivedInventoryItems = pgTable("archived_inventory_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  originalId: varchar("original_id"), // ID из оригинальной таблицы inventory_items
+  productId: text("product_id"),
+  name: text("name"),
+  sku: text("sku").notNull(),
+  location: text("location").notNull(),
+  quantity: integer("quantity").notNull(), // Должно быть 0 или меньше
+  barcode: text("barcode"),
+  barcodeMappings: text("barcode_mappings"),
+  condition: text("condition"),
+  length: integer("length"),
+  width: integer("width"),
+  height: integer("height"),
+  volume: integer("volume"),
+  weight: integer("weight"),
+  price: integer("price"),
+  itemId: text("item_id"),
+  ebayUrl: text("ebay_url"),
+  imageUrls: text("image_urls"),
+  ebaySellerName: text("ebay_seller_name"),
+  imageUrl1: text("image_url_1"),
+  imageUrl2: text("image_url_2"),
+  imageUrl3: text("image_url_3"),
+  imageUrl4: text("image_url_4"),
+  imageUrl5: text("image_url_5"),
+  imageUrl6: text("image_url_6"),
+  imageUrl7: text("image_url_7"),
+  imageUrl8: text("image_url_8"),
+  imageUrl9: text("image_url_9"),
+  imageUrl10: text("image_url_10"),
+  imageUrl11: text("image_url_11"),
+  imageUrl12: text("image_url_12"),
+  imageUrl13: text("image_url_13"),
+  imageUrl14: text("image_url_14"),
+  imageUrl15: text("image_url_15"),
+  imageUrl16: text("image_url_16"),
+  imageUrl17: text("image_url_17"),
+  imageUrl18: text("image_url_18"),
+  imageUrl19: text("image_url_19"),
+  imageUrl20: text("image_url_20"),
+  imageUrl21: text("image_url_21"),
+  imageUrl22: text("image_url_22"),
+  imageUrl23: text("image_url_23"),
+  imageUrl24: text("image_url_24"),
+  archivedBy: varchar("archived_by").references(() => users.id), // Кто архивировал (может быть NULL для автоматической архивации)
+  archivedAt: timestamp("archived_at").defaultNow().notNull(), // Когда архивирован
+  originalCreatedAt: timestamp("original_created_at"), // Дата создания оригинального товара
+  originalUpdatedAt: timestamp("original_updated_at"), // Дата последнего обновления оригинального товара
+});
+
+// Настройки автоматического планировщика CSV импорта
+export const schedulerSettings = pgTable("scheduler_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  enabled: boolean("enabled").notNull().default(false), // Включен ли автоматический импорт
+  cronExpression: text("cron_expression").notNull().default("0 6 * * *"), // Расписание (по умолчанию 6:00 каждый день)
+  lastRunAt: timestamp("last_run_at"), // Время последнего запуска
+  lastRunStatus: text("last_run_status"), // SUCCESS, FAILED, RUNNING
+  lastRunError: text("last_run_error"), // Ошибка при последнем запуске
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -359,6 +423,16 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
   updatedAt: true,
 });
 
+export const insertArchivedInventoryItemSchema = createInsertSchema(archivedInventoryItems).omit({
+  id: true,
+  archivedAt: true,
+});
+
+export const insertSchedulerSettingSchema = createInsertSchema(schedulerSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -407,6 +481,12 @@ export type CsvImportSession = typeof csvImportSessions.$inferSelect;
 
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
+
+export type InsertArchivedInventoryItem = z.infer<typeof insertArchivedInventoryItemSchema>;
+export type ArchivedInventoryItem = typeof archivedInventoryItems.$inferSelect;
+
+export type InsertSchedulerSetting = z.infer<typeof insertSchedulerSettingSchema>;
+export type SchedulerSetting = typeof schedulerSettings.$inferSelect;
 
 // CSV Conflict Resolution Types
 export interface CSVConflict {

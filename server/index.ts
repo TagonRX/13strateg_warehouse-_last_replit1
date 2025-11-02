@@ -65,7 +65,16 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, () => {
+  }, async () => {
     log(`serving on port ${port}`);
+    
+    // Start the scheduler
+    try {
+      const { startScheduler } = await import('./scheduler');
+      await startScheduler();
+      log('CSV import scheduler initialized');
+    } catch (error) {
+      console.error('Failed to start scheduler:', error);
+    }
   });
 })();
