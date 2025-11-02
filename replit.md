@@ -3,6 +3,10 @@
 ## Overview
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
+## Recent Changes (November 2, 2025)
+- **CSV Import Performance Optimization**: Batch updates now process 10 items in parallel (matching insert strategy), eliminating the 90% progress freeze that occurred when updating thousands of items sequentially. Expected 10x speedup for large updates.
+- **Visible Progress Feedback**: Added toast notifications showing "Processing started" at the beginning and "✅ Upload complete: Created: X | Updated: Y | Errors: Z" at the end, giving users clear feedback on bulk operations.
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
