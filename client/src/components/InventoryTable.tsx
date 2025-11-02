@@ -184,6 +184,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const [duplicates, setDuplicates] = useState<any[]>([]);
   const [deleteNoItemIdDialogOpen, setDeleteNoItemIdDialogOpen] = useState(false);
   const [isDeletingNoItemId, setIsDeletingNoItemId] = useState(false);
+  const [deleteNoItemIdProgress, setDeleteNoItemIdProgress] = useState({ current: 0, total: 0 });
   const [showDuplicatesFilter, setShowDuplicatesFilter] = useState(false);
   const { toast } = useToast();
 
@@ -984,44 +985,60 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     }
 
     setIsDeletingNoItemId(true);
-    const results: { id: string; sku: string; success: boolean; error?: string }[] = [];
+    setDeleteNoItemIdProgress({ current: 0, total: itemsWithoutItemId.length });
     
-    // Delete items sequentially to catch individual errors
-    for (const item of itemsWithoutItemId) {
+    const allDeleted: string[] = [];
+    const allFailed: Array<{ id: string; error: string }> = [];
+    
+    // Extract item IDs for batch deletion
+    const itemIds = itemsWithoutItemId.map(item => item.id);
+    
+    // Process deletions in chunks of 10 for real-time progress and maximum speed
+    const chunkSize = 10;
+    for (let i = 0; i < itemIds.length; i += chunkSize) {
+      const chunk = itemIds.slice(i, i + chunkSize);
+      
       try {
-        await api.deleteInventoryItem(item.id);
-        results.push({ id: item.id, sku: item.sku, success: true });
+        // Use batch delete endpoint for parallel deletion (10x faster)
+        const result = await api.batchDeleteInventoryItems(chunk);
+        
+        // Collect results
+        allDeleted.push(...result.deleted);
+        allFailed.push(...result.failed);
+        
+        // Update progress with real-time count
+        setDeleteNoItemIdProgress({ current: allDeleted.length, total: itemIds.length });
       } catch (error: any) {
-        results.push({ id: item.id, sku: item.sku, success: false, error: error.message });
+        // If entire chunk fails, mark all as failed
+        chunk.forEach(id => {
+          allFailed.push({ id, error: error.message || 'Ошибка удаления' });
+        });
       }
     }
 
-    // Analyze results
-    const successes = results.filter(r => r.success);
-    const failures = results.filter(r => !r.success);
-
     setIsDeletingNoItemId(false);
     setDeleteNoItemIdDialogOpen(false);
+    setDeleteNoItemIdProgress({ current: 0, total: 0 });
 
     // Refetch inventory after deletion attempts
     await queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
 
     // Show results
-    if (failures.length === 0) {
+    if (allFailed.length === 0) {
       toast({
         title: "Удаление завершено",
-        description: `Удалено ${successes.length} товаров без Item ID`,
+        description: `Удалено ${allDeleted.length} товаров без Item ID`,
       });
-    } else if (successes.length === 0) {
+    } else if (allDeleted.length === 0) {
       toast({
         title: "Ошибка удаления",
-        description: `Не удалось удалить ни один из ${failures.length} товаров`,
+        description: `Не удалось удалить ни один из ${allFailed.length} товаров`,
         variant: "destructive",
       });
     } else {
       toast({
         title: "Частичное удаление",
-        description: `Удалено ${successes.length} из ${results.length} товаров. ${failures.length} не удалось удалить.`,
+        description: `Удалено ${allDeleted.length} из ${itemIds.length} товаров. ${allFailed.length} не удалось удалить.`,
         variant: "destructive",
       });
     }
@@ -1290,7 +1307,9 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
               disabled={isDeletingNoItemId}
               data-testid="button-confirm-delete-no-item-id"
             >
-              {isDeletingNoItemId ? "Удаление..." : "Удалить"}
+              {isDeletingNoItemId 
+                ? `Удаление ${deleteNoItemIdProgress.current} из ${deleteNoItemIdProgress.total}...` 
+                : "Удалить"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
