@@ -182,6 +182,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [duplicatesDialogOpen, setDuplicatesDialogOpen] = useState(false);
   const [duplicates, setDuplicates] = useState<any[]>([]);
+  const [deleteNoItemIdDialogOpen, setDeleteNoItemIdDialogOpen] = useState(false);
+  const [isDeletingNoItemId, setIsDeletingNoItemId] = useState(false);
   const { toast } = useToast();
 
   // Fetch tested items for condition display
@@ -940,6 +942,62 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     }
   };
 
+  const handleDeleteWithoutItemId = async () => {
+    const itemsWithoutItemId = items.filter(item => !item.itemId || item.itemId.trim() === '');
+    
+    if (itemsWithoutItemId.length === 0) {
+      toast({
+        title: "Нет товаров",
+        description: "Нет товаров без Item ID для удаления",
+      });
+      setDeleteNoItemIdDialogOpen(false);
+      return;
+    }
+
+    setIsDeletingNoItemId(true);
+    const results: { id: string; sku: string; success: boolean; error?: string }[] = [];
+    
+    // Delete items sequentially to catch individual errors
+    for (const item of itemsWithoutItemId) {
+      try {
+        await api.deleteInventoryItem(item.id);
+        results.push({ id: item.id, sku: item.sku, success: true });
+      } catch (error: any) {
+        results.push({ id: item.id, sku: item.sku, success: false, error: error.message });
+      }
+    }
+
+    // Analyze results
+    const successes = results.filter(r => r.success);
+    const failures = results.filter(r => !r.success);
+
+    setIsDeletingNoItemId(false);
+    setDeleteNoItemIdDialogOpen(false);
+
+    // Refetch inventory after deletion attempts
+    await queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+
+    // Show results
+    if (failures.length === 0) {
+      toast({
+        title: "Удаление завершено",
+        description: `Удалено ${successes.length} товаров без Item ID`,
+      });
+    } else if (successes.length === 0) {
+      toast({
+        title: "Ошибка удаления",
+        description: `Не удалось удалить ни один из ${failures.length} товаров`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Частичное удаление",
+        description: `Удалено ${successes.length} из ${results.length} товаров. ${failures.length} не удалось удалить.`,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -960,6 +1018,16 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                 >
                   <Copy className="w-4 h-4 mr-2" />
                   {isLoadingDuplicates ? "Поиск..." : "Найти дубликаты"}
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setDeleteNoItemIdDialogOpen(true)}
+                  disabled={items.filter(item => !item.itemId || item.itemId.trim() === '').length === 0}
+                  data-testid="button-delete-no-item-id"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Удалить без Item ID ({items.filter(item => !item.itemId || item.itemId.trim() === '').length})
                 </Button>
                 <InventoryCsvImportDialog onSuccess={handleRefreshInventory} />
               </>
@@ -1151,6 +1219,32 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         duplicates={duplicates}
         onDelete={handleDeleteDuplicates}
       />
+
+      {/* Delete Items Without Item ID Dialog */}
+      <AlertDialog open={deleteNoItemIdDialogOpen} onOpenChange={setDeleteNoItemIdDialogOpen}>
+        <AlertDialogContent data-testid="dialog-delete-no-item-id">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить товары без Item ID?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы уверены, что хотите удалить все товары без Item ID? 
+              Будет удалено {items.filter(item => !item.itemId || item.itemId.trim() === '').length} товаров.
+              Это действие необратимо.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingNoItemId} data-testid="button-cancel-delete-no-item-id">
+              Отменить
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteWithoutItemId}
+              disabled={isDeletingNoItemId}
+              data-testid="button-confirm-delete-no-item-id"
+            >
+              {isDeletingNoItemId ? "Удаление..." : "Удалить"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

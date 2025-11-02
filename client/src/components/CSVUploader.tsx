@@ -222,6 +222,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
   const [csvPreview, setCsvPreview] = useState<{ headers: string[]; rows: any[] } | null>(null);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping[]>([]);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [skipItemsWithoutItemId, setSkipItemsWithoutItemId] = useState(false);
   
   // Conflict resolution state
   const [conflicts, setConflicts] = useState<CSVConflict[]>([]);
@@ -487,13 +488,42 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
     }
     
     const targetHeaders = enabledMappings.map(m => m.targetField);
-    const transformedRows = csvPreview.rows.map(row => {
+    let transformedRows = csvPreview.rows.map(row => {
       const newRow: Record<string, string> = {};
       enabledMappings.forEach(mapping => {
         newRow[mapping.targetField] = row[mapping.csvColumn] || '';
       });
       return newRow;
     });
+    
+    // Filter out rows without Item ID if option is enabled
+    if (skipItemsWithoutItemId) {
+      // Check if Item ID is mapped
+      const hasItemIdMapping = enabledMappings.some(m => m.targetField === 'itemId');
+      
+      if (!hasItemIdMapping) {
+        toast({
+          title: "Предупреждение",
+          description: "Item ID не замаплен. Фильтрация товаров без Item ID невозможна.",
+          variant: "destructive",
+        });
+      } else {
+        const beforeCount = transformedRows.length;
+        transformedRows = transformedRows.filter(row => {
+          const itemId = row['itemId'] || '';
+          return itemId.trim() !== '';
+        });
+        const afterCount = transformedRows.length;
+        const skippedCount = beforeCount - afterCount;
+        
+        if (skippedCount > 0) {
+          toast({
+            title: "Товары без Item ID пропущены",
+            description: `Пропущено ${skippedCount} товаров без Item ID`,
+          });
+        }
+      }
+    }
     
     const transformedCsvText = convertToCSVText(targetHeaders, transformedRows);
     const blob = new Blob([transformedCsvText], { type: 'text/csv' });
@@ -1128,6 +1158,18 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
                   </div>
                 </AlertDescription>
               </Alert>
+
+              <div className="flex items-center space-x-2 p-3 border rounded-md bg-muted/50">
+                <Checkbox
+                  id="skip-without-item-id"
+                  checked={skipItemsWithoutItemId}
+                  onCheckedChange={(checked) => setSkipItemsWithoutItemId(checked as boolean)}
+                  data-testid="checkbox-skip-without-item-id"
+                />
+                <Label htmlFor="skip-without-item-id" className="text-sm font-medium cursor-pointer">
+                  Не импортировать товары без Item ID
+                </Label>
+              </div>
 
               <div>
                 <h4 className="text-sm font-medium mb-2">Итоговое сопоставление:</h4>
