@@ -597,39 +597,9 @@ export class DbStorage implements IStorage {
       }
     }
 
-    // Archive items missing from CSV import
-    const csvItemIds = new Set(
-      items
-        .filter(i => i.itemId)
-        .map(i => i.itemId!)
-    );
-    const csvSkus = new Set(items.map(i => i.sku));
+    // NOTE: Automatic archiving of missing items disabled - it could archive legitimate inventory
+    // that was added manually or from other sources. This feature requires proper source tracking.
     
-    let archivedCount = 0;
-    for (const existing of allExistingItems) {
-      const missingFromCsv = existing.itemId 
-        ? !csvItemIds.has(existing.itemId)
-        : !csvSkus.has(existing.sku);
-      
-      if (missingFromCsv) {
-        try {
-          await this.moveToArchive(existing.id, 'system', 'Item missing from CSV import');
-          archivedCount++;
-        } catch (error) {
-          console.error(`Error archiving missing item ${existing.id}:`, error);
-        }
-      }
-    }
-    
-    // Log CSV_ITEM_ARCHIVED_MISSING event if any items were archived
-    if (archivedCount > 0) {
-      await this.createEventLog({
-        userId: null,
-        action: "CSV_ITEM_ARCHIVED_MISSING",
-        details: `CSV Import: Archived ${archivedCount} items missing from CSV`,
-      });
-    }
-
     return { success, updated, errors };
   }
 
