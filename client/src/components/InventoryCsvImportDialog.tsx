@@ -37,6 +37,8 @@ import { getAuthToken } from "@/lib/api";
 
 interface CsvImportDialogProps {
   onSuccess: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 interface ImportSession {
@@ -194,8 +196,10 @@ function suggestTargetField(csvColumn: string): string {
   return '(skip)';
 }
 
-export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogProps) {
-  const [open, setOpen] = useState(false);
+export default function InventoryCsvImportDialog({ onSuccess, open: externalOpen, onOpenChange: externalOnOpenChange }: CsvImportDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = externalOpen ?? internalOpen;
+  const setOpen = externalOnOpenChange ?? setInternalOpen;
   const [step, setStep] = useState(1);
   const [sourceType, setSourceType] = useState<'url' | 'file' | 'multiple-urls'>('url');
   const [sourceUrl, setSourceUrl] = useState("");
@@ -746,12 +750,6 @@ export default function InventoryCsvImportDialog({ onSuccess }: CsvImportDialogP
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="default" data-testid="button-inventory-csv-import">
-          <Upload className="h-4 w-4 mr-2" />
-          Импорт CSV
-        </Button>
-      </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
