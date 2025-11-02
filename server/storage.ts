@@ -10,6 +10,7 @@ import {
   warehouseSettings,
   activeLocations,
   csvSources,
+  bulkUploadSources,
   globalSettings,
   pendingTests,
   testedItems,
@@ -37,6 +38,8 @@ import {
   type InsertActiveLocation,
   type CsvSource,
   type InsertCsvSource,
+  type BulkUploadSource,
+  type InsertBulkUploadSource,
   type GlobalSetting,
   type InsertGlobalSetting,
   type PendingTest,
@@ -153,11 +156,17 @@ export interface IStorage {
   }>;
   deletePickingList(listId: string, userId: string): Promise<boolean>;
 
-  // CSV Sources methods
+  // CSV Sources methods (for Picking Lists)
   getAllCsvSources(): Promise<CsvSource[]>;
   createCsvSource(source: InsertCsvSource): Promise<CsvSource>;
   updateCsvSource(id: string, updates: Partial<InsertCsvSource>): Promise<CsvSource>;
   deleteCsvSource(id: string): Promise<void>;
+  
+  // Bulk Upload Sources methods (for inventory mass upload & scheduler)
+  getAllBulkUploadSources(): Promise<BulkUploadSource[]>;
+  createBulkUploadSource(source: InsertBulkUploadSource): Promise<BulkUploadSource>;
+  updateBulkUploadSource(id: string, updates: Partial<InsertBulkUploadSource>): Promise<BulkUploadSource>;
+  deleteBulkUploadSource(id: string): Promise<void>;
 
   // Global Settings methods
   getGlobalSetting(key: string): Promise<GlobalSetting | undefined>;
@@ -1779,6 +1788,29 @@ export class DbStorage implements IStorage {
 
   async deleteCsvSource(id: string): Promise<void> {
     await db.delete(csvSources).where(eq(csvSources.id, id));
+  }
+  
+  // Bulk Upload Sources methods (for inventory mass upload & scheduler)
+  async getAllBulkUploadSources(): Promise<BulkUploadSource[]> {
+    return await db.select().from(bulkUploadSources).orderBy(bulkUploadSources.sortOrder, bulkUploadSources.createdAt);
+  }
+
+  async createBulkUploadSource(source: InsertBulkUploadSource): Promise<BulkUploadSource> {
+    const result = await db.insert(bulkUploadSources).values(source).returning();
+    return result[0];
+  }
+
+  async updateBulkUploadSource(id: string, updates: Partial<InsertBulkUploadSource>): Promise<BulkUploadSource> {
+    const result = await db
+      .update(bulkUploadSources)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(bulkUploadSources.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteBulkUploadSource(id: string): Promise<void> {
+    await db.delete(bulkUploadSources).where(eq(bulkUploadSources.id, id));
   }
 
   // Global Settings methods

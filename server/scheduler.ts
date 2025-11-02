@@ -87,31 +87,43 @@ export async function runScheduledImport(): Promise<{ success: boolean; message:
   console.log('[SCHEDULER] Starting scheduled CSV import...');
   
   try {
-    // Get CSV sources
-    const sources = await storage.getAllCsvSources();
+    // Get bulk upload sources (for inventory mass upload)
+    const sources = await storage.getAllBulkUploadSources();
     
     if (sources.length === 0) {
-      console.log('[SCHEDULER] No CSV sources configured');
+      console.log('[SCHEDULER] No bulk upload sources configured');
       await storage.updateSchedulerSettings({
         lastRunAt: startTime,
         lastRunStatus: 'WARNING',
-        lastRunError: 'No CSV sources configured',
+        lastRunError: 'No bulk upload sources configured',
       });
       isRunning = false;
-      return { success: false, message: 'No CSV sources configured' };
+      return { success: false, message: 'No bulk upload sources configured' };
     }
     
     let totalSuccess = 0;
     let totalUpdated = 0;
     let totalErrors = 0;
     
-    // Process each CSV source
+    // Process each bulk upload source
     for (const source of sources) {
+      // Skip disabled sources
+      if (!source.enabled) {
+        console.log(`[SCHEDULER] Skipping disabled source: ${source.label}`);
+        continue;
+      }
+      
+      // Skip sources with empty URL (draft/incomplete entries)
+      if (!source.url || source.url.trim() === '') {
+        console.log(`[SCHEDULER] Skipping source with empty URL: ${source.label}`);
+        continue;
+      }
+      
       console.log(`[SCHEDULER] Downloading CSV from: ${source.url}`);
       
       try {
         const items = await downloadAndParseCsv(source.url);
-        console.log(`[SCHEDULER] Downloaded ${items.length} items from ${source.name}`);
+        console.log(`[SCHEDULER] Downloaded ${items.length} items from ${source.label}`);
         
         if (items.length > 0) {
           const result = await storage.bulkUpsertInventoryItems(items);
@@ -119,10 +131,10 @@ export async function runScheduledImport(): Promise<{ success: boolean; message:
           totalUpdated += result.updated;
           totalErrors += result.errors;
           
-          console.log(`[SCHEDULER] Processed ${source.name}: ${result.success} created, ${result.updated} updated, ${result.errors} errors`);
+          console.log(`[SCHEDULER] Processed ${source.label}: ${result.success} created, ${result.updated} updated, ${result.errors} errors`);
         }
       } catch (error: any) {
-        console.error(`[SCHEDULER] Error processing ${source.name}:`, error);
+        console.error(`[SCHEDULER] Error processing ${source.label}:`, error);
         totalErrors++;
       }
     }

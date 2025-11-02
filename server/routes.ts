@@ -1463,6 +1463,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk Upload Sources routes (for mass inventory upload & scheduler)
+  app.get("/api/bulk-upload-sources", requireAuth, async (req, res) => {
+    try {
+      const sources = await storage.getAllBulkUploadSources();
+      return res.json(sources);
+    } catch (error: any) {
+      console.error("Get bulk upload sources error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  app.post("/api/bulk-upload-sources", requireAuth, async (req, res) => {
+    try {
+      const { url, label, enabled, sortOrder } = req.body;
+
+      // Allow empty url and label for draft sources (user will fill them in later)
+      // Default to disabled to prevent scheduler from trying to fetch empty URLs
+      const source = await storage.createBulkUploadSource({
+        url: url || '',
+        label: label || '',
+        enabled: enabled ?? false,
+        sortOrder: sortOrder ?? 0
+      });
+
+      return res.json(source);
+    } catch (error: any) {
+      console.error("Create bulk upload source error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  app.patch("/api/bulk-upload-sources/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+
+      const source = await storage.updateBulkUploadSource(id, updates);
+      return res.json(source);
+    } catch (error: any) {
+      console.error("Update bulk upload source error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  app.delete("/api/bulk-upload-sources/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteBulkUploadSource(id);
+      return res.status(204).send();
+    } catch (error: any) {
+      console.error("Delete bulk upload source error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Global Settings routes
   app.get("/api/settings/:key", requireAuth, async (req, res) => {
     try {

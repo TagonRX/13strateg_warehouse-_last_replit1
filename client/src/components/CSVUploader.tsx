@@ -218,15 +218,15 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
   const [sourceUrl, setSourceUrl] = useState("");
   const [loadProgress, setLoadProgress] = useState<LoadProgress | null>(null);
   
-  // Fetch CSV sources from database
+  // Fetch bulk upload sources from database (for mass inventory upload)
   const { data: savedSources = [] } = useQuery<Array<{
     id: string;
-    name: string;
+    label: string;
     url: string;
     enabled: boolean;
     sortOrder: number;
   }>>({
-    queryKey: ['/api/csv-sources'],
+    queryKey: ['/api/bulk-upload-sources'],
   });
   
   // Column mapping dialog state
@@ -331,7 +331,6 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
     runSchedulerMutation.mutate();
   };
 
-  // Load saved sources from localStorage on mount
   // Migrations: Load sources from localStorage and save to database (one-time)
   useEffect(() => {
     const migrateFromLocalStorage = async () => {
@@ -350,8 +349,8 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
         
         // Migrate each source to database
         for (const source of localSources) {
-          await apiRequest("POST", "/api/csv-sources", {
-            name: source.label,
+          await apiRequest("POST", "/api/bulk-upload-sources", {
+            label: source.label,
             url: source.url,
             enabled: true,
             sortOrder: 0
@@ -364,7 +363,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
         });
         
         localStorage.removeItem('csvImportSources');
-        queryClient.invalidateQueries({ queryKey: ['/api/csv-sources'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/bulk-upload-sources'] });
       } catch (e) {
         console.error('Failed to migrate sources:', e);
       }
@@ -439,38 +438,55 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
   };
 
   // Helper: Add new source
-  const addNewSource = () => {
-    const newSource: SavedSource = {
-      id: crypto.randomUUID(),
-      label: '',
-      url: '',
-    };
-    const updated = [...savedSources, newSource];
-    setSavedSources(updated);
-    saveSourcesToLocalStorage(updated);
+  const addNewSource = async () => {
+    try {
+      await apiRequest("POST", "/api/bulk-upload-sources", {
+        label: '',
+        url: '',
+        enabled: false, // Default to disabled until user fills in URL
+        sortOrder: savedSources.length
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/bulk-upload-sources'] });
+    } catch (error) {
+      console.error('Failed to add source:', error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось добавить источник",
+        variant: "destructive",
+      });
+    }
   };
 
   // Helper: Remove source
-  const removeSource = (id: string) => {
-    const updated = savedSources.filter(s => s.id !== id);
-    setSavedSources(updated);
-    saveSourcesToLocalStorage(updated);
+  const removeSource = async (id: string) => {
+    try {
+      await apiRequest("DELETE", `/api/bulk-upload-sources/${id}`);
+      queryClient.invalidateQueries({ queryKey: ['/api/bulk-upload-sources'] });
+    } catch (error) {
+      console.error('Failed to remove source:', error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось удалить источник",
+        variant: "destructive",
+      });
+    }
   };
 
   // Helper: Update source
-  const updateSource = (id: string, field: 'label' | 'url', value: string) => {
-    const updated = savedSources.map(s => {
-      if (s.id === id) {
-        if (field === 'label') {
-          return { ...s, label: value.toUpperCase().slice(0, 4) };
-        } else {
-          return { ...s, url: value };
-        }
-      }
-      return s;
-    });
-    setSavedSources(updated);
-    saveSourcesToLocalStorage(updated);
+  const updateSource = async (id: string, field: 'label' | 'url', value: string) => {
+    try {
+      // Find current source to preserve enabled state
+      const currentSource = savedSources.find(s => s.id === id);
+      
+      const updates = field === 'label' 
+        ? { label: value.toUpperCase().slice(0, 4), enabled: currentSource?.enabled ?? false }
+        : { url: value, enabled: currentSource?.enabled ?? false };
+      
+      await apiRequest("PATCH", `/api/bulk-upload-sources/${id}`, updates);
+      queryClient.invalidateQueries({ queryKey: ['/api/bulk-upload-sources'] });
+    } catch (error) {
+      console.error('Failed to update source:', error);
+    }
   };
 
   // Helper: Load multiple CSVs sequentially
