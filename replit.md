@@ -10,7 +10,7 @@ This project is a comprehensive warehouse management system designed to streamli
 - **Duplicate Deletion Progress**: Real-time progress indicator showing accurate count of successful deletions (not attempt index)
 - **Error Handling**: Partial deletion failures display detailed error messages with counts, keep dialog open, and refetch data to show remaining duplicates
 - **Scheduled CSV Import**: Automated scheduler now uses case-insensitive matching and preserves all existing data fields (location, barcode, dimensions, weight, volume) during updates
-- **Batch Delete Optimization**: Implemented parallel batch deletion endpoint (POST /api/inventory/batch-delete) processing items in groups of 10 for 10x faster duplicate removal compared to sequential deletion. "Delete without Item ID" feature now uses batch deletion with real-time progress indicator showing "Удаление X из Y..." during operation
+- **Batch Delete Optimization with Visual Progress**: Implemented parallel batch deletion endpoint (POST /api/inventory/batch-delete) processing items in groups of 10 for 10x faster duplicate removal. "Delete without Item ID" feature uses batch deletion with highly visible real-time progress UI: large counter showing "X из Y", animated progress bar, and warning text "Пожалуйста, подождите. Не закрывайте это окно." Dialog remains open during entire deletion process and cannot be closed until completion
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.

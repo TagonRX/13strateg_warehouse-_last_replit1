@@ -38,6 +38,7 @@ import BarcodeEditor from "./BarcodeEditor";
 import InventoryCsvImportDialog from "./InventoryCsvImportDialog";
 import ImageGalleryModal from "./ImageGalleryModal";
 import { DuplicatesDialog } from "./DuplicatesDialog";
+import { Progress } from "@/components/ui/progress";
 
 interface BarcodeMapping {
   code: string;
@@ -1288,29 +1289,59 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       />
 
       {/* Delete Items Without Item ID Dialog */}
-      <AlertDialog open={deleteNoItemIdDialogOpen} onOpenChange={setDeleteNoItemIdDialogOpen}>
+      <AlertDialog open={deleteNoItemIdDialogOpen} onOpenChange={(open) => {
+        if (!isDeletingNoItemId) {
+          setDeleteNoItemIdDialogOpen(open);
+        }
+      }}>
         <AlertDialogContent data-testid="dialog-delete-no-item-id">
           <AlertDialogHeader>
             <AlertDialogTitle>Удалить товары без Item ID?</AlertDialogTitle>
             <AlertDialogDescription>
-              Вы уверены, что хотите удалить все товары без Item ID? 
-              Будет удалено {items.filter(item => !item.itemId || item.itemId.trim() === '').length} товаров.
-              Это действие необратимо.
+              {!isDeletingNoItemId ? (
+                <>
+                  Вы уверены, что хотите удалить все товары без Item ID? 
+                  Будет удалено {items.filter(item => !item.itemId || item.itemId.trim() === '').length} товаров.
+                  Это действие необратимо.
+                </>
+              ) : (
+                <div className="space-y-4 py-4">
+                  <div className="text-center">
+                    <p className="text-lg font-semibold mb-2">
+                      Удаление товаров...
+                    </p>
+                    <p className="text-2xl font-bold text-primary">
+                      {deleteNoItemIdProgress.current} из {deleteNoItemIdProgress.total}
+                    </p>
+                  </div>
+                  <Progress 
+                    value={(deleteNoItemIdProgress.current / deleteNoItemIdProgress.total) * 100} 
+                    className="w-full"
+                    data-testid="progress-delete-no-item-id"
+                  />
+                  <p className="text-sm text-muted-foreground text-center">
+                    Пожалуйста, подождите. Не закрывайте это окно.
+                  </p>
+                </div>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeletingNoItemId} data-testid="button-cancel-delete-no-item-id">
               Отменить
             </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDeleteWithoutItemId}
+            <Button
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteWithoutItemId();
+              }}
               disabled={isDeletingNoItemId}
               data-testid="button-confirm-delete-no-item-id"
             >
               {isDeletingNoItemId 
-                ? `Удаление ${deleteNoItemIdProgress.current} из ${deleteNoItemIdProgress.total}...` 
+                ? `Удаление...` 
                 : "Удалить"}
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
