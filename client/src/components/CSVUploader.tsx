@@ -1216,8 +1216,8 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       </Card>
 
       <Dialog open={mappingDialogOpen} onOpenChange={setMappingDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
-          <DialogHeader>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>
               Шаг {mappingStep} из 3: {
                 mappingStep === 1 ? "Проверка данных" :
@@ -1227,6 +1227,8 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
             </DialogTitle>
           </DialogHeader>
 
+          <ScrollArea className="flex-1 overflow-auto">
+            <div className="pr-4">
           {mappingStep === 1 && csvPreview && (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
@@ -1397,8 +1399,10 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
               </div>
             </div>
           )}
+            </div>
+          </ScrollArea>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="flex-shrink-0 gap-2 mt-4">
             {mappingStep > 1 && (
               <Button
                 variant="outline"
