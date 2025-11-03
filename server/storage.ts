@@ -255,6 +255,7 @@ export interface IStorage {
   updatePackingData(id: string, userId: string): Promise<Order>;
   findOrdersBySku(sku: string, status?: string): Promise<Order[]>;
   findOrderByBarcode(barcode: string, status?: string): Promise<Order | null>;
+  deleteOrdersByStatus(statuses: string[]): Promise<number>;
 }
 
 export class DbStorage implements IStorage {
@@ -2791,6 +2792,18 @@ export class DbStorage implements IStorage {
     });
     
     return found || null;
+  }
+
+  async deleteOrdersByStatus(statuses: string[]): Promise<number> {
+    if (!statuses || statuses.length === 0) {
+      return 0;
+    }
+
+    const result = await db.delete(orders)
+      .where(inArray(orders.status, statuses))
+      .returning();
+    
+    return result.length;
   }
 
   // Archived Inventory methods

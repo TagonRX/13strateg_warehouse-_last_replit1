@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CheckCircle2, Circle, ExternalLink, Image as ImageIcon, Package, Truck, AlertTriangle, Search } from "lucide-react";
+import { CheckCircle2, Circle, ExternalLink, Image as ImageIcon, Package, Truck, AlertTriangle, Search, Trash2 } from "lucide-react";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ImageGalleryModal from "@/components/ImageGalleryModal";
 import type { Order, InventoryItem } from "@shared/schema";
@@ -47,6 +47,7 @@ export default function Dispatch() {
   const [orderSelectionDialogOpen, setOrderSelectionDialogOpen] = useState(false);
   const [availableOrders, setAvailableOrders] = useState<ParsedOrder[]>([]);
   const [manualSkuInput, setManualSkuInput] = useState<string>("");
+  const [deletePendingDialogOpen, setDeletePendingDialogOpen] = useState(false);
 
   const { data: currentUser } = useQuery<any>({
     queryKey: ["/api/auth/me"],
@@ -177,6 +178,33 @@ export default function Dispatch() {
         variant: "destructive",
         title: "Ошибка отправки заказа",
         description: error?.message || "Не удалось отправить заказ",
+      });
+    },
+  });
+
+  const deletePendingOrdersMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", "/api/orders/bulk?status=PENDING", {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const deletedCount = data.deleted || 0;
+      toast({
+        title: "Заказы удалены",
+        description: `Удалено ${deletedCount} заказ(ов)`,
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["/api/orders?status=PENDING"]
+      });
+
+      setDeletePendingDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка удаления",
+        description: error?.message || "Не удалось удалить заказы",
       });
     },
   });
@@ -461,11 +489,22 @@ export default function Dispatch() {
       {/* Orders Table */}
       {parsedPendingOrders.length > 0 && currentPhase === 'scanning_product' && !currentOrder && (
         <Card data-testid="card-orders-table">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle className="flex items-center gap-2">
               <Package className="w-5 h-5" />
               Все заказы ({parsedPendingOrders.length})
             </CardTitle>
+            {currentUser?.role === 'admin' && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeletePendingDialogOpen(true)}
+                data-testid="button-delete-all-pending"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Удалить все
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             <div className="border rounded-md">
@@ -873,6 +912,36 @@ export default function Dispatch() {
               data-testid="button-confirm-dispatch"
             >
               {dispatchOrderMutation.isPending ? 'Отправка...' : 'Отправить заказ'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deletePendingDialogOpen} onOpenChange={setDeletePendingDialogOpen}>
+        <DialogContent data-testid="dialog-delete-pending">
+          <DialogHeader>
+            <DialogTitle>Удалить все pending заказы?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Будет удалено {parsedPendingOrders.length} заказ(ов). Это действие необратимо.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeletePendingDialogOpen(false)}
+              data-testid="button-cancel-delete-pending"
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletePendingOrdersMutation.mutate()}
+              disabled={deletePendingOrdersMutation.isPending}
+              data-testid="button-confirm-delete-pending"
+            >
+              {deletePendingOrdersMutation.isPending ? 'Удаление...' : 'Удалить'}
             </Button>
           </DialogFooter>
         </DialogContent>

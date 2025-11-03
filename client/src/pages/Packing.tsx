@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { CheckCircle2, Circle, ExternalLink, Image as ImageIcon, Package, Truck, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle2, Circle, ExternalLink, Image as ImageIcon, Package, Truck, AlertTriangle, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ImageGalleryModal from "@/components/ImageGalleryModal";
 import type { Order, InventoryItem } from "@shared/schema";
@@ -43,6 +43,7 @@ export default function Packing() {
   const [selectedImageUrls, setSelectedImageUrls] = useState<string[]>([]);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
 
   const { data: currentUser } = useQuery<any>({
     queryKey: ["/api/auth/me"],
@@ -198,6 +199,36 @@ export default function Packing() {
         variant: "destructive",
         title: "Ошибка",
         description: error?.message || "Не удалось упаковать заказ",
+      });
+    },
+  });
+
+  const deleteAllProcessedOrdersMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", "/api/orders/bulk?status=DISPATCHED&status=PACKED", {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const deletedCount = data.deleted || 0;
+      toast({
+        title: "Заказы удалены",
+        description: `Удалено ${deletedCount} заказ(ов)`,
+      });
+
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/orders');
+        }
+      });
+
+      setDeleteAllDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка удаления",
+        description: error?.message || "Не удалось удалить заказы",
       });
     },
   });
@@ -636,11 +667,22 @@ export default function Packing() {
       {/* Dispatched Orders Table (Ready to Pack) */}
       {dispatchedOrders.length > 0 && (
         <Card data-testid="card-dispatched-orders">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle className="flex items-center gap-2">
               <Package className="w-5 h-5" />
               Готовы к упаковке ({dispatchedOrders.length})
             </CardTitle>
+            {currentUser?.role === 'admin' && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteAllDialogOpen(true)}
+                data-testid="button-delete-all-processed"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Удалить все
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -955,6 +997,36 @@ export default function Packing() {
               data-testid="button-confirm-packing"
             >
               {packOrderMutation.isPending ? 'Завершение...' : 'Да, завершить упаковку'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteAllDialogOpen} onOpenChange={setDeleteAllDialogOpen}>
+        <DialogContent data-testid="dialog-delete-all">
+          <DialogHeader>
+            <DialogTitle>Удалить все обработанные заказы?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Будет удалено {dispatchedOrders.length + packedOrders.length} заказ(ов) (dispatched и packed). Это действие необратимо.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteAllDialogOpen(false)}
+              data-testid="button-cancel-delete-all"
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteAllProcessedOrdersMutation.mutate()}
+              disabled={deleteAllProcessedOrdersMutation.isPending}
+              data-testid="button-confirm-delete-all"
+            >
+              {deleteAllProcessedOrdersMutation.isPending ? 'Удаление...' : 'Удалить'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3128,6 +3128,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk delete orders by status (admin only)
+  app.delete("/api/orders/bulk", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { status } = req.query;
+
+      if (!status) {
+        return res.status(400).json({ error: "Требуется параметр status" });
+      }
+
+      // Convert status to array of strings
+      let statuses: string[];
+      if (Array.isArray(status)) {
+        statuses = status.filter(s => typeof s === 'string') as string[];
+      } else if (typeof status === 'string') {
+        statuses = [status];
+      } else {
+        return res.status(400).json({ error: "Недопустимый формат параметра status" });
+      }
+
+      if (statuses.length === 0) {
+        return res.status(400).json({ error: "Не указаны валидные статусы" });
+      }
+
+      // Validate statuses
+      const validStatuses = ["PENDING", "DISPATCHED", "PACKED", "SHIPPED"];
+      const invalidStatuses = statuses.filter(s => !validStatuses.includes(s));
+      
+      if (invalidStatuses.length > 0) {
+        return res.status(400).json({ 
+          error: `Недопустимые статусы: ${invalidStatuses.join(", ")}. Допустимые: ${validStatuses.join(", ")}` 
+        });
+      }
+
+      // Delete orders by status
+      const deleted = await storage.deleteOrdersByStatus(statuses);
+
+      return res.json({ deleted });
+    } catch (error: any) {
+      console.error("Bulk delete orders error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Load inventory from project CSV file (data/inventory.csv)
   app.post("/api/inventory/load-project-csv", requireAuth, requireAdmin, async (req, res) => {
     try {
