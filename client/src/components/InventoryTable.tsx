@@ -39,6 +39,7 @@ import InventoryCsvImportDialog from "./InventoryCsvImportDialog";
 import ImageGalleryModal from "./ImageGalleryModal";
 import { DuplicatesDialog } from "./DuplicatesDialog";
 import { Progress } from "@/components/ui/progress";
+import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 
 interface BarcodeMapping {
   code: string;
@@ -188,6 +189,9 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const [deleteNoItemIdProgress, setDeleteNoItemIdProgress] = useState({ current: 0, total: 0 });
   const [showDuplicatesFilter, setShowDuplicatesFilter] = useState(false);
   const { toast } = useToast();
+  
+  // Global barcode scanner support for search field
+  const { inputRef: searchInputRef } = useGlobalBarcodeInput(true);
 
   // Fetch tested items for condition display
   const { data: testedItems = [] } = useQuery<any[]>({
@@ -1087,6 +1091,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Поиск по названию, SKU или штрихкоду..."
