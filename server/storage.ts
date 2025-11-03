@@ -20,6 +20,7 @@ import {
   orders,
   archivedInventoryItems,
   schedulerSettings,
+  importRuns,
   type User, 
   type InsertUser,
   type InventoryItem,
@@ -57,11 +58,28 @@ import {
   type ArchivedInventoryItem,
   type InsertArchivedInventoryItem,
   type SchedulerSetting,
-  type InsertSchedulerSetting
+  type InsertSchedulerSetting,
+  type ImportRun,
+  type InsertImportRun
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ilike, getTableColumns } from "drizzle-orm";
 import fs from "fs/promises";
 import path from "path";
+
+// Детальная статистика импорта CSV
+export interface ImportStats {
+  rowsTotal: number;
+  rowsWithId: number;
+  rowsWithoutId: number;
+  created: number;
+  updatedAllFields: number;
+  updatedQuantityOnly: number;
+  updatedPartial: number;
+  skippedNoId: number;
+  errors: number;
+  totalQuantityChange: number;
+  errorDetails: string[];
+}
 
 export interface IStorage {
   // User methods
@@ -83,7 +101,7 @@ export interface IStorage {
   updateInventoryItemById(id: string, updates: Partial<InsertInventoryItem>): Promise<InventoryItem>;
   deleteInventoryItem(id: string, userId: string): Promise<boolean>;
   deleteAllInventoryItems(userId: string): Promise<number>;
-  bulkUpsertInventoryItems(items: InsertInventoryItem[]): Promise<{ success: number; updated: number; errors: number }>;
+  bulkUpsertInventoryItems(items: InsertInventoryItem[], context?: { sourceType?: string; sourceRef?: string; userId?: string }): Promise<ImportStats>;
   updateItemCondition(itemId: string, condition: string, userId: string): Promise<void>;
   getConditionByBarcode(barcode: string): Promise<string | null>;
   
@@ -214,6 +232,11 @@ export interface IStorage {
   // Scheduler Settings methods
   getSchedulerSettings(): Promise<SchedulerSetting | undefined>;
   updateSchedulerSettings(updates: Partial<InsertSchedulerSetting>): Promise<SchedulerSetting>;
+  
+  // Import Runs methods
+  createImportRun(run: InsertImportRun): Promise<ImportRun>;
+  getLatestImportRun(sourceType?: string): Promise<ImportRun | undefined>;
+  getImportRunById(id: string): Promise<ImportRun | undefined>;
 
   // Order methods
   createOrder(order: InsertOrder): Promise<Order>;
@@ -359,10 +382,23 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async bulkUpsertInventoryItems(items: InsertInventoryItem[]): Promise<{ success: number; updated: number; errors: number }> {
-    let success = 0;
-    let updated = 0;
-    let errors = 0;
+  async bulkUpsertInventoryItems(items: InsertInventoryItem[], context?: { sourceType?: string; sourceRef?: string; userId?: string }): Promise<ImportStats> {
+    const startTime = Date.now();
+    
+    // Initialize detailed statistics
+    const stats: ImportStats = {
+      rowsTotal: items.length,
+      rowsWithId: 0,
+      rowsWithoutId: 0,
+      created: 0,
+      updatedAllFields: 0,
+      updatedQuantityOnly: 0,
+      updatedPartial: 0,
+      skippedNoId: 0,
+      errors: 0,
+      totalQuantityChange: 0,
+      errorDetails: []
+    };
     
     console.log(`[BULK UPSERT] Starting process for ${items.length} items...`);
 
@@ -400,6 +436,13 @@ export class DbStorage implements IStorage {
         console.log(`[BULK UPSERT] Analyzed ${processedCount}/${items.length} items...`);
       }
       try {
+        // Count items with/without ID
+        if (item.itemId) {
+          stats.rowsWithId++;
+        } else {
+          stats.rowsWithoutId++;
+        }
+        
         // Extract location from SKU if not provided
         const location = item.location || this.extractLocation(item.sku);
         
@@ -408,6 +451,9 @@ export class DbStorage implements IStorage {
           const existing = existingByItemId.get(item.itemId)!;
           const newQuantity = item.quantity ?? existing.quantity;
           const oldQuantity = existing.quantity;
+          
+          // Track quantity change
+          stats.totalQuantityChange += (newQuantity - oldQuantity);
           
           // Determine zeroQuantitySince based on quantity transition
           let zeroQuantitySince = existing.zeroQuantitySince;
@@ -428,6 +474,7 @@ export class DbStorage implements IStorage {
               zeroQuantitySince,
             }
           });
+          stats.updatedQuantityOnly++; // Updating only quantity and price
           
         } else if (item.itemId) {
           // ItemId provided but not found in database - create new item
@@ -436,7 +483,8 @@ export class DbStorage implements IStorage {
             createdItemIds.add(item.itemId);
           } else {
             // Duplicate itemId in same upload - skip with error
-            errors++;
+            stats.errors++;
+            stats.errorDetails.push(`Duplicate itemId in CSV: ${item.itemId}`);
             console.warn(`Duplicate itemId in CSV: ${item.itemId}`);
           }
           
@@ -483,15 +531,22 @@ export class DbStorage implements IStorage {
             // Preserve existing barcode/dimensions, don't overwrite
             // (no updates for barcode, length, width, height, weight, volume)
             
+            // Track quantity change
+            stats.totalQuantityChange += (newQuantity - oldQuantity);
+            
             itemsToUpdate.push({
               id: existingWithData.id,
               updates
             });
+            stats.updatedPartial++; // Partial update (enriching data)
           } else {
             // No existing item with barcode/dimensions, update first match
             const firstMatch = skuMatches[0];
             const newQuantity = item.quantity || firstMatch.quantity;
             const oldQuantity = firstMatch.quantity;
+            
+            // Track quantity change
+            stats.totalQuantityChange += (newQuantity - oldQuantity);
             
             // Determine zeroQuantitySince based on quantity transition
             let zeroQuantitySince = firstMatch.zeroQuantitySince;
@@ -513,6 +568,7 @@ export class DbStorage implements IStorage {
                 zeroQuantitySince,
               }
             });
+            stats.updatedPartial++; // Partial update (some fields)
           }
         } else {
           // No matching SKU or itemId - create new item
@@ -520,7 +576,8 @@ export class DbStorage implements IStorage {
         }
       } catch (error) {
         console.error(`Error processing item:`, error);
-        errors++;
+        stats.errors++;
+        stats.errorDetails.push(`Processing error: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -532,20 +589,22 @@ export class DbStorage implements IStorage {
         const chunk = itemsToCreate.slice(i, i + chunkSize);
         try {
           await db.insert(inventoryItems).values(chunk);
-          success += chunk.length;
+          stats.created += chunk.length;
           if ((i + chunkSize) % 1000 === 0 || i + chunkSize >= itemsToCreate.length) {
             console.log(`[BULK UPSERT] Created ${Math.min(i + chunkSize, itemsToCreate.length)}/${itemsToCreate.length} items...`);
           }
         } catch (error) {
           console.error(`Batch insert error, retrying item-by-item:`, error);
+          stats.errorDetails.push(`Batch insert error: ${error instanceof Error ? error.message : String(error)}`);
           // Fallback: insert one by one to avoid losing entire chunk
           for (const item of chunk) {
             try {
               await db.insert(inventoryItems).values(item);
-              success++;
+              stats.created++;
             } catch (itemError) {
               console.error(`Individual insert error for ${item.itemId || item.sku}:`, itemError);
-              errors++;
+              stats.errors++;
+              stats.errorDetails.push(`Individual insert error for ${item.itemId || item.sku}: ${itemError instanceof Error ? itemError.message : String(itemError)}`);
             }
           }
         }
@@ -566,10 +625,11 @@ export class DbStorage implements IStorage {
               .update(inventoryItems)
               .set({ ...updates, updatedAt: new Date() })
               .where(eq(inventoryItems.id, id));
-            updated++;
+            // Note: update type already tracked in stats (updatedQuantityOnly, updatedPartial, etc.)
           } catch (error) {
             console.error(`Update error:`, error);
-            errors++;
+            stats.errors++;
+            stats.errorDetails.push(`Update error: ${error instanceof Error ? error.message : String(error)}`);
           }
         }));
         
@@ -595,8 +655,41 @@ export class DbStorage implements IStorage {
     // NOTE: Automatic archiving of missing items disabled - it could archive legitimate inventory
     // that was added manually or from other sources. This feature requires proper source tracking.
     
-    console.log(`[BULK UPSERT] ✅ Complete: ${success} created, ${updated} updated, ${errors} errors`);
-    return { success, updated, errors };
+    const duration = Date.now() - startTime;
+    const totalUpdated = stats.updatedQuantityOnly + stats.updatedPartial + stats.updatedAllFields;
+    
+    console.log(`[BULK UPSERT] ✅ Complete: ${stats.created} created, ${totalUpdated} updated, ${stats.errors} errors (${duration}ms)`);
+    console.log(`[BULK UPSERT] Stats - With ID: ${stats.rowsWithId}, Without ID: ${stats.rowsWithoutId}, Quantity change: ${stats.totalQuantityChange}`);
+    
+    // Create import run record if context provided
+    if (context) {
+      try {
+        const errorDetailsJson = stats.errorDetails.length > 0 ? JSON.stringify(stats.errorDetails.slice(0, 100)) : null; // Limit to first 100 errors
+        
+        await db.insert(importRuns).values({
+          sourceType: context.sourceType || 'manual',
+          sourceRef: context.sourceRef,
+          triggeredBy: context.userId || null,
+          rowsTotal: stats.rowsTotal,
+          rowsWithId: stats.rowsWithId,
+          rowsWithoutId: stats.rowsWithoutId,
+          created: stats.created,
+          updatedAllFields: stats.updatedAllFields,
+          updatedQuantityOnly: stats.updatedQuantityOnly,
+          updatedPartial: stats.updatedPartial,
+          skippedNoId: stats.skippedNoId,
+          errors: stats.errors,
+          totalQuantityChange: stats.totalQuantityChange,
+          errorDetails: errorDetailsJson,
+          status: stats.errors > 0 ? (stats.created + totalUpdated > 0 ? 'PARTIAL' : 'FAILED') : 'SUCCESS',
+          duration
+        });
+      } catch (error) {
+        console.error('[BULK UPSERT] Failed to create import run record:', error);
+      }
+    }
+    
+    return stats;
   }
 
   // Event log methods
@@ -2703,6 +2796,7 @@ export class DbStorage implements IStorage {
         lastRunAt: updates.lastRunAt || null,
         lastRunStatus: updates.lastRunStatus || null,
         lastRunError: updates.lastRunError || null,
+        lastRunId: updates.lastRunId || null,
       }).returning();
       return newSetting;
     }
@@ -2713,6 +2807,31 @@ export class DbStorage implements IStorage {
       .returning();
     
     return updatedSetting;
+  }
+
+  // Import Runs methods
+  async createImportRun(run: InsertImportRun): Promise<ImportRun> {
+    const [importRun] = await db.insert(importRuns).values(run).returning();
+    return importRun;
+  }
+
+  async getLatestImportRun(sourceType?: string): Promise<ImportRun | undefined> {
+    let query = db.select().from(importRuns);
+    
+    if (sourceType) {
+      query = query.where(eq(importRuns.sourceType, sourceType)) as any;
+    }
+    
+    const [run] = await query
+      .orderBy(sql`${importRuns.createdAt} DESC`)
+      .limit(1);
+    
+    return run;
+  }
+
+  async getImportRunById(id: string): Promise<ImportRun | undefined> {
+    const [run] = await db.select().from(importRuns).where(eq(importRuns.id, id)).limit(1);
+    return run;
   }
 
   // Helper: Append archived item to OLD-inventory.csv
