@@ -57,7 +57,7 @@ export default function Dispatch() {
   });
 
   const { data: pendingOrders = [], isLoading: pendingOrdersLoading } = useQuery<Order[]>({
-    queryKey: ["/api/orders", { status: "PENDING" }],
+    queryKey: ["/api/orders?status=PENDING"],
     enabled: currentPhase === 'scanning_product' && !currentOrder,
   });
 
