@@ -117,8 +117,13 @@ export default function Packing() {
         description: `Заказ №${parsedOrder.orderNumber}. Отсканируйте ${totalQuantity} товар(ов) для проверки.`,
       });
 
-      // Invalidate queries to refresh lists
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      // Invalidate all order queries (using predicate to match all /api/orders* queries)
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/orders');
+        }
+      });
     },
     onError: (error: any) => {
       const message = error?.message || "Заказ не найден";
@@ -144,8 +149,13 @@ export default function Packing() {
         description: `Заказ №${currentOrder?.orderNumber} успешно упакован`,
       });
 
-      // Invalidate queries to refresh both lists
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      // Invalidate all order queries (using predicate to match all /api/orders* queries)
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/orders');
+        }
+      });
       
       resetToPhase1();
       setConfirmDialogOpen(false);
