@@ -3032,6 +3032,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Заказ не найден" });
       }
       
+      // CRITICAL: Validate that picking list is complete before dispatching
+      const validation = await storage.validatePickingListComplete(order.orderNumber);
+      if (!validation.isComplete) {
+        const details = validation.incompleteTasks.map(t => 
+          `${t.itemName || t.sku}: собрано ${t.pickedQuantity}/${t.requiredQuantity}`
+        ).join(', ');
+        return res.status(400).json({ 
+          error: `Невозможно отправить заказ - не все товары собраны`,
+          details,
+          incompleteTasks: validation.incompleteTasks
+        });
+      }
+      
       const updatedOrder = await storage.updateDispatchData(id, barcodes, userId);
       
       return res.json(updatedOrder);
@@ -3054,6 +3067,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const order = await storage.getOrderById(id);
       if (!order) {
         return res.status(404).json({ error: "Заказ не найден" });
+      }
+      
+      // CRITICAL: Validate that picking list is complete before packing
+      const validation = await storage.validatePickingListComplete(order.orderNumber);
+      if (!validation.isComplete) {
+        const details = validation.incompleteTasks.map(t => 
+          `${t.itemName || t.sku}: собрано ${t.pickedQuantity}/${t.requiredQuantity}`
+        ).join(', ');
+        return res.status(400).json({ 
+          error: `Невозможно упаковать заказ - не все товары собраны`,
+          details,
+          incompleteTasks: validation.incompleteTasks
+        });
       }
       
       const updatedOrder = await storage.updatePackingData(id, userId);

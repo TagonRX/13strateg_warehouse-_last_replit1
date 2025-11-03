@@ -2415,6 +2415,12 @@ export class DbStorage implements IStorage {
     const existingOrders = await db.select().from(orders)
       .where(eq(orders.orderNumber, list.name));
     
+    // CRITICAL: Do NOT modify orders that have been dispatched or packed
+    if (existingOrders.length > 0 && (existingOrders[0].status === 'DISPATCHED' || existingOrders[0].status === 'PACKED')) {
+      console.log(`[ORDER] Skipping update for order ${existingOrders[0].id} - already ${existingOrders[0].status}`);
+      return existingOrders[0];
+    }
+    
     // Get item details from inventory
     const [inventoryItem] = await db.select().from(inventoryItems)
       .where(eq(inventoryItems.sku, task.sku))
@@ -2431,7 +2437,7 @@ export class DbStorage implements IStorage {
     };
 
     if (existingOrders.length > 0) {
-      // Update existing order - add this item to the items array
+      // Update existing PENDING order - add this item to the items array
       const existingOrder = existingOrders[0];
       const existingItems = existingOrder.items ? JSON.parse(existingOrder.items) : [];
       
@@ -2475,6 +2481,37 @@ export class DbStorage implements IStorage {
 
       return newOrder;
     }
+  }
+
+  async validatePickingListComplete(orderNumber: string): Promise<{ isComplete: boolean; incompleteTasks: any[] }> {
+    // Find the picking list by name (which is used as order number)
+    const [list] = await db.select()
+      .from(pickingLists)
+      .where(eq(pickingLists.name, orderNumber))
+      .limit(1);
+    
+    if (!list) {
+      return { isComplete: true, incompleteTasks: [] }; // No picking list found, allow order to proceed
+    }
+    
+    // Get all tasks for this picking list
+    const tasks = await db.select()
+      .from(pickingTasks)
+      .where(eq(pickingTasks.listId, list.id));
+    
+    // Check if all tasks are fully picked
+    const incompleteTasks = tasks.filter(task => task.pickedQuantity < task.requiredQuantity);
+    
+    return {
+      isComplete: incompleteTasks.length === 0,
+      incompleteTasks: incompleteTasks.map(t => ({
+        sku: t.sku,
+        itemName: t.itemName,
+        pickedQuantity: t.pickedQuantity,
+        requiredQuantity: t.requiredQuantity,
+        missing: t.requiredQuantity - t.pickedQuantity
+      }))
+    };
   }
 
   async getOrders(filters?: { status?: string }): Promise<Order[]> {
