@@ -602,16 +602,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdBy: userId,
       }));
 
-      const result = await storage.bulkUpsertInventoryItems(sanitizedItems);
+      const result = await storage.bulkUpsertInventoryItems(sanitizedItems, {
+        sourceType: 'manual',
+        sourceRef: 'CSV Upload',
+        userId: userId,
+      });
+
+      const totalUpdated = result.updatedQuantityOnly + result.updatedPartial + result.updatedAllFields;
 
       // Log the event using authenticated user ID
       await storage.createEventLog({
         userId,
         action: "CSV_UPLOAD",
-        details: `Bulk upload: ${result.success} new, ${result.updated} updated, ${result.errors} errors`,
+        details: `Bulk upload: ${result.created} new, ${totalUpdated} updated, ${result.errors} errors`,
       });
 
-      return res.json(result);
+      return res.json({
+        created: result.created,
+        updated: totalUpdated,
+        errors: result.errors,
+        stats: result, // Full detailed stats
+      });
     } catch (error: any) {
       console.error("Bulk upload error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
@@ -3084,22 +3095,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Bulk upsert items
-      const result = await storage.bulkUpsertInventoryItems(items);
+      const result = await storage.bulkUpsertInventoryItems(items, {
+        sourceType: 'file',
+        sourceRef: 'data/inventory.csv',
+        userId: userId,
+      });
+
+      const totalUpdated = result.updatedQuantityOnly + result.updatedPartial + result.updatedAllFields;
 
       // Log the event
       await storage.createEventLog({
         userId,
         action: "PROJECT_CSV_LOAD",
-        details: `Загружено из data/inventory.csv: ${result.success} новых, ${result.updated} обновлено, ${result.errors} ошибок`,
+        details: `Загружено из data/inventory.csv: ${result.created} новых, ${totalUpdated} обновлено, ${result.errors} ошибок`,
       });
 
       console.log("[PROJECT CSV] Result:", result);
 
       return res.json({
-        success: result.success,
-        updated: result.updated,
+        created: result.created,
+        updated: totalUpdated,
         errors: result.errors,
-        message: `Успешно загружено: ${result.success} новых товаров, обновлено: ${result.updated}`,
+        message: `Успешно загружено: ${result.created} новых товаров, обновлено: ${totalUpdated}`,
+        stats: result, // Full detailed stats
       });
     } catch (error: any) {
       console.error("[PROJECT CSV] Error:", error);
@@ -3142,6 +3160,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(settings);
     } catch (error: any) {
       console.error("[SCHEDULER] Update settings error:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Import runs endpoints
+  app.get("/api/import-runs/latest", requireAuth, async (req, res) => {
+    try {
+      const sourceType = req.query.sourceType as string | undefined;
+      const run = await storage.getLatestImportRun(sourceType);
+      return res.json(run);
+    } catch (error: any) {
+      console.error("[IMPORT RUNS] Get latest error:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/import-runs/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const run = await storage.getImportRunById(id);
+      if (!run) {
+        return res.status(404).json({ error: "Import run not found" });
+      }
+      return res.json(run);
+    } catch (error: any) {
+      console.error("[IMPORT RUNS] Get by ID error:", error);
       return res.status(500).json({ error: error.message });
     }
   });

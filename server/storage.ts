@@ -79,6 +79,7 @@ export interface ImportStats {
   errors: number;
   totalQuantityChange: number;
   errorDetails: string[];
+  importRunId?: string; // Optional ID of created import run
 }
 
 export interface IStorage {
@@ -666,7 +667,7 @@ export class DbStorage implements IStorage {
       try {
         const errorDetailsJson = stats.errorDetails.length > 0 ? JSON.stringify(stats.errorDetails.slice(0, 100)) : null; // Limit to first 100 errors
         
-        await db.insert(importRuns).values({
+        const importRun = await db.insert(importRuns).values({
           sourceType: context.sourceType || 'manual',
           sourceRef: context.sourceRef,
           triggeredBy: context.userId || null,
@@ -683,9 +684,12 @@ export class DbStorage implements IStorage {
           errorDetails: errorDetailsJson,
           status: stats.errors > 0 ? (stats.created + totalUpdated > 0 ? 'PARTIAL' : 'FAILED') : 'SUCCESS',
           duration
-        });
+        }).returning();
+        
+        return { ...stats, importRunId: importRun[0].id };
       } catch (error) {
         console.error('[BULK UPSERT] Failed to create import run record:', error);
+        return stats;
       }
     }
     

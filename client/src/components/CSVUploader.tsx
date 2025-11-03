@@ -54,9 +54,23 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 
 interface CSVUploaderProps {
   onUpload: (file: File) => Promise<{
-    success: number;
+    created: number;
     updated: number;
     errors: number;
+    stats?: {
+      rowsTotal: number;
+      rowsWithId: number;
+      rowsWithoutId: number;
+      created: number;
+      updatedAllFields: number;
+      updatedQuantityOnly: number;
+      updatedPartial: number;
+      skippedNoId: number;
+      errors: number;
+      totalQuantityChange: number;
+      errorDetails: string[];
+      importRunId?: string;
+    };
   }>;
 }
 
@@ -207,11 +221,25 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<{
-    success: number;
+    created: number;
     updated: number;
     errors: number;
     deleted?: number;
     isSync?: boolean;
+    stats?: {
+      rowsTotal: number;
+      rowsWithId: number;
+      rowsWithoutId: number;
+      created: number;
+      updatedAllFields: number;
+      updatedQuantityOnly: number;
+      updatedPartial: number;
+      skippedNoId: number;
+      errors: number;
+      totalQuantityChange: number;
+      errorDetails: string[];
+      importRunId?: string;
+    };
   } | null>(null);
   
   const [sourceType, setSourceType] = useState<'file' | 'url' | 'multiple-urls'>('file');
@@ -689,10 +717,27 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       setProgress(100);
       setResult(uploadResult);
       
-      // Show detailed result toast
+      // Show detailed result toast with enhanced statistics
+      const totalUpdated = uploadResult.updated || 0;
+      const stats = uploadResult.stats;
+      
+      let description = `Создано: ${uploadResult.created} | Обновлено: ${totalUpdated} | Ошибок: ${uploadResult.errors}`;
+      
+      // Add detailed breakdown if stats available
+      if (stats) {
+        const details: string[] = [];
+        if (stats.rowsWithId > 0) details.push(`С Item ID: ${stats.rowsWithId}`);
+        if (stats.rowsWithoutId > 0) details.push(`Без Item ID: ${stats.rowsWithoutId}`);
+        if (stats.updatedQuantityOnly > 0) details.push(`Обновлено кол-во: ${stats.updatedQuantityOnly}`);
+        if (stats.updatedPartial > 0) details.push(`Частично обновлено: ${stats.updatedPartial}`);
+        if (details.length > 0) {
+          description += `\n${details.join(' | ')}`;
+        }
+      }
+      
       toast({
         title: "✅ Загрузка завершена",
-        description: `Создано: ${uploadResult.success} | Обновлено: ${uploadResult.updated} | Ошибок: ${uploadResult.errors}`,
+        description: description,
       });
     } catch (error) {
       console.error('Upload error:', error);

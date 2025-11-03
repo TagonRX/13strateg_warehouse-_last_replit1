@@ -101,9 +101,10 @@ export async function runScheduledImport(): Promise<{ success: boolean; message:
       return { success: false, message: 'No bulk upload sources configured' };
     }
     
-    let totalSuccess = 0;
+    let totalCreated = 0;
     let totalUpdated = 0;
     let totalErrors = 0;
+    let lastRunId: string | null = null;
     
     // Process each bulk upload source
     for (const source of sources) {
@@ -126,12 +127,22 @@ export async function runScheduledImport(): Promise<{ success: boolean; message:
         console.log(`[SCHEDULER] Downloaded ${items.length} items from ${source.label}`);
         
         if (items.length > 0) {
-          const result = await storage.bulkUpsertInventoryItems(items);
-          totalSuccess += result.success;
-          totalUpdated += result.updated;
+          const result = await storage.bulkUpsertInventoryItems(items, {
+            sourceType: 'scheduler',
+            sourceRef: source.label,
+            userId: undefined,
+          });
+          
+          totalCreated += result.created;
+          totalUpdated += result.updatedQuantityOnly + result.updatedPartial + result.updatedAllFields;
           totalErrors += result.errors;
           
-          console.log(`[SCHEDULER] Processed ${source.label}: ${result.success} created, ${result.updated} updated, ${result.errors} errors`);
+          // Track last import run ID
+          if (result.importRunId) {
+            lastRunId = result.importRunId;
+          }
+          
+          console.log(`[SCHEDULER] Processed ${source.label}: ${result.created} created, ${totalUpdated} updated, ${result.errors} errors`);
         }
       } catch (error: any) {
         console.error(`[SCHEDULER] Error processing ${source.label}:`, error);
@@ -144,16 +155,17 @@ export async function runScheduledImport(): Promise<{ success: boolean; message:
       lastRunAt: startTime,
       lastRunStatus: totalErrors > 0 ? 'PARTIAL' : 'SUCCESS',
       lastRunError: totalErrors > 0 ? `${totalErrors} errors occurred` : null,
+      lastRunId: lastRunId,
     });
     
-    console.log(`[SCHEDULER] Import completed: ${totalSuccess} created, ${totalUpdated} updated, ${totalErrors} errors`);
+    console.log(`[SCHEDULER] Import completed: ${totalCreated} created, ${totalUpdated} updated, ${totalErrors} errors`);
     
     isRunning = false;
     return {
       success: true,
       message: 'Import completed successfully',
       details: {
-        created: totalSuccess,
+        created: totalCreated,
         updated: totalUpdated,
         errors: totalErrors,
       },
