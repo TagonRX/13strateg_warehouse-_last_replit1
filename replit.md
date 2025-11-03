@@ -4,6 +4,13 @@
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
 ## Recent Changes (November 3, 2025)
+- **Integrated Picking → Dispatch → Packing Workflow**: Implemented automated order creation and fulfillment pipeline:
+  - **Auto Order Creation**: When picking task is completed, system automatically creates/updates order with status PENDING for Dispatch section
+  - **Smart Dispatch**: Workers scan item barcode to see all pending orders containing that item; multi-order selection dialog shows complete order details for worker choice
+  - **Status Flow**: PENDING (from picking) → DISPATCHED (after scanning label) → PACKED (after packing verification)
+  - **Inventory Depletion**: Items are automatically removed from inventory after packing completion based on dispatched barcodes
+  - **Order Lifecycle**: createOrUpdateOrderFromPickingTask consolidates picking tasks into single order per picking list; orders transition through statuses as workers process them
+- **Barcode Scanner Auto-Input**: Added useGlobalBarcodeInput hook to inventory search field for automatic barcode scanner input routing
 - **Bypass Code Feature**: Implemented secure bypass code system for warehouse item placement:
   - **Database**: Added `bypassCode` field to `warehouseSettings` table for storing administrator-set code
   - **Storage Layer**: Created `getBypassCode()` and `setBypassCode()` methods with admin-only access control

@@ -1527,11 +1527,18 @@ export class DbStorage implements IStorage {
       price: item.price || null,
     });
 
+    // If task is completed, create or update order
+    let order = null;
+    if (isCompleted) {
+      order = await this.createOrUpdateOrderFromPickingTask(updatedTask, userId);
+    }
+
     return { 
       success: true, 
       message: `Item picked successfully! Progress: ${newPickedQuantity}/${task.requiredQuantity}`,
       item,
-      task: updatedTask
+      task: updatedTask,
+      order
     };
   }
 
@@ -1602,10 +1609,17 @@ export class DbStorage implements IStorage {
         price: item.price || null,
       });
 
+      // If task is completed, create or update order
+      let order = null;
+      if (isCompleted) {
+        order = await this.createOrUpdateOrderFromPickingTask(updatedTask, userId);
+      }
+
       return { 
         success: true, 
         message: `Товар собран вручную! Прогресс: ${newPickedQuantity}/${task.requiredQuantity}`,
-        task: updatedTask
+        task: updatedTask,
+        order
       };
     } else {
       // No item found in inventory with matching SKU
@@ -1634,10 +1648,17 @@ export class DbStorage implements IStorage {
         price: null,
       });
 
+      // If task is completed, create or update order
+      let order = null;
+      if (isCompleted) {
+        order = await this.createOrUpdateOrderFromPickingTask(updatedTask, userId);
+      }
+
       return { 
         success: true, 
         message: `Товар собран вручную (нет в инвентаре)! Прогресс: ${newPickedQuantity}/${task.requiredQuantity}`,
-        task: updatedTask
+        task: updatedTask,
+        order
       };
     }
   }
@@ -2356,6 +2377,83 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  async createOrUpdateOrderFromPickingTask(task: PickingTask, userId: string): Promise<Order | null> {
+    if (!task.listId) {
+      return null;
+    }
+
+    // Get the picking list to use as order number
+    const [list] = await db.select().from(pickingLists).where(eq(pickingLists.id, task.listId));
+    if (!list) {
+      return null;
+    }
+
+    // Try to find existing order for this picking list
+    const existingOrders = await db.select().from(orders)
+      .where(eq(orders.orderNumber, list.name));
+    
+    // Get item details from inventory
+    const [inventoryItem] = await db.select().from(inventoryItems)
+      .where(eq(inventoryItems.sku, task.sku))
+      .limit(1);
+
+    const orderItem = {
+      sku: task.sku,
+      barcode: inventoryItem?.barcode || undefined,
+      imageUrls: inventoryItem?.imageUrls ? JSON.parse(inventoryItem.imageUrls) : undefined,
+      ebayUrl: inventoryItem?.ebayUrl || undefined,
+      ebaySellerName: inventoryItem?.ebaySellerName || task.ebaySellerName || undefined,
+      itemName: task.itemName || inventoryItem?.name || undefined,
+      quantity: task.requiredQuantity,
+    };
+
+    if (existingOrders.length > 0) {
+      // Update existing order - add this item to the items array
+      const existingOrder = existingOrders[0];
+      const existingItems = existingOrder.items ? JSON.parse(existingOrder.items) : [];
+      
+      // Check if item with this SKU already exists in the order
+      const existingItemIndex = existingItems.findIndex((item: any) => item.sku === task.sku);
+      
+      if (existingItemIndex >= 0) {
+        // ACCUMULATE quantity instead of overwriting
+        existingItems[existingItemIndex].quantity += task.requiredQuantity;
+        // Update metadata in case it changed
+        if (orderItem.barcode) existingItems[existingItemIndex].barcode = orderItem.barcode;
+        if (orderItem.imageUrls) existingItems[existingItemIndex].imageUrls = orderItem.imageUrls;
+        if (orderItem.ebayUrl) existingItems[existingItemIndex].ebayUrl = orderItem.ebayUrl;
+        if (orderItem.ebaySellerName) existingItems[existingItemIndex].ebaySellerName = orderItem.ebaySellerName;
+        if (orderItem.itemName) existingItems[existingItemIndex].itemName = orderItem.itemName;
+      } else {
+        // Add new item to the order
+        existingItems.push(orderItem);
+      }
+
+      const [updatedOrder] = await db.update(orders)
+        .set({
+          items: JSON.stringify(existingItems),
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, existingOrder.id))
+        .returning();
+
+      return updatedOrder;
+    } else {
+      // Create new order
+      const newOrder = await this.createOrder({
+        orderNumber: list.name,
+        customerName: null,
+        shippingAddress: null,
+        orderDate: new Date(),
+        status: "PENDING",
+        items: JSON.stringify([orderItem]),
+        createdBy: userId,
+      });
+
+      return newOrder;
+    }
+  }
+
   async getOrders(filters?: { status?: string }): Promise<Order[]> {
     if (filters?.status) {
       return await db.select().from(orders)
@@ -2417,6 +2515,12 @@ export class DbStorage implements IStorage {
   }
 
   async updatePackingData(id: string, userId: string): Promise<Order> {
+    // Get order before update
+    const orderBefore = await this.getOrderById(id);
+    if (!orderBefore) {
+      throw new Error("Order not found");
+    }
+
     // Update order status first
     const result = await db.update(orders)
       .set({
@@ -2441,10 +2545,12 @@ export class DbStorage implements IStorage {
     let itemsInfo = '';
     let barcodesInfo = '';
     let itemCount = 0;
+    let items: any[] = [];
+    let barcodes: string[] = [];
     
     try {
       // Handle both JSON string and already-parsed array
-      const items = updatedOrder.items 
+      items = updatedOrder.items 
         ? (typeof updatedOrder.items === 'string' ? JSON.parse(updatedOrder.items) : updatedOrder.items)
         : [];
       itemCount = items.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0);
@@ -2459,7 +2565,7 @@ export class DbStorage implements IStorage {
 
     try {
       // Handle both JSON string and already-parsed array
-      const barcodes = updatedOrder.dispatchedBarcodes
+      barcodes = updatedOrder.dispatchedBarcodes
         ? (typeof updatedOrder.dispatchedBarcodes === 'string' ? JSON.parse(updatedOrder.dispatchedBarcodes) : updatedOrder.dispatchedBarcodes)
         : [];
       
@@ -2474,6 +2580,18 @@ export class DbStorage implements IStorage {
     } catch (e) {
       console.error('Failed to parse barcodes:', e);
       barcodesInfo = itemsInfo; // Fallback to items info on error
+    }
+
+    // Delete items from inventory based on dispatched barcodes
+    if (barcodes && barcodes.length > 0) {
+      for (const barcode of barcodes) {
+        try {
+          // Find and delete item by barcode
+          await db.delete(inventoryItems).where(eq(inventoryItems.barcode, barcode));
+        } catch (e) {
+          console.error(`Failed to delete item with barcode ${barcode}:`, e);
+        }
+      }
     }
 
     // Create event log for packing completion

@@ -42,6 +42,8 @@ export default function Dispatch() {
   const [selectedImageUrls, setSelectedImageUrls] = useState<string[]>([]);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [shippingLabel, setShippingLabel] = useState<string>("");
+  const [orderSelectionDialogOpen, setOrderSelectionDialogOpen] = useState(false);
+  const [availableOrders, setAvailableOrders] = useState<ParsedOrder[]>([]);
 
   const { data: currentUser } = useQuery<any>({
     queryKey: ["/api/auth/me"],
@@ -61,11 +63,15 @@ export default function Dispatch() {
     },
     onSuccess: (data) => {
       if (data.multiple) {
-        toast({
-          variant: "destructive",
-          title: "Найдено несколько заказов",
-          description: `Найдено ${data.orders.length} заказов с этим SKU. Отсканируйте конкретный баркод товара.`,
-        });
+        // Multiple orders found - show selection dialog
+        const parsedOrders = data.orders.map((order: any) => ({
+          ...order,
+          items: order.items ? JSON.parse(order.items) : []
+        }));
+        
+        parsedOrders.forEach((order: ParsedOrder) => enrichOrderWithInventoryData(order));
+        setAvailableOrders(parsedOrders);
+        setOrderSelectionDialogOpen(true);
         return;
       }
 
@@ -292,6 +298,28 @@ export default function Dispatch() {
     setShippingLabel("");
   };
 
+  const handleOrderSelection = (selectedOrder: ParsedOrder) => {
+    setCurrentOrder(selectedOrder);
+    setScannedItemBarcodes([]);
+    setScannedCounts(new Map());
+    setOrderSelectionDialogOpen(false);
+
+    const totalQuantity = selectedOrder.items.reduce((sum, item) => sum + item.quantity, 0);
+    if (totalQuantity === 1) {
+      setCurrentPhase('scanning_label');
+      toast({
+        title: "Заказ выбран",
+        description: `Заказ №${selectedOrder.orderNumber} (1 товар). Отсканируйте лейбл посылки.`,
+      });
+    } else {
+      setCurrentPhase('scanning_items');
+      toast({
+        title: "Заказ выбран",
+        description: `Заказ №${selectedOrder.orderNumber} (${totalQuantity} товаров). Отсканируйте все товары.`,
+      });
+    }
+  };
+
   const openImageGallery = (imageUrls: string[]) => {
     setSelectedImageUrls(imageUrls);
     setImageModalOpen(true);
@@ -510,6 +538,71 @@ export default function Dispatch() {
         isOpen={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
       />
+
+      <Dialog open={orderSelectionDialogOpen} onOpenChange={setOrderSelectionDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto" data-testid="dialog-order-selection">
+          <DialogHeader>
+            <DialogTitle>Выберите заказ</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Найдено {availableOrders.length} заказ(ов) с этим товаром. Выберите нужный:
+            </p>
+            <div className="space-y-3">
+              {availableOrders.map((order) => (
+                <Card 
+                  key={order.id} 
+                  className="cursor-pointer hover-elevate active-elevate-2 transition-all"
+                  onClick={() => handleOrderSelection(order)}
+                  data-testid={`order-option-${order.orderNumber}`}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">Заказ №{order.orderNumber}</CardTitle>
+                      <Badge>{order.items.length} товар(ов)</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Покупатель:</span>
+                        <p className="font-medium">{order.customerName || 'Не указан'}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Дата:</span>
+                        <p className="font-medium">
+                          {order.orderDate ? format(new Date(order.orderDate), "dd.MM.yyyy") : 'Не указана'}
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-sm text-muted-foreground">Товары в заказе:</span>
+                      <div className="mt-2 space-y-1">
+                        {order.items.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-sm">
+                            <Badge variant="outline">{item.sku}</Badge>
+                            <span>{item.itemName || 'Без названия'}</span>
+                            <span className="text-muted-foreground">× {item.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setOrderSelectionDialogOpen(false)}
+              data-testid="button-cancel-order-selection"
+            >
+              Отмена
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
         <DialogContent data-testid="dialog-confirm-dispatch">
