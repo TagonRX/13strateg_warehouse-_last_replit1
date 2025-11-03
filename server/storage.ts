@@ -2433,7 +2433,7 @@ export class DbStorage implements IStorage {
       ebayUrl: inventoryItem?.ebayUrl || undefined,
       ebaySellerName: inventoryItem?.ebaySellerName || task.ebaySellerName || undefined,
       itemName: task.itemName || inventoryItem?.name || undefined,
-      quantity: task.requiredQuantity,
+      quantity: task.pickedQuantity, // Use actual picked quantity, not required
     };
 
     if (existingOrders.length > 0) {
@@ -2445,8 +2445,8 @@ export class DbStorage implements IStorage {
       const existingItemIndex = existingItems.findIndex((item: any) => item.sku === task.sku);
       
       if (existingItemIndex >= 0) {
-        // ACCUMULATE quantity instead of overwriting
-        existingItems[existingItemIndex].quantity += task.requiredQuantity;
+        // SET quantity to current pickedQuantity (not accumulate - we're tracking the task state)
+        existingItems[existingItemIndex].quantity = task.pickedQuantity;
         // Update metadata in case it changed
         if (orderItem.barcode) existingItems[existingItemIndex].barcode = orderItem.barcode;
         if (orderItem.imageUrls) existingItems[existingItemIndex].imageUrls = orderItem.imageUrls;
@@ -2454,7 +2454,7 @@ export class DbStorage implements IStorage {
         if (orderItem.ebaySellerName) existingItems[existingItemIndex].ebaySellerName = orderItem.ebaySellerName;
         if (orderItem.itemName) existingItems[existingItemIndex].itemName = orderItem.itemName;
       } else {
-        // Add new item to the order
+        // Add new item to the order with current picked quantity
         existingItems.push(orderItem);
       }
 
