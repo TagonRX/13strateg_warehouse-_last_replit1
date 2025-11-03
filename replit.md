@@ -4,6 +4,18 @@
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
 ## Recent Changes (November 3, 2025)
+- **Dual Inventory Quantity Tracking**: Implemented comprehensive system for tracking expected vs physical inventory:
+  - **Database Schema**: Added `expectedQuantity` field to `inventoryItems` table for storing quantity from external systems/CSV imports
+  - **Smart CSV Import Logic**: Modified `bulkUpsertInventoryItems` to preserve physical inventory during updates:
+    - Items WITH barcodes: CSV updates only `expectedQuantity`, keeps physical `quantity` unchanged (determined by actual barcode count)
+    - Items WITHOUT barcodes: CSV updates `quantity` as before (traditional inventory management)
+  - **Physical Count Calculation**: Frontend automatically calculates physical count by counting records with same SKU that have barcodes
+  - **Variance Detection UI**: InventoryTable displays new "Qty" column showing:
+    - Non-barcoded items: displays `quantity` only
+    - Barcoded items: displays `physicalCount / expectedCount` with red warning (⚠️) when mismatch occurs
+    - Hover tooltip shows detailed breakdown: Physical count, Expected count, and Difference (±X)
+  - **Business Logic**: Solves synchronization issue where external system shows reduced quantity after sales, but physical warehouse items (with barcodes) remain intact until actually picked
+  - **Reconciliation**: After picking/packing completion, physical quantity decreases to match expected quantity from external system
 - **Integrated Picking → Dispatch → Packing Workflow**: Implemented automated order creation and fulfillment pipeline:
   - **Auto Order Creation**: When picking task is completed, system automatically creates/updates order with status PENDING for Dispatch section
   - **Smart Dispatch**: Workers scan item barcode to see all pending orders containing that item; multi-order selection dialog shows complete order details for worker choice
