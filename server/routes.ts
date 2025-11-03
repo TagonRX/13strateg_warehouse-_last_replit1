@@ -364,9 +364,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let bypassCodeUsed = false;
       if (bypassCode) {
         const validBypassCode = await storage.getBypassCode();
-        if (!validBypassCode || bypassCode.trim() !== validBypassCode) {
+        
+        if (!validBypassCode) {
+          return res.status(400).json({ error: "Bypass-код не установлен в системе" });
+        }
+        
+        if (bypassCode.trim() !== validBypassCode) {
           return res.status(400).json({ error: "Неверный bypass-код" });
         }
+        
         bypassCodeUsed = true;
       }
 
