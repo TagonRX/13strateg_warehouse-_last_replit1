@@ -350,7 +350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/placements/confirm", requireAuth, async (req, res) => {
     try {
       const userId = (req as any).userId;
-      const { placementId, location } = req.body;
+      const { placementId, location, bypassCode } = req.body;
 
       if (!placementId) {
         return res.status(400).json({ error: "Требуется ID размещения" });
@@ -360,7 +360,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Требуется локация" });
       }
 
+      // If bypass code was provided, verify it
+      let bypassCodeUsed = false;
+      if (bypassCode) {
+        const validBypassCode = await storage.getBypassCode();
+        if (!validBypassCode || bypassCode.trim() !== validBypassCode) {
+          return res.status(400).json({ error: "Неверный bypass-код" });
+        }
+        bypassCodeUsed = true;
+      }
+
+      // Confirm placement
       const inventoryItem = await storage.confirmPlacement(placementId, location, userId);
+      
+      // If bypass code was used and verified, log it
+      if (bypassCodeUsed) {
+        await storage.createEventLog({
+          userId,
+          action: "BYPASS_CODE_USED",
+          details: `Товар размещён с использованием bypass-кода: ${inventoryItem.name || inventoryItem.sku} → ${location}`,
+          productId: inventoryItem.productId || undefined,
+          itemName: inventoryItem.name || undefined,
+          sku: inventoryItem.sku,
+          location: inventoryItem.location,
+          quantity: inventoryItem.quantity,
+          price: inventoryItem.price || undefined,
+        });
+      }
+      
       return res.json(inventoryItem);
     } catch (error: any) {
       console.error("Confirm placement error:", error);
@@ -1233,6 +1260,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(updated);
     } catch (error: any) {
       console.error("Update location barcode error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Bypass Code endpoints (Admin only)
+  app.get("/api/warehouse-settings/bypass-code", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const code = await storage.getBypassCode();
+      return res.json({ bypassCode: code });
+    } catch (error: any) {
+      console.error("Get bypass code error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  app.post("/api/warehouse-settings/bypass-code", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { code } = req.body;
+      
+      // Allow setting to null or empty string to remove the code
+      const codeToSet = code && code.trim() !== '' ? code.trim() : null;
+      
+      await storage.setBypassCode(codeToSet);
+      return res.json({ bypassCode: codeToSet });
+    } catch (error: any) {
+      console.error("Set bypass code error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });

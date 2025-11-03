@@ -29,6 +29,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Key, Eye, EyeOff, Edit } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 
 interface User {
   id: string;
@@ -67,6 +70,49 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
 
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const [editingLogin, setEditingLogin] = useState("");
+
+  const { toast } = useToast();
+  
+  // Bypass code state
+  const [bypassCode, setBypassCode] = useState("");
+  const [showBypassCode, setShowBypassCode] = useState(false);
+
+  // Fetch bypass code
+  const { data: bypassCodeData } = useQuery<{ bypassCode: string | null }>({
+    queryKey: ['/api/warehouse-settings/bypass-code'],
+  });
+
+  // Update bypass code mutation
+  const updateBypassCodeMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const response = await fetch('/api/warehouse-settings/bypass-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to update bypass code');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/warehouse-settings/bypass-code'] });
+      toast({
+        title: "Код обновлён",
+        description: "Bypass-код успешно сохранён",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось обновить bypass-код",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleBypassCodeSave = () => {
+    updateBypassCodeMutation.mutate(bypassCode.trim());
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -397,6 +443,60 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Bypass Code Section */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Bypass-код для размещения</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Установите секретный код, который позволяет работникам размещать товары без сканирования баркода локации.
+            </p>
+            <div className="flex gap-4 items-end">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="bypass-code">Bypass-код</Label>
+                <div className="relative">
+                  <Input
+                    id="bypass-code"
+                    type={showBypassCode ? "text" : "password"}
+                    value={bypassCode}
+                    onChange={(e) => setBypassCode(e.target.value)}
+                    placeholder={bypassCodeData?.bypassCode || "Введите код"}
+                    data-testid="input-bypass-code"
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full"
+                    onClick={() => setShowBypassCode(!showBypassCode)}
+                    data-testid="button-toggle-bypass-code"
+                    aria-label={showBypassCode ? "Скрыть код" : "Показать код"}
+                    title={showBypassCode ? "Скрыть код" : "Показать код"}
+                  >
+                    {showBypassCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <Button
+                onClick={handleBypassCodeSave}
+                disabled={updateBypassCodeMutation.isPending}
+                data-testid="button-save-bypass-code"
+              >
+                {updateBypassCodeMutation.isPending ? "Сохранение..." : "Сохранить"}
+              </Button>
+            </div>
+            {bypassCodeData?.bypassCode && (
+              <p className="text-sm text-muted-foreground">
+                Текущий код: {showBypassCode ? bypassCodeData.bypassCode : "••••••••"}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </Card>
   );
 }

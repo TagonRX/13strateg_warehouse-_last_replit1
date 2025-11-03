@@ -139,6 +139,7 @@ export const warehouseSettings = pgTable("warehouse_settings", {
   locationPattern: text("location_pattern").notNull().unique(), // Например: "A1", "B1", "C1" и т.д.
   tsku: integer("tsku").notNull().default(4), // Максимальное количество SKU
   maxq: integer("maxq").notNull().default(10), // Максимальное количество товаров
+  bypassCode: text("bypass_code"), // Секретный код для размещения товаров без сканирования баркода локации
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

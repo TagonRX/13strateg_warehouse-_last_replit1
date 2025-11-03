@@ -239,6 +239,10 @@ export interface IStorage {
   getLatestImportRun(sourceType?: string): Promise<ImportRun | undefined>;
   getImportRunById(id: string): Promise<ImportRun | undefined>;
 
+  // Bypass Code methods
+  getBypassCode(): Promise<string | null>;
+  setBypassCode(code: string | null): Promise<void>;
+
   // Order methods
   createOrder(order: InsertOrder): Promise<Order>;
   getOrders(filters?: { status?: string }): Promise<Order[]>;
@@ -2836,6 +2840,38 @@ export class DbStorage implements IStorage {
   async getImportRunById(id: string): Promise<ImportRun | undefined> {
     const [run] = await db.select().from(importRuns).where(eq(importRuns.id, id)).limit(1);
     return run;
+  }
+
+  // Bypass Code methods
+  async getBypassCode(): Promise<string | null> {
+    // Get bypass code from first warehouse setting that has it, or null
+    const [setting] = await db
+      .select()
+      .from(warehouseSettings)
+      .where(sql`${warehouseSettings.bypassCode} IS NOT NULL`)
+      .limit(1);
+    
+    return setting?.bypassCode || null;
+  }
+
+  async setBypassCode(code: string | null): Promise<void> {
+    // Set bypass code on the first setting (or create if none exists)
+    const [firstSetting] = await db.select().from(warehouseSettings).limit(1);
+    
+    if (firstSetting) {
+      await db
+        .update(warehouseSettings)
+        .set({ bypassCode: code })
+        .where(eq(warehouseSettings.id, firstSetting.id));
+    } else {
+      // Create a default setting with the bypass code
+      await db.insert(warehouseSettings).values({
+        locationPattern: 'DEFAULT',
+        tsku: 4,
+        maxq: 10,
+        bypassCode: code,
+      });
+    }
   }
 
   // Helper: Append archived item to OLD-inventory.csv

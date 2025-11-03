@@ -37,6 +37,8 @@ export default function PlacementView() {
   const [feedback, setFeedback] = useState<"success" | "error" | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [placementToDelete, setPlacementToDelete] = useState<PendingPlacement | null>(null);
+  const [bypassCode, setBypassCode] = useState("");
+  const [showBypassInput, setShowBypassInput] = useState(false);
 
   const { toast } = useToast();
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
@@ -132,6 +134,57 @@ export default function PlacementView() {
     setCurrentPlacement(placement);
     setTargetLocation(placement.location);
     setStep("scan_location");
+  };
+
+  const handleBypassCodeSubmit = async () => {
+    if (!currentPlacement || !bypassCode.trim()) return;
+
+    // Submit bypass code to server for verification
+    try {
+      const response = await fetch("/api/placements/confirm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          placementId: currentPlacement.id,
+          location: targetLocation.toUpperCase(),
+          bypassCode: bypassCode.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Ошибка размещения");
+      }
+
+      setFeedback("success");
+      setStep("success");
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/pending-placements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+
+      toast({
+        title: "✅ Bypass-код принят!",
+        description: `${currentPlacement.name || currentPlacement.barcode} → ${targetLocation.toUpperCase()} (bypass-код использован)`,
+      });
+
+      // Reset after 2 seconds
+      setTimeout(() => {
+        resetForm();
+      }, 2000);
+    } catch (error: any) {
+      console.error("Placement error:", error);
+      toast({
+        title: "❌ Неверный код!",
+        description: error.message || "Bypass-код неправильный",
+        variant: "destructive",
+      });
+      setBypassCode("");
+    }
   };
 
   const handleLocationScanned = async (scannedCode: string) => {
@@ -232,6 +285,8 @@ export default function PlacementView() {
     setTargetLocation("");
     setCurrentPlacement(null);
     setFeedback(null);
+    setBypassCode("");
+    setShowBypassInput(false);
   };
 
   const handleBarcodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -387,6 +442,50 @@ export default function PlacementView() {
                       readOnly={scannerMode === "phone"}
                       data-testid="input-location-barcode"
                     />
+                  </div>
+
+                  {/* Bypass code section - Always visible for workers */}
+                  <div className="border-t pt-4 space-y-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowBypassInput(!showBypassInput)}
+                      className="w-full"
+                      data-testid="button-toggle-bypass"
+                    >
+                      {showBypassInput ? "Скрыть bypass-код" : "Использовать bypass-код"}
+                    </Button>
+                    
+                    {showBypassInput && (
+                      <div className="space-y-2">
+                        <Label htmlFor="bypass-code-input">Bypass-код</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="bypass-code-input"
+                            type="password"
+                            value={bypassCode}
+                            onChange={(e) => setBypassCode(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && bypassCode.trim()) {
+                                handleBypassCodeSubmit();
+                              }
+                            }}
+                            placeholder="Введите bypass-код"
+                            className="flex-1"
+                            data-testid="input-bypass-code-placement"
+                          />
+                          <Button
+                            onClick={handleBypassCodeSubmit}
+                            disabled={!bypassCode.trim()}
+                            data-testid="button-submit-bypass"
+                          >
+                            Подтвердить
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Используйте bypass-код для размещения без сканирования локации
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <Button

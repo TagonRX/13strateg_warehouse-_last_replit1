@@ -4,6 +4,14 @@
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
 ## Recent Changes (November 3, 2025)
+- **Bypass Code Feature**: Implemented secure bypass code system for warehouse item placement:
+  - **Database**: Added `bypassCode` field to `warehouseSettings` table for storing administrator-set code
+  - **Storage Layer**: Created `getBypassCode()` and `setBypassCode()` methods with admin-only access control
+  - **API Endpoints**: Added GET/POST `/api/warehouse-settings/bypass-code` (admin-only) for managing bypass code
+  - **UI Enhancement**: UserManagementPanel includes password-type input and save button for administrators to set bypass code
+  - **PlacementView Integration**: Workers can use bypass code as alternative to scanning location barcode - code is verified server-side without exposing actual code to frontend
+  - **Event Logging**: System creates BYPASS_CODE_USED event when bypass code is successfully used, tracking user, item details, and location for audit trail
+  - **Security**: Bypass code never transmitted to frontend; workers submit code for server-side verification; invalid codes return explicit error
 - **Detailed Import Statistics Tracking**: Implemented comprehensive import statistics pipeline:
   - **Database**: Added `import_runs` table to persist complete import history with granular metrics (rowsTotal, rowsWithId/WithoutId, created, updatedQuantityOnly/Partial/AllFields, skippedNoId, errors, totalQuantityChange)
   - **Storage Layer**: Modified `bulkUpsertInventoryItems` to collect detailed statistics during processing and accept optional context (sourceType, sourceRef, userId) for import tracking
