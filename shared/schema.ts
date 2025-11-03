@@ -20,7 +20,8 @@ export const inventoryItems = pgTable("inventory_items", {
   name: text("name"), // Название (опционально, может добавиться через CSV)
   sku: text("sku").notNull(), // SKU = Локация (обязательно)
   location: text("location").notNull(), // Автоматически извлекается из SKU
-  quantity: integer("quantity").notNull().default(1),
+  quantity: integer("quantity").notNull().default(1), // Старое поле - для товаров без баркодов и обратной совместимости
+  expectedQuantity: integer("expected_quantity"), // Количество из внешней системы (массовая загрузка) - может быть null
   zeroQuantitySince: timestamp("zero_quantity_since"), // Дата, когда quantity стало <= 0 (для 4-дневной задержки архивации)
   barcode: text("barcode"), // Опционально (устаревшее - используется для обратной совместимости)
   barcodeMappings: text("barcode_mappings"), // JSON массив: [{ code: "123", qty: 2 }, { code: "456", qty: 3 }]

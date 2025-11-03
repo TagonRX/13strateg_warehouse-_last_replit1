@@ -451,35 +451,45 @@ export class DbStorage implements IStorage {
         // Extract location from SKU if not provided
         const location = item.location || this.extractLocation(item.sku);
         
-        // SMART UPDATE LOGIC: If itemId exists in database, update ONLY quantity and price
+        // SMART UPDATE LOGIC: If itemId exists in database, update expectedQuantity or quantity
         if (item.itemId && existingByItemId.has(item.itemId)) {
           const existing = existingByItemId.get(item.itemId)!;
           const newQuantity = item.quantity ?? existing.quantity;
           const oldQuantity = existing.quantity;
           
-          // Track quantity change
-          stats.totalQuantityChange += (newQuantity - oldQuantity);
+          // Check if item has barcode (physical item with scanned barcode)
+          const hasBarcode = existing.barcode && existing.barcode.trim() !== '';
           
-          // Determine zeroQuantitySince based on quantity transition
-          let zeroQuantitySince = existing.zeroQuantitySince;
-          if (oldQuantity > 0 && newQuantity <= 0) {
-            // Quantity went from positive to zero or negative
-            zeroQuantitySince = new Date();
-          } else if (oldQuantity <= 0 && newQuantity > 0) {
-            // Quantity went from zero/negative to positive
-            zeroQuantitySince = null;
+          const updates: Partial<InsertInventoryItem> = {
+            price: item.price,
+          };
+          
+          if (hasBarcode) {
+            // For items WITH barcode: update expectedQuantity, NOT quantity
+            updates.expectedQuantity = newQuantity;
+            // Keep physical quantity unchanged - it's determined by barcode count
+          } else {
+            // For items WITHOUT barcode: update quantity as before
+            updates.quantity = newQuantity;
+            
+            // Track quantity change only for non-barcoded items
+            stats.totalQuantityChange += (newQuantity - oldQuantity);
+            
+            // Determine zeroQuantitySince based on quantity transition
+            let zeroQuantitySince = existing.zeroQuantitySince;
+            if (oldQuantity > 0 && newQuantity <= 0) {
+              zeroQuantitySince = new Date();
+            } else if (oldQuantity <= 0 && newQuantity > 0) {
+              zeroQuantitySince = null;
+            }
+            updates.zeroQuantitySince = zeroQuantitySince;
           }
-          // If both positive or both non-positive, keep existing zeroQuantitySince
           
           itemsToUpdate.push({
             id: existing.id,
-            updates: {
-              quantity: newQuantity,
-              price: item.price,
-              zeroQuantitySince,
-            }
+            updates
           });
-          stats.updatedQuantityOnly++; // Updating only quantity and price
+          stats.updatedQuantityOnly++; // Updating quantity/expectedQuantity and price
           
         } else if (item.itemId) {
           // ItemId provided but not found in database - create new item
@@ -505,19 +515,32 @@ export class DbStorage implements IStorage {
             const newQuantity = item.quantity || existingWithData.quantity;
             const oldQuantity = existingWithData.quantity;
             
-            // Determine zeroQuantitySince based on quantity transition
-            let zeroQuantitySince = existingWithData.zeroQuantitySince;
-            if (oldQuantity > 0 && newQuantity <= 0) {
-              zeroQuantitySince = new Date();
-            } else if (oldQuantity <= 0 && newQuantity > 0) {
-              zeroQuantitySince = null;
-            }
+            // Check if item has barcode
+            const hasBarcode = existingWithData.barcode && existingWithData.barcode.trim() !== '';
             
             const updates: Partial<InsertInventoryItem> = {
-              quantity: newQuantity,
               price: item.price || existingWithData.price,
-              zeroQuantitySince,
             };
+            
+            if (hasBarcode) {
+              // For items WITH barcode: update expectedQuantity only
+              updates.expectedQuantity = newQuantity;
+            } else {
+              // For items WITHOUT barcode: update quantity as before
+              updates.quantity = newQuantity;
+              
+              // Track quantity change only for non-barcoded items
+              stats.totalQuantityChange += (newQuantity - oldQuantity);
+              
+              // Determine zeroQuantitySince based on quantity transition
+              let zeroQuantitySince = existingWithData.zeroQuantitySince;
+              if (oldQuantity > 0 && newQuantity <= 0) {
+                zeroQuantitySince = new Date();
+              } else if (oldQuantity <= 0 && newQuantity > 0) {
+                zeroQuantitySince = null;
+              }
+              updates.zeroQuantitySince = zeroQuantitySince;
+            }
             
             // Only update name/itemId if they are missing in existing item
             if (!existingWithData.name && item.name) {
@@ -536,9 +559,6 @@ export class DbStorage implements IStorage {
             // Preserve existing barcode/dimensions, don't overwrite
             // (no updates for barcode, length, width, height, weight, volume)
             
-            // Track quantity change
-            stats.totalQuantityChange += (newQuantity - oldQuantity);
-            
             itemsToUpdate.push({
               id: existingWithData.id,
               updates
@@ -550,28 +570,40 @@ export class DbStorage implements IStorage {
             const newQuantity = item.quantity || firstMatch.quantity;
             const oldQuantity = firstMatch.quantity;
             
-            // Track quantity change
-            stats.totalQuantityChange += (newQuantity - oldQuantity);
+            // Check if item has barcode
+            const hasBarcode = firstMatch.barcode && firstMatch.barcode.trim() !== '';
             
-            // Determine zeroQuantitySince based on quantity transition
-            let zeroQuantitySince = firstMatch.zeroQuantitySince;
-            if (oldQuantity > 0 && newQuantity <= 0) {
-              zeroQuantitySince = new Date();
-            } else if (oldQuantity <= 0 && newQuantity > 0) {
-              zeroQuantitySince = null;
+            const updates: Partial<InsertInventoryItem> = {
+              price: item.price || firstMatch.price,
+              name: item.name || firstMatch.name,
+              itemId: item.itemId || firstMatch.itemId,
+              barcode: item.barcode || firstMatch.barcode,
+              location: location,
+            };
+            
+            if (hasBarcode) {
+              // For items WITH barcode: update expectedQuantity only
+              updates.expectedQuantity = newQuantity;
+            } else {
+              // For items WITHOUT barcode: update quantity as before
+              updates.quantity = newQuantity;
+              
+              // Track quantity change only for non-barcoded items
+              stats.totalQuantityChange += (newQuantity - oldQuantity);
+              
+              // Determine zeroQuantitySince based on quantity transition
+              let zeroQuantitySince = firstMatch.zeroQuantitySince;
+              if (oldQuantity > 0 && newQuantity <= 0) {
+                zeroQuantitySince = new Date();
+              } else if (oldQuantity <= 0 && newQuantity > 0) {
+                zeroQuantitySince = null;
+              }
+              updates.zeroQuantitySince = zeroQuantitySince;
             }
             
             itemsToUpdate.push({
               id: firstMatch.id,
-              updates: {
-                quantity: newQuantity,
-                price: item.price || firstMatch.price,
-                name: item.name || firstMatch.name,
-                itemId: item.itemId || firstMatch.itemId,
-                barcode: item.barcode || firstMatch.barcode,
-                location: location,
-                zeroQuantitySince,
-              }
+              updates
             });
             stats.updatedPartial++; // Partial update (some fields)
           }
