@@ -342,7 +342,38 @@ export const schedulerSettings = pgTable("scheduler_settings", {
   lastRunAt: timestamp("last_run_at"), // Время последнего запуска
   lastRunStatus: text("last_run_status"), // SUCCESS, FAILED, RUNNING
   lastRunError: text("last_run_error"), // Ошибка при последнем запуске
+  lastRunId: varchar("last_run_id"), // ID последнего запуска импорта (ссылка на import_runs)
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// История запусков импорта CSV (для детальной статистики)
+export const importRuns = pgTable("import_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceType: text("source_type").notNull(), // 'scheduler' или 'manual'
+  sourceRef: text("source_ref"), // Название источника или файла
+  triggeredBy: varchar("triggered_by").references(() => users.id), // Кто запустил (NULL для scheduler)
+  
+  // Общая статистика
+  rowsTotal: integer("rows_total").notNull().default(0), // Всего строк в CSV
+  rowsWithId: integer("rows_with_id").notNull().default(0), // Строк с Item ID
+  rowsWithoutId: integer("rows_without_id").notNull().default(0), // Строк без Item ID
+  
+  // Операции
+  created: integer("created").notNull().default(0), // Создано новых товаров
+  updatedAllFields: integer("updated_all_fields").notNull().default(0), // Обновлены все поля
+  updatedQuantityOnly: integer("updated_quantity_only").notNull().default(0), // Обновлено только количество
+  updatedPartial: integer("updated_partial").notNull().default(0), // Частичное обновление (некоторые поля)
+  skippedNoId: integer("skipped_no_id").notNull().default(0), // Пропущено из-за отсутствия Item ID
+  errors: integer("errors").notNull().default(0), // Количество ошибок
+  
+  // Детали изменений
+  totalQuantityChange: integer("total_quantity_change").notNull().default(0), // Общее изменение количества
+  errorDetails: text("error_details"), // JSON массив деталей ошибок
+  
+  // Метаданные
+  status: text("status").notNull().default("SUCCESS"), // SUCCESS, FAILED, PARTIAL
+  duration: integer("duration"), // Длительность в миллисекундах
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 // Insert schemas
@@ -451,6 +482,11 @@ export const insertSchedulerSettingSchema = createInsertSchema(schedulerSettings
   updatedAt: true,
 });
 
+export const insertImportRunSchema = createInsertSchema(importRuns).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -508,6 +544,9 @@ export type ArchivedInventoryItem = typeof archivedInventoryItems.$inferSelect;
 
 export type InsertSchedulerSetting = z.infer<typeof insertSchedulerSettingSchema>;
 export type SchedulerSetting = typeof schedulerSettings.$inferSelect;
+
+export type InsertImportRun = z.infer<typeof insertImportRunSchema>;
+export type ImportRun = typeof importRuns.$inferSelect;
 
 // CSV Conflict Resolution Types
 export interface CSVConflict {
