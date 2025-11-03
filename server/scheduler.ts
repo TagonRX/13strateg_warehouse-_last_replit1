@@ -268,7 +268,8 @@ function downloadAndParseCsv(url: string): Promise<InsertInventoryItem[]> {
             weight: weight,
           } as InsertInventoryItem;
           
-          if (item.sku) {
+          // Scheduler always skips items without Item ID (stricter than manual upload)
+          if (item.sku && item.itemId) {
             items.push(item);
           }
         } catch (error) {

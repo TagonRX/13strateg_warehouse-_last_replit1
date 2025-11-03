@@ -235,7 +235,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
   const [csvPreview, setCsvPreview] = useState<{ headers: string[]; rows: any[] } | null>(null);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping[]>([]);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [skipItemsWithoutItemId, setSkipItemsWithoutItemId] = useState(false);
+  const [skipItemsWithoutItemId, setSkipItemsWithoutItemId] = useState(true);
   
   // Conflict resolution state
   const [conflicts, setConflicts] = useState<CSVConflict[]>([]);
