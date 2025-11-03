@@ -112,17 +112,31 @@ export default function Packing() {
       setCurrentOrder(parsedOrder);
       setScannedCounts(new Map());
       setErrorMessage(null);
-      setCurrentPhase('label_scanned');
 
       const totalQuantity = parsedOrder.items.reduce((sum, item) => sum + item.quantity, 0);
       const displayOrderNumber = parsedOrder.shippingLabel 
         ? `${parsedOrder.orderNumber}__${parsedOrder.shippingLabel}` 
         : parsedOrder.orderNumber;
+
+      // Check if barcode verification is required
+      const hasDispatchedBarcodes = parsedOrder.dispatchedBarcodes && parsedOrder.dispatchedBarcodes.length > 0;
       
-      toast({
-        title: "Заказ найден",
-        description: `Заказ №${displayOrderNumber}. Отсканируйте ${totalQuantity} товар(ов) для проверки.`,
-      });
+      if (!hasDispatchedBarcodes) {
+        // No barcodes were scanned in Dispatch - allow immediate completion
+        setCurrentPhase('confirming');
+        setConfirmDialogOpen(true);
+        toast({
+          title: "Заказ готов к упаковке",
+          description: `Заказ №${displayOrderNumber}. Подтвердите завершение упаковки.`,
+        });
+      } else {
+        // Barcodes were scanned in Dispatch - require verification
+        setCurrentPhase('label_scanned');
+        toast({
+          title: "Заказ найден",
+          description: `Заказ №${displayOrderNumber}. Отсканируйте ${totalQuantity} товар(ов) для проверки.`,
+        });
+      }
 
       // Invalidate all order queries (using predicate to match all /api/orders* queries)
       queryClient.invalidateQueries({
@@ -302,22 +316,54 @@ export default function Packing() {
     setCurrentPhase('packing');
     setErrorMessage(null);
 
-    // Find the SKU that this barcode belongs to
+    // IMPORTANT: Verify barcode matches one from Dispatch
+    // Only accept barcodes that were scanned in Dispatch
+    const hasDispatchedBarcodes = currentOrder.dispatchedBarcodes && currentOrder.dispatchedBarcodes.length > 0;
+    
+    if (!hasDispatchedBarcodes) {
+      // This shouldn't happen as we skip item scanning when no barcodes were dispatched
+      // But handle gracefully
+      setErrorMessage("Проверка баркодов не требуется для этого заказа");
+      return;
+    }
+
+    // Step 1: Check if code is directly in dispatchedBarcodes
+    let isValidBarcode = currentOrder.dispatchedBarcodes.includes(code);
     let matchingItem: OrderItem | undefined;
-    
-    // First, try to match by exact SKU (code is SKU)
-    matchingItem = currentOrder.items.find(item => item.sku === code);
-    
-    // If not matched by SKU, check if barcode belongs to any SKU in inventory
-    if (!matchingItem) {
+    let resolvedSku: string = code;
+
+    // Step 2: If code is in dispatchedBarcodes, try to resolve it to SKU
+    // (it could be either a barcode or a SKU from manual confirmation)
+    if (isValidBarcode) {
       const inventoryItem = inventory.find(inv => inv.barcode === code);
       if (inventoryItem) {
-        matchingItem = currentOrder.items.find(item => item.sku === inventoryItem.sku);
+        // Code is a barcode, map to SKU
+        resolvedSku = inventoryItem.sku;
+      }
+      // If not found in inventory, assume code is already a SKU
+    } else {
+      // Step 3: If not a direct match, try barcode → SKU mapping
+      const inventoryItem = inventory.find(inv => inv.barcode === code);
+      if (inventoryItem) {
+        resolvedSku = inventoryItem.sku;
+        // Check if this SKU is in dispatchedBarcodes (manual confirmation case)
+        isValidBarcode = currentOrder.dispatchedBarcodes.includes(inventoryItem.sku);
       }
     }
 
-    // IMPORTANT: Allow ANY barcode that belongs to a SKU in the order
-    // This allows scanning different barcodes for the same SKU (e.g., different units of same product)
+    if (!isValidBarcode) {
+      setErrorMessage(`Ошибка: товар не соответствует списку (${code})`);
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: "Этот товар не был отсканирован в Dispatch",
+      });
+      return;
+    }
+
+    // Step 4: Find which item this SKU belongs to
+    matchingItem = currentOrder.items.find(item => item.sku === resolvedSku);
+
     if (!matchingItem) {
       setErrorMessage(`Товар с кодом ${code} не найден в заказе`);
       toast({
