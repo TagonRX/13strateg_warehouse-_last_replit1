@@ -3,6 +3,12 @@
 ## Overview
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
+## Recent Changes (November 3, 2025)
+- **Item ID Filtering Implementation**: Enforced strict Item ID requirements for inventory imports:
+  - **Automated Scheduler**: Now requires both SKU and Item ID for all imports (line 275 in scheduler.ts: `if (item.sku && item.itemId)`), preventing items without Item IDs from being added to inventory
+  - **Manual CSV Upload**: Changed default behavior - "Skip items without Item ID" checkbox now CHECKED by default (changed from `false` to `true` in CSVUploader.tsx line 241), ensuring users must explicitly opt-in to import items without Item IDs
+  - Existing filtering logic (lines 640-666) properly respects the checkbox state and displays toast notifications showing count of skipped items
+
 ## Recent Changes (November 2, 2025)
 - **Separated CSV Source Systems**: Implemented two independent CSV source management systems:
   - `bulkUploadSources` table for inventory imports used by automated scheduler
