@@ -165,6 +165,38 @@ export default function Packing() {
     },
   });
 
+  // Manual pack order (without scanning items)
+  const manualPackOrderMutation = useMutation({
+    mutationFn: async ({ orderId, userId }: { orderId: string; userId: string }) => {
+      const response = await apiRequest("PATCH", `/api/orders/${orderId}/packing`, {
+        userId
+      });
+      return response.json();
+    },
+    onSuccess: (updatedOrder, variables) => {
+      const orderNumber = dispatchedOrders.find(o => o.id === variables.orderId)?.orderNumber;
+      toast({
+        title: "Заказ упакован",
+        description: `Заказ №${orderNumber} отмечен как упакованный`,
+      });
+
+      // Invalidate all order queries
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/orders');
+        }
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: error?.message || "Не удалось упаковать заказ",
+      });
+    },
+  });
+
   const enrichOrderWithInventoryData = (order: ParsedOrder) => {
     order.items = order.items.map(item => {
       const inventoryItem = inventory.find(inv => inv.sku === item.sku);
@@ -349,6 +381,14 @@ export default function Packing() {
     });
   };
 
+  const handleManualPackOrder = (orderId: string) => {
+    if (!currentUser) return;
+    manualPackOrderMutation.mutate({
+      orderId,
+      userId: currentUser.id
+    });
+  };
+
   const resetToPhase1 = () => {
     setCurrentPhase('viewing');
     setCurrentOrder(null);
@@ -409,161 +449,7 @@ export default function Packing() {
         </Badge>
       </div>
 
-      {/* Top Section: Dispatched Orders (Ready to Pack) */}
-      {dispatchedOrders.length > 0 && (
-        <Card data-testid="card-dispatched-orders">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Готовы к упаковке ({dispatchedOrders.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {dispatchedOrders.map((order) => {
-                const parsedOrder = parseOrderForDisplay(order);
-                const isExpanded = expandedOrders.has(order.id);
-                
-                return (
-                  <Collapsible
-                    key={order.id}
-                    open={isExpanded}
-                    onOpenChange={() => toggleOrderExpanded(order.id)}
-                  >
-                    <div className="border rounded-md" data-testid={`order-dispatched-${order.orderNumber}`}>
-                      <CollapsibleTrigger className="w-full">
-                        <div className="flex items-center justify-between p-3 hover-elevate rounded-md">
-                          <div className="flex items-center gap-3">
-                            <div className="flex-shrink-0">
-                              {isExpanded ? (
-                                <ChevronUp className="w-4 h-4" />
-                              ) : (
-                                <ChevronDown className="w-4 h-4" />
-                              )}
-                            </div>
-                            <div className="text-left">
-                              <p className="font-medium" data-testid={`text-order-number-${order.orderNumber}`}>
-                                Заказ №{order.orderNumber}
-                              </p>
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <span data-testid={`text-customer-${order.orderNumber}`}>
-                                  {order.customerName || 'Покупатель не указан'}
-                                </span>
-                                <span>•</span>
-                                <span data-testid={`text-items-count-${order.orderNumber}`}>
-                                  {parsedOrder.items.length} товар(ов)
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {order.dispatchedAt ? format(new Date(order.dispatchedAt), "dd.MM.yyyy HH:mm") : ''}
-                          </div>
-                        </div>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <div className="border-t p-3 space-y-3">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">Адрес доставки:</span>
-                              <p className="font-medium" data-testid={`text-address-${order.orderNumber}`}>
-                                {order.shippingAddress || 'Не указан'}
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Дата заказа:</span>
-                              <p className="font-medium" data-testid={`text-order-date-${order.orderNumber}`}>
-                                {order.orderDate ? format(new Date(order.orderDate), "dd.MM.yyyy") : 'Не указана'}
-                              </p>
-                            </div>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <h4 className="text-sm font-semibold">Товары:</h4>
-                            <div className="space-y-2">
-                              {parsedOrder.items.map((item, index) => (
-                                <div
-                                  key={index}
-                                  className="flex items-center gap-3 p-2 rounded-md bg-muted"
-                                  data-testid={`item-${order.orderNumber}-${item.sku}`}
-                                >
-                                  {item.imageUrls && item.imageUrls.length > 0 && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        openImageGallery(item.imageUrls!);
-                                      }}
-                                      className="flex-shrink-0 hover-elevate rounded overflow-hidden relative"
-                                      data-testid={`button-open-gallery-${order.orderNumber}-${item.sku}`}
-                                    >
-                                      <img
-                                        src={item.imageUrls[0]}
-                                        alt={item.itemName || item.sku}
-                                        className="w-12 h-12 object-cover"
-                                        data-testid={`image-thumbnail-${order.orderNumber}-${item.sku}`}
-                                      />
-                                      {item.imageUrls.length > 1 && (
-                                        <div className="absolute bottom-0 right-0 bg-black/70 text-white text-xs px-1 rounded-tl">
-                                          +{item.imageUrls.length - 1}
-                                        </div>
-                                      )}
-                                    </button>
-                                  )}
-
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-medium truncate text-sm" data-testid={`text-item-name-${order.orderNumber}-${item.sku}`}>
-                                      {item.itemName || 'Название не указано'}
-                                    </p>
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                      <span data-testid={`text-item-sku-${order.orderNumber}-${item.sku}`}>
-                                        SKU: {item.sku}
-                                      </span>
-                                      {item.ebaySellerName && (
-                                        <>
-                                          <span>•</span>
-                                          <span data-testid={`text-item-seller-${order.orderNumber}-${item.sku}`}>Seller: {item.ebaySellerName}</span>
-                                        </>
-                                      )}
-                                      {item.barcode && (
-                                        <>
-                                          <span>•</span>
-                                          <span>Баркод: {item.barcode}</span>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {item.ebayUrl && (
-                                    <a
-                                      href={item.ebayUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex-shrink-0"
-                                      onClick={(e) => e.stopPropagation()}
-                                      data-testid={`link-ebay-${order.orderNumber}-${item.sku}`}
-                                    >
-                                      <Button size="sm" variant="outline">
-                                        <ExternalLink className="w-3 h-3 mr-1" />
-                                        eBay
-                                      </Button>
-                                    </a>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </CollapsibleContent>
-                    </div>
-                  </Collapsible>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Middle Section: Scanner + Current Packing Session */}
+      {/* Top Section: Scanner */}
       <BarcodeScanner onScan={handleScan} label={getScannerLabel()} />
 
       {currentOrder && (
@@ -729,6 +615,174 @@ export default function Packing() {
               >
                 Отменить
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dispatched Orders Table (Ready to Pack) */}
+      {dispatchedOrders.length > 0 && (
+        <Card data-testid="card-dispatched-orders">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Готовы к упаковке ({dispatchedOrders.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {dispatchedOrders.map((order) => {
+                const parsedOrder = parseOrderForDisplay(order);
+                const isExpanded = expandedOrders.has(order.id);
+                
+                return (
+                  <Collapsible
+                    key={order.id}
+                    open={isExpanded}
+                    onOpenChange={() => toggleOrderExpanded(order.id)}
+                  >
+                    <div className="border rounded-md" data-testid={`order-dispatched-${order.orderNumber}`}>
+                      <CollapsibleTrigger className="w-full">
+                        <div className="flex items-center justify-between p-3 hover-elevate rounded-md">
+                          <div className="flex items-center gap-3">
+                            <div className="flex-shrink-0">
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div className="text-left">
+                              <p className="font-medium" data-testid={`text-order-number-${order.orderNumber}`}>
+                                Заказ №{order.orderNumber}
+                              </p>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span data-testid={`text-customer-${order.orderNumber}`}>
+                                  {order.customerName || 'Покупатель не указан'}
+                                </span>
+                                <span>•</span>
+                                <span data-testid={`text-items-count-${order.orderNumber}`}>
+                                  {parsedOrder.items.length} товар(ов)
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleManualPackOrder(order.id);
+                              }}
+                              disabled={manualPackOrderMutation.isPending}
+                              data-testid={`button-mark-packed-${order.orderNumber}`}
+                            >
+                              Упакован
+                            </Button>
+                            <div className="text-sm text-muted-foreground">
+                              {order.dispatchedAt ? format(new Date(order.dispatchedAt), "dd.MM.yyyy HH:mm") : ''}
+                            </div>
+                          </div>
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="border-t p-3 space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Адрес доставки:</span>
+                              <p className="font-medium" data-testid={`text-address-${order.orderNumber}`}>
+                                {order.shippingAddress || 'Не указан'}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Дата заказа:</span>
+                              <p className="font-medium" data-testid={`text-order-date-${order.orderNumber}`}>
+                                {order.orderDate ? format(new Date(order.orderDate), "dd.MM.yyyy") : 'Не указана'}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-semibold">Товары:</h4>
+                            <div className="space-y-2">
+                              {parsedOrder.items.map((item, index) => (
+                                <div
+                                  key={index}
+                                  className="flex items-center gap-3 p-2 rounded-md bg-muted"
+                                  data-testid={`item-${order.orderNumber}-${item.sku}`}
+                                >
+                                  {item.imageUrls && item.imageUrls.length > 0 && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openImageGallery(item.imageUrls!);
+                                      }}
+                                      className="flex-shrink-0 hover-elevate rounded overflow-hidden relative"
+                                      data-testid={`button-open-gallery-${order.orderNumber}-${item.sku}`}
+                                    >
+                                      <img
+                                        src={item.imageUrls[0]}
+                                        alt={item.itemName || item.sku}
+                                        className="w-12 h-12 object-cover"
+                                        data-testid={`image-thumbnail-${order.orderNumber}-${item.sku}`}
+                                      />
+                                      {item.imageUrls.length > 1 && (
+                                        <div className="absolute bottom-0 right-0 bg-black/70 text-white text-xs px-1 rounded-tl">
+                                          +{item.imageUrls.length - 1}
+                                        </div>
+                                      )}
+                                    </button>
+                                  )}
+
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium truncate text-sm" data-testid={`text-item-name-${order.orderNumber}-${item.sku}`}>
+                                      {item.itemName || 'Название не указано'}
+                                    </p>
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <span data-testid={`text-item-sku-${order.orderNumber}-${item.sku}`}>
+                                        SKU: {item.sku}
+                                      </span>
+                                      {item.ebaySellerName && (
+                                        <>
+                                          <span>•</span>
+                                          <span data-testid={`text-item-seller-${order.orderNumber}-${item.sku}`}>Seller: {item.ebaySellerName}</span>
+                                        </>
+                                      )}
+                                      {item.barcode && (
+                                        <>
+                                          <span>•</span>
+                                          <span>Баркод: {item.barcode}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {item.ebayUrl && (
+                                    <a
+                                      href={item.ebayUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex-shrink-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                      data-testid={`link-ebay-${order.orderNumber}-${item.sku}`}
+                                    >
+                                      <Button size="sm" variant="outline">
+                                        <ExternalLink className="w-3 h-3 mr-1" />
+                                        eBay
+                                      </Button>
+                                    </a>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </CollapsibleContent>
+                    </div>
+                  </Collapsible>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
