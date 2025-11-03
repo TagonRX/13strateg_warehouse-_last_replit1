@@ -1638,11 +1638,8 @@ export class DbStorage implements IStorage {
         price: item.price || null,
       });
 
-      // If task is completed, create or update order
-      let order = null;
-      if (isCompleted) {
-        order = await this.createOrUpdateOrderFromPickingTask(updatedTask, userId);
-      }
+      // Create or update order after EVERY manual collection (not just when completed)
+      const order = await this.createOrUpdateOrderFromPickingTask(updatedTask, userId);
 
       return { 
         success: true, 
@@ -1677,11 +1674,8 @@ export class DbStorage implements IStorage {
         price: null,
       });
 
-      // If task is completed, create or update order
-      let order = null;
-      if (isCompleted) {
-        order = await this.createOrUpdateOrderFromPickingTask(updatedTask, userId);
-      }
+      // Create or update order after EVERY manual collection (not just when completed)
+      const order = await this.createOrUpdateOrderFromPickingTask(updatedTask, userId);
 
       return { 
         success: true, 
