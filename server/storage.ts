@@ -2808,6 +2808,17 @@ export class DbStorage implements IStorage {
     });
   }
 
+  async findOrderByShippingLabel(label: string, status?: string): Promise<Order | null> {
+    if (status) {
+      const result = await db.select().from(orders)
+        .where(and(eq(orders.shippingLabel, label), eq(orders.status, status)));
+      return result[0] || null;
+    }
+    
+    const result = await db.select().from(orders).where(eq(orders.shippingLabel, label));
+    return result[0] || null;
+  }
+
   async findOrderByBarcode(barcode: string, status?: string): Promise<Order | null> {
     let query = db.select().from(orders);
     

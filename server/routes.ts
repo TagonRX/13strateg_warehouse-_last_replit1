@@ -3116,17 +3116,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Find order by SKU or barcode
+  // Find order by shipping label, SKU or barcode
   app.post("/api/orders/scan", requireAuth, async (req, res) => {
     try {
       const { code, status } = req.body;
       
       if (!code) {
-        return res.status(400).json({ error: "Требуется code (SKU или barcode)" });
+        return res.status(400).json({ error: "Требуется code (shipping label, SKU или barcode)" });
       }
       
-      // Try to find by barcode first
-      let order = await storage.findOrderByBarcode(code, status);
+      // Try to find by shipping label first (for Packing workflow)
+      let order = await storage.findOrderByShippingLabel(code, status);
+      
+      if (order) {
+        return res.json({ order, matchType: "shippingLabel" });
+      }
+      
+      // Try to find by barcode (items in order)
+      order = await storage.findOrderByBarcode(code, status);
       
       if (order) {
         return res.json({ order, matchType: "barcode" });

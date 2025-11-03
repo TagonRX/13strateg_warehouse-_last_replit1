@@ -115,9 +115,13 @@ export default function Packing() {
       setCurrentPhase('label_scanned');
 
       const totalQuantity = parsedOrder.items.reduce((sum, item) => sum + item.quantity, 0);
+      const displayOrderNumber = parsedOrder.shippingLabel 
+        ? `${parsedOrder.orderNumber}__${parsedOrder.shippingLabel}` 
+        : parsedOrder.orderNumber;
+      
       toast({
         title: "Заказ найден",
-        description: `Заказ №${parsedOrder.orderNumber}. Отсканируйте ${totalQuantity} товар(ов) для проверки.`,
+        description: `Заказ №${displayOrderNumber}. Отсканируйте ${totalQuantity} товар(ов) для проверки.`,
       });
 
       // Invalidate all order queries (using predicate to match all /api/orders* queries)
@@ -147,9 +151,13 @@ export default function Packing() {
       return response.json();
     },
     onSuccess: (updatedOrder) => {
+      const displayOrderNumber = currentOrder?.shippingLabel 
+        ? `${currentOrder.orderNumber}__${currentOrder.shippingLabel}` 
+        : currentOrder?.orderNumber;
+      
       toast({
         title: "Упаковка завершена",
-        description: `Заказ №${currentOrder?.orderNumber} успешно упакован`,
+        description: `Заказ №${displayOrderNumber} успешно упакован`,
       });
 
       // Invalidate all order queries (using predicate to match all /api/orders* queries)
@@ -529,7 +537,7 @@ export default function Packing() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Package className="w-5 h-5" />
-              Текущая упаковка: Заказ №{currentOrder.orderNumber}
+              Текущая упаковка: Заказ №{currentOrder.shippingLabel ? `${currentOrder.orderNumber}__${currentOrder.shippingLabel}` : currentOrder.orderNumber}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -737,7 +745,7 @@ export default function Packing() {
                             </div>
                             <div className="text-left">
                               <p className="font-medium" data-testid={`text-order-number-${order.orderNumber}`}>
-                                Заказ №{order.orderNumber}
+                                Заказ №{order.shippingLabel ? `${order.orderNumber}__${order.shippingLabel}` : order.orderNumber}
                               </p>
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <span data-testid={`text-customer-${order.orderNumber}`}>
@@ -894,7 +902,7 @@ export default function Packing() {
                       <CheckCircle2 className="w-5 h-5 text-green-600" />
                       <div>
                         <p className="font-medium" data-testid={`text-packed-order-number-${order.orderNumber}`}>
-                          Заказ №{order.orderNumber}
+                          Заказ №{order.shippingLabel ? `${order.orderNumber}__${order.shippingLabel}` : order.orderNumber}
                         </p>
                         <p className="text-sm text-muted-foreground" data-testid={`text-packed-order-details-${order.orderNumber}`}>
                           {parsedOrder.items.length} товар(ов) • {order.customerName || 'Покупатель не указан'}
@@ -1014,7 +1022,7 @@ export default function Packing() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Все товары проверены. Завершить упаковку заказа №{currentOrder?.orderNumber}?
+              Все товары проверены. Завершить упаковку заказа №{currentOrder?.shippingLabel ? `${currentOrder.orderNumber}__${currentOrder.shippingLabel}` : currentOrder?.orderNumber}?
             </p>
             {currentOrder && (
               <div className="p-4 rounded-md bg-muted space-y-2">

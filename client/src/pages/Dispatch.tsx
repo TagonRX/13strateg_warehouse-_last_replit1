@@ -96,17 +96,21 @@ export default function Dispatch() {
       setScannedCounts(new Map());
 
       const totalQuantity = parsedOrder.items.reduce((sum, item) => sum + item.quantity, 0);
+      const displayOrderNumber = parsedOrder.shippingLabel 
+        ? `${parsedOrder.orderNumber}__${parsedOrder.shippingLabel}` 
+        : parsedOrder.orderNumber;
+      
       if (totalQuantity === 1) {
         setCurrentPhase('scanning_label');
         toast({
           title: "Заказ найден",
-          description: `Заказ №${parsedOrder.orderNumber} (1 товар). Отсканируйте лейбл посылки.`,
+          description: `Заказ №${displayOrderNumber} (1 товар). Отсканируйте лейбл посылки.`,
         });
       } else {
         setCurrentPhase('scanning_items');
         toast({
           title: "Заказ найден",
-          description: `Заказ №${parsedOrder.orderNumber} (${totalQuantity} товаров). Отсканируйте все товары.`,
+          description: `Заказ №${displayOrderNumber} (${totalQuantity} товаров). Отсканируйте все товары.`,
         });
       }
     },
@@ -157,9 +161,13 @@ export default function Dispatch() {
         setDispatchedOrders(prev => [parsedOrder, ...prev]);
       }
 
+      const displayOrderNumber = currentOrder?.shippingLabel 
+        ? `${currentOrder.orderNumber}__${currentOrder.shippingLabel}` 
+        : currentOrder?.orderNumber;
+      
       toast({
         title: "Заказ отправлен",
-        description: `Заказ №${currentOrder?.orderNumber} успешно обработан`,
+        description: `Заказ №${displayOrderNumber} успешно обработан`,
       });
 
       // Invalidate all order queries to refresh all stations
@@ -569,7 +577,9 @@ export default function Dispatch() {
                         onClick={() => handlePendingOrderSelection(order)}
                         data-testid={`order-row-${order.orderNumber}`}
                       >
-                        <TableCell className="font-medium font-mono">{order.orderNumber}</TableCell>
+                        <TableCell className="font-medium font-mono">
+          {order.shippingLabel ? `${order.orderNumber}__${order.shippingLabel}` : order.orderNumber}
+        </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
                             <span className="font-medium">{customerDisplay}</span>
@@ -614,7 +624,7 @@ export default function Dispatch() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Package className="w-5 h-5" />
-              Заказ №{currentOrder.orderNumber}
+              Заказ №{currentOrder.shippingLabel ? `${currentOrder.orderNumber}__${currentOrder.shippingLabel}` : currentOrder.orderNumber}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -794,7 +804,9 @@ export default function Dispatch() {
                   <div className="flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-green-600" />
                     <div>
-                      <p className="font-medium">Заказ №{order.orderNumber}</p>
+                      <p className="font-medium">
+                        Заказ №{order.shippingLabel ? `${order.orderNumber}__${order.shippingLabel}` : order.orderNumber}
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         {order.items.length} товар(ов) • {order.customerName}
                       </p>
@@ -835,7 +847,9 @@ export default function Dispatch() {
                 >
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">Заказ №{order.orderNumber}</CardTitle>
+                      <CardTitle className="text-lg">
+                        Заказ №{order.shippingLabel ? `${order.orderNumber}__${order.shippingLabel}` : order.orderNumber}
+                      </CardTitle>
                       <Badge>{order.items.length} товар(ов)</Badge>
                     </div>
                   </CardHeader>
@@ -888,7 +902,7 @@ export default function Dispatch() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Вы уверены, что хотите отправить заказ №{currentOrder?.orderNumber}?
+              Вы уверены, что хотите отправить заказ №{currentOrder?.shippingLabel ? `${currentOrder.orderNumber}__${currentOrder.shippingLabel}` : currentOrder?.orderNumber}?
             </p>
             {currentOrder && (
               <div className="p-4 rounded-md bg-muted space-y-2">
