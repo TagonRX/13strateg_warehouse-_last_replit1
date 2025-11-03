@@ -1559,11 +1559,8 @@ export class DbStorage implements IStorage {
       price: item.price || null,
     });
 
-    // If task is completed, create or update order
-    let order = null;
-    if (isCompleted) {
-      order = await this.createOrUpdateOrderFromPickingTask(updatedTask, userId);
-    }
+    // Create or update order after EVERY scan (not just when completed)
+    const order = await this.createOrUpdateOrderFromPickingTask(updatedTask, userId);
 
     return { 
       success: true, 
