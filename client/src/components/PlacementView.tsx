@@ -17,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Usb, Smartphone, Wifi, Check, X, Package, Trash2 } from "lucide-react";
+import { Usb, Smartphone, Wifi, Check, X, Package, Trash2, Eye, EyeOff } from "lucide-react";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +39,7 @@ export default function PlacementView() {
   const [placementToDelete, setPlacementToDelete] = useState<PendingPlacement | null>(null);
   const [bypassCode, setBypassCode] = useState("");
   const [showBypassInput, setShowBypassInput] = useState(false);
+  const [showBypassCode, setShowBypassCode] = useState(false);
 
   const { toast } = useToast();
   const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
@@ -141,24 +142,13 @@ export default function PlacementView() {
 
     // Submit bypass code to server for verification
     try {
-      const response = await fetch("/api/placements/confirm", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
-          placementId: currentPlacement.id,
-          location: targetLocation.toUpperCase(),
-          bypassCode: bypassCode.trim(),
-        }),
+      const response = await apiRequest("POST", "/api/placements/confirm", {
+        placementId: currentPlacement.id,
+        location: targetLocation.toUpperCase(),
+        bypassCode: bypassCode.trim(),
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Ошибка размещения");
-      }
 
       setFeedback("success");
       setStep("success");
@@ -287,6 +277,7 @@ export default function PlacementView() {
     setFeedback(null);
     setBypassCode("");
     setShowBypassInput(false);
+    setShowBypassCode(false);
   };
 
   const handleBarcodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -458,24 +449,39 @@ export default function PlacementView() {
                     {showBypassInput && (
                       <div className="space-y-2">
                         <Label htmlFor="bypass-code-input">Bypass-код</Label>
-                        <div className="flex gap-2">
-                          <Input
-                            id="bypass-code-input"
-                            type="password"
-                            value={bypassCode}
-                            onChange={(e) => setBypassCode(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && bypassCode.trim()) {
-                                handleBypassCodeSubmit();
-                              }
-                            }}
-                            placeholder="Введите bypass-код"
-                            className="flex-1"
-                            data-testid="input-bypass-code-placement"
-                          />
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <Input
+                              id="bypass-code-input"
+                              type={showBypassCode ? "text" : "password"}
+                              value={bypassCode}
+                              onChange={(e) => setBypassCode(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && bypassCode.trim()) {
+                                  handleBypassCodeSubmit();
+                                }
+                              }}
+                              placeholder="Введите bypass-код"
+                              className="pr-10"
+                              data-testid="input-bypass-code-placement"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-0 top-0 h-full"
+                              onClick={() => setShowBypassCode(!showBypassCode)}
+                              data-testid="button-toggle-bypass-visibility"
+                              aria-label={showBypassCode ? "Скрыть код" : "Показать код"}
+                              title={showBypassCode ? "Скрыть код" : "Показать код"}
+                            >
+                              {showBypassCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                          </div>
                           <Button
                             onClick={handleBypassCodeSubmit}
                             disabled={!bypassCode.trim()}
+                            className="w-full"
                             data-testid="button-submit-bypass"
                           >
                             Подтвердить
