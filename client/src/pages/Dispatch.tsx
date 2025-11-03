@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CheckCircle2, Circle, ExternalLink, Image as ImageIcon, Package, Truck, AlertTriangle, Search } from "lucide-react";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ImageGalleryModal from "@/components/ImageGalleryModal";
@@ -386,6 +387,82 @@ export default function Dispatch() {
           {currentPhase === 'confirming' && 'Подтверждение'}
         </Badge>
       </div>
+
+      {/* Orders Table */}
+      {parsedPendingOrders.length > 0 && currentPhase === 'scanning_product' && !currentOrder && (
+        <Card data-testid="card-orders-table">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Все заказы ({parsedPendingOrders.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Номер заказа</TableHead>
+                    <TableHead>Покупатель</TableHead>
+                    <TableHead>Адрес/Индекс</TableHead>
+                    <TableHead>Товаров</TableHead>
+                    <TableHead>Кол-во</TableHead>
+                    <TableHead>Дата создания</TableHead>
+                    <TableHead>Действия</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parsedPendingOrders.map((order) => {
+                    const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
+                    const customerDisplay = order.buyerName || order.buyerUsername || order.customerName || 'Не указан';
+                    const addressDisplay = order.addressPostalCode || order.shippingAddress || 'Не указан';
+                    
+                    return (
+                      <TableRow 
+                        key={order.id}
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => handlePendingOrderSelection(order)}
+                        data-testid={`order-row-${order.orderNumber}`}
+                      >
+                        <TableCell className="font-medium font-mono">{order.orderNumber}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{customerDisplay}</span>
+                            {order.sellerEbayId && (
+                              <span className="text-xs text-muted-foreground">
+                                Продавец: {order.sellerEbayId}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{addressDisplay}</TableCell>
+                        <TableCell>{order.items.length}</TableCell>
+                        <TableCell>{totalQuantity}</TableCell>
+                        <TableCell>
+                          {order.createdAt ? format(new Date(order.createdAt), "dd.MM.yyyy HH:mm") : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePendingOrderSelection(order);
+                            }}
+                            data-testid={`button-select-${order.orderNumber}`}
+                          >
+                            Выбрать
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <BarcodeScanner onScan={handleScan} label={getScannerLabel()} />
 

@@ -659,9 +659,13 @@ export default function DailyPickingView() {
     return Array.from(letters).sort();
   }, [currentList]);
 
-  // Filter tasks
+  // Filter tasks - hide completed tasks
   const filteredTasks = currentList?.tasks
     .filter(task => {
+      // Hide completed tasks
+      if (task.status === "COMPLETED") return false;
+      
+      // Filter by letter
       if (letterFilter.length === 0) return true;
       const firstLetter = task.sku.charAt(0).toUpperCase();
       return letterFilter.includes(firstLetter);
