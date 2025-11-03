@@ -1461,6 +1461,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Migration endpoint: create orders for existing picking tasks with pickedQuantity > 0
+  app.post("/api/picking/migrate-orders", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      
+      // Get all picking tasks with pickedQuantity > 0
+      const tasksWithProgress = await db.select()
+        .from(pickingTasks)
+        .where(sql`${pickingTasks.pickedQuantity} > 0`);
+      
+      console.log(`[MIGRATION] Found ${tasksWithProgress.length} tasks with picked items`);
+      
+      const results = [];
+      for (const task of tasksWithProgress) {
+        try {
+          const order = await storage.createOrUpdateOrderFromPickingTask(task, userId);
+          results.push({ taskId: task.id, sku: task.sku, orderId: order?.id, success: true });
+        } catch (error) {
+          console.error(`[MIGRATION] Failed for task ${task.id}:`, error);
+          results.push({ taskId: task.id, sku: task.sku, success: false, error: String(error) });
+        }
+      }
+      
+      const successful = results.filter(r => r.success).length;
+      console.log(`[MIGRATION] Successfully migrated ${successful}/${tasksWithProgress.length} tasks`);
+      
+      return res.json({ 
+        total: tasksWithProgress.length,
+        successful,
+        results 
+      });
+    } catch (error: any) {
+      console.error("Migration error:", error);
+      return res.status(500).json({ error: "Ошибка миграции" });
+    }
+  });
+
   app.delete("/api/picking/lists/:id", requireAuth, async (req, res) => {
     try {
       const userId = (req as any).userId;
