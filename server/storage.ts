@@ -159,7 +159,7 @@ export interface IStorage {
   clearActiveLocations(): Promise<void>;
 
   // Picking List methods
-  createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string; itemId?: string; buyerUsername?: string; buyerName?: string; addressPostalCode?: string; sellerEbayId?: string; orderDate?: Date }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }>;
+  createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string; itemId?: string; buyerUsername?: string; buyerName?: string; addressPostalCode?: string; sellerEbayId?: string; orderDate?: Date | string }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }>;
   getAllPickingLists(): Promise<PickingList[]>;
   getPickingListWithTasks(listId: string): Promise<{ list: PickingList; tasks: PickingTask[] } | null>;
   scanBarcodeForPickingTask(barcode: string, taskId: string, userId: string): Promise<{
@@ -1395,7 +1395,7 @@ export class DbStorage implements IStorage {
   }
 
   // Daily Picking methods
-  async createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string; itemId?: string; buyerUsername?: string; buyerName?: string; addressPostalCode?: string; sellerEbayId?: string; orderDate?: Date }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }> {
+  async createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string; itemId?: string; buyerUsername?: string; buyerName?: string; addressPostalCode?: string; sellerEbayId?: string; orderDate?: Date | string }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }> {
     // Create the picking list
     const [list] = await db.insert(pickingLists).values({
       name: data.name,
@@ -1445,6 +1445,16 @@ export class DbStorage implements IStorage {
           ebaySellerName = skuToSellerMap.get(task.sku) || null;
         }
 
+        // Convert orderDate to Date object if it's a string
+        let orderDate: Date | null = null;
+        if (task.orderDate) {
+          if (task.orderDate instanceof Date) {
+            orderDate = task.orderDate;
+          } else if (typeof task.orderDate === 'string') {
+            orderDate = new Date(task.orderDate);
+          }
+        }
+
         return {
           listId: list.id,
           itemId: task.itemId || null,
@@ -1455,7 +1465,7 @@ export class DbStorage implements IStorage {
           buyerName: task.buyerName || null,
           addressPostalCode: task.addressPostalCode || null,
           sellerEbayId: task.sellerEbayId || null,
-          orderDate: task.orderDate || null,
+          orderDate,
           requiredQuantity: task.requiredQuantity,
           pickedQuantity: 0,
           status: "PENDING",
