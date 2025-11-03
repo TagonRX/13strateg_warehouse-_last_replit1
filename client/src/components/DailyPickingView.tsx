@@ -255,6 +255,13 @@ export default function DailyPickingView() {
     onSuccess: (data) => {
       setLastResult(data);
       queryClient.invalidateQueries({ queryKey: ["/api/picking/lists", selectedListId] });
+      // Invalidate orders cache so Dispatch page shows new orders immediately
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/orders');
+        }
+      });
       toast({
         title: data.success ? "Item Picked" : "Error",
         description: data.message,
@@ -274,6 +281,13 @@ export default function DailyPickingView() {
     onSuccess: (data) => {
       setLastResult(data);
       queryClient.invalidateQueries({ queryKey: ["/api/picking/lists", selectedListId] });
+      // Invalidate orders cache so Dispatch page shows new orders immediately
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/orders');
+        }
+      });
       toast({
         title: data.success ? "Товар собран вручную" : "Ошибка",
         description: data.message,
