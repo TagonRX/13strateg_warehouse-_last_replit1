@@ -44,6 +44,7 @@ export default function Packing() {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
+  const [deletePendingDialogOpen, setDeletePendingDialogOpen] = useState(false);
 
   const { data: currentUser } = useQuery<any>({
     queryKey: ["/api/auth/me"],
@@ -229,6 +230,33 @@ export default function Packing() {
         variant: "destructive",
         title: "Ошибка удаления",
         description: error?.message || "Не удалось удалить заказы",
+      });
+    },
+  });
+
+  const deletePendingOrdersMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", "/api/orders/bulk?status=PENDING", {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const deletedCount = data.deleted || 0;
+      toast({
+        title: "Заказы удалены",
+        description: `Удалено ${deletedCount} pending заказ(ов)`,
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["/api/orders?status=PENDING"]
+      });
+
+      setDeletePendingDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка удаления",
+        description: error?.message || "Не удалось удалить pending заказы",
       });
     },
   });
@@ -887,14 +915,27 @@ export default function Packing() {
       {/* Pending Orders Section */}
       {parsedPendingOrders.length > 0 && (
         <Card data-testid="card-pending-orders">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Ожидающие заказы ({parsedPendingOrders.length})
-            </CardTitle>
-            <p className="text-sm text-muted-foreground mt-2">
-              Эти заказы ожидают подготовки в разделе "Подготовка заказов"
-            </p>
+          <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="w-5 h-5" />
+                Ожидающие заказы ({parsedPendingOrders.length})
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-2">
+                Эти заказы ожидают подготовки в разделе "Подготовка заказов"
+              </p>
+            </div>
+            {currentUser?.role === 'admin' && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeletePendingDialogOpen(true)}
+                data-testid="button-delete-all-pending-packing"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Удалить все
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -1027,6 +1068,36 @@ export default function Packing() {
               data-testid="button-confirm-delete-all"
             >
               {deleteAllProcessedOrdersMutation.isPending ? 'Удаление...' : 'Удалить'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deletePendingDialogOpen} onOpenChange={setDeletePendingDialogOpen}>
+        <DialogContent data-testid="dialog-delete-pending-packing">
+          <DialogHeader>
+            <DialogTitle>Удалить все pending заказы?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Будет удалено {parsedPendingOrders.length} заказ(ов). Это действие необратимо.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeletePendingDialogOpen(false)}
+              data-testid="button-cancel-delete-pending-packing"
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletePendingOrdersMutation.mutate()}
+              disabled={deletePendingOrdersMutation.isPending}
+              data-testid="button-confirm-delete-pending-packing"
+            >
+              {deletePendingOrdersMutation.isPending ? 'Удаление...' : 'Удалить'}
             </Button>
           </DialogFooter>
         </DialogContent>
