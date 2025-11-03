@@ -2415,22 +2415,42 @@ export class DbStorage implements IStorage {
       return null;
     }
 
-    // NEW GROUPING LOGIC: Group by (buyerUsername OR buyerName) + addressPostalCode + sellerEbayId
-    // Generate unique order number based on grouping key
-    const buyerIdentifier = task.buyerUsername || task.buyerName || 'UNKNOWN';
-    const postalCode = task.addressPostalCode || 'NOCODE';
-    const sellerId = task.sellerEbayId || 'NOSELLER';
+    // Get the picking list name for fallback grouping
+    const [pickingList] = await db.select().from(pickingLists).where(eq(pickingLists.id, task.listId));
+    if (!pickingList) {
+      return null;
+    }
+
+    // SMART GROUPING LOGIC:
+    // - If eBay data exists: Group by (buyerUsername OR buyerName) + addressPostalCode + sellerEbayId
+    // - If NO eBay data: Fallback to old logic - group by picking list name (one order per list)
+    const hasEbayData = !!(task.buyerUsername || task.buyerName || task.addressPostalCode || task.sellerEbayId);
     
-    // Create order number: SELLER_BUYER_POSTALCODE format (sanitized)
-    const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    const orderNumber = `${sanitize(sellerId)}_${sanitize(buyerIdentifier)}_${sanitize(postalCode)}`;
+    let orderNumber: string;
+    let searchCriteria;
+    
+    if (hasEbayData) {
+      // NEW eBay grouping logic
+      const buyerIdentifier = task.buyerUsername || task.buyerName || 'UNKNOWN';
+      const postalCode = task.addressPostalCode || 'NOCODE';
+      const sellerId = task.sellerEbayId || 'NOSELLER';
+      
+      const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      orderNumber = `${sanitize(sellerId)}_${sanitize(buyerIdentifier)}_${sanitize(postalCode)}`;
+      
+      searchCriteria = and(
+        eq(orders.orderNumber, orderNumber),
+        task.sellerEbayId ? eq(orders.sellerEbayId, task.sellerEbayId) : sql`${orders.sellerEbayId} IS NULL`
+      );
+    } else {
+      // OLD fallback logic: use picking list name as order number
+      orderNumber = pickingList.name;
+      searchCriteria = eq(orders.orderNumber, orderNumber);
+    }
     
     // Try to find existing order with this grouping
     const existingOrders = await db.select().from(orders)
-      .where(and(
-        eq(orders.orderNumber, orderNumber),
-        task.sellerEbayId ? eq(orders.sellerEbayId, task.sellerEbayId) : sql`${orders.sellerEbayId} IS NULL`
-      ));
+      .where(searchCriteria);
     
     // CRITICAL: Do NOT modify orders that have been dispatched or packed
     if (existingOrders.length > 0 && (existingOrders[0].status === 'DISPATCHED' || existingOrders[0].status === 'PACKED')) {
@@ -2492,7 +2512,7 @@ export class DbStorage implements IStorage {
         buyerName: task.buyerName || null,
         addressPostalCode: task.addressPostalCode || null,
         sellerEbayId: task.sellerEbayId || null,
-        customerName: task.buyerName || task.buyerUsername || null,
+        customerName: hasEbayData ? (task.buyerName || task.buyerUsername || null) : pickingList.name,
         shippingAddress: task.addressPostalCode ? `Postal Code: ${task.addressPostalCode}` : null,
         orderDate: task.orderDate || new Date(),
         status: "PENDING",
@@ -2500,6 +2520,7 @@ export class DbStorage implements IStorage {
         createdBy: userId,
       });
 
+      console.log(`[ORDER] Created new order ${newOrder.id} (${orderNumber}) - eBay data: ${hasEbayData ? 'YES' : 'NO (fallback to picking list)'}`);
       return newOrder;
     }
   }
