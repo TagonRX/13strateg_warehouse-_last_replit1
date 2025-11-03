@@ -4,6 +4,12 @@
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
 ## Recent Changes (November 3, 2025)
+- **Detailed Import Statistics Tracking**: Implemented comprehensive import statistics pipeline:
+  - **Database**: Added `import_runs` table to persist complete import history with granular metrics (rowsTotal, rowsWithId/WithoutId, created, updatedQuantityOnly/Partial/AllFields, skippedNoId, errors, totalQuantityChange)
+  - **Storage Layer**: Modified `bulkUpsertInventoryItems` to collect detailed statistics during processing and accept optional context (sourceType, sourceRef, userId) for import tracking
+  - **Scheduler Integration**: Scheduler now records detailed statistics for automated imports and tracks lastRunId in schedulerSettings
+  - **API Endpoints**: Added GET `/api/import-runs/latest` and `/api/import-runs/:id` for import history retrieval; CSV upload responses now return detailed statistics
+  - **UI Enhancement**: CSVUploader displays comprehensive breakdown in toast notifications showing created/updated counts by category, skipped items, and quantity changes
 - **Item ID Filtering Implementation**: Enforced strict Item ID requirements for inventory imports:
   - **Automated Scheduler**: Now requires both SKU and Item ID for all imports (line 275 in scheduler.ts: `if (item.sku && item.itemId)`), preventing items without Item IDs from being added to inventory
   - **Manual CSV Upload**: Changed default behavior - "Skip items without Item ID" checkbox now CHECKED by default (changed from `false` to `true` in CSVUploader.tsx line 241), ensuring users must explicitly opt-in to import items without Item IDs
