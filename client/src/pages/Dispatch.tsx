@@ -570,78 +570,6 @@ export default function Dispatch() {
         </Card>
       )}
 
-      {currentPhase === 'scanning_product' && !currentOrder && parsedPendingOrders.length > 0 && (
-        <Card data-testid="card-pending-orders">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Ожидающие заказы ({parsedPendingOrders.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {parsedPendingOrders.map((order) => {
-                const itemsWithoutBarcodes = order.items.filter(item => !item.barcode);
-                const hasNonBarcodedItems = itemsWithoutBarcodes.length > 0;
-                
-                return (
-                  <Card 
-                    key={order.id} 
-                    className="cursor-pointer hover-elevate active-elevate-2 transition-all"
-                    onClick={() => handlePendingOrderSelection(order)}
-                    data-testid={`pending-order-${order.orderNumber}`}
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">Заказ №{order.orderNumber}</CardTitle>
-                        <div className="flex items-center gap-2">
-                          <Badge>{order.items.length} товар(ов)</Badge>
-                          {hasNonBarcodedItems && (
-                            <Badge variant="secondary" data-testid={`badge-no-barcode-${order.orderNumber}`}>
-                              {itemsWithoutBarcodes.length} без баркода
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Покупатель:</span>
-                          <p className="font-medium">{order.customerName || 'Не указан'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Дата:</span>
-                          <p className="font-medium">
-                            {order.orderDate ? format(new Date(order.orderDate), "dd.MM.yyyy") : 'Не указана'}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium">Товары:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {order.items.map((item, idx) => (
-                            <Badge 
-                              key={idx} 
-                              variant={item.barcode ? "default" : "secondary"}
-                              className="text-xs"
-                              data-testid={`item-badge-${order.orderNumber}-${item.sku}`}
-                            >
-                              {item.sku} {!item.barcode && '(без баркода)'}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {currentOrder && (
         <Card data-testid="card-current-order">
           <CardHeader>
@@ -793,6 +721,17 @@ export default function Dispatch() {
                 </AlertDescription>
               </Alert>
             )}
+
+            <div className="pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={resetToPhase1}
+                className="w-full"
+                data-testid="button-back-to-orders"
+              >
+                Назад к списку заказов
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
