@@ -1441,6 +1441,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New endpoint: scan by list ID (auto-find matching task by SKU)
+  app.post("/api/picking/scan-by-list", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { barcode, listId } = req.body;
+
+      if (!barcode || !listId) {
+        return res.status(400).json({ error: "Требуются штрихкод и listId" });
+      }
+
+      const result = await storage.scanBarcodeForPickingList(barcode, listId, userId);
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.message });
+      }
+
+      return res.json(result);
+    } catch (error: any) {
+      console.error("Scan barcode by list error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
   app.post("/api/picking/manual-collect", requireAuth, async (req, res) => {
     try {
       const userId = (req as any).userId;

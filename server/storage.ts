@@ -1500,6 +1500,43 @@ export class DbStorage implements IStorage {
     return { list, tasks };
   }
 
+  // New method: scan by list ID, automatically find matching task by SKU
+  async scanBarcodeForPickingList(barcode: string, listId: string, userId: string): Promise<{
+    success: boolean;
+    message: string;
+    item?: InventoryItem;
+    task?: PickingTask;
+    order?: Order;
+  }> {
+    // Find item with matching barcode
+    const [item] = await db.select().from(inventoryItems)
+      .where(eq(inventoryItems.barcode, barcode));
+
+    if (!item) {
+      return { success: false, message: "Item not found" };
+    }
+
+    // Find a PENDING task in this list with matching SKU
+    const tasks = await db.select().from(pickingTasks)
+      .where(eq(pickingTasks.listId, listId));
+    
+    const matchingTask = tasks.find(t => 
+      t.sku === item.sku && 
+      t.status === "PENDING" && 
+      t.pickedQuantity < t.requiredQuantity
+    );
+
+    if (!matchingTask) {
+      return { 
+        success: false, 
+        message: `No pending task found for SKU: ${item.sku}` 
+      };
+    }
+
+    // Process the scan using the found task
+    return this.scanBarcodeForPickingTask(barcode, matchingTask.id, userId);
+  }
+
   async scanBarcodeForPickingTask(barcode: string, taskId: string, userId: string): Promise<{
     success: boolean;
     message: string;

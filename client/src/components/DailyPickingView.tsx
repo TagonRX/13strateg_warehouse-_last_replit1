@@ -248,8 +248,8 @@ export default function DailyPickingView() {
   });
 
   const scanMutation = useMutation({
-    mutationFn: async (data: { barcode: string; taskId: string }) => {
-      const response = await apiRequest("POST", "/api/picking/scan", data);
+    mutationFn: async (data: { barcode: string; listId: string }) => {
+      const response = await apiRequest("POST", "/api/picking/scan-by-list", data);
       return response.json();
     },
     onSuccess: (data) => {
@@ -452,14 +452,13 @@ export default function DailyPickingView() {
       return;
     }
     
-    // Find first pending task
-    const nextPending = filteredTasks.find(t => t.status === "PENDING");
-    if (!nextPending) {
-      toast({ title: "No Pending Tasks", description: "All tasks are completed", variant: "destructive" });
+    if (!selectedListId) {
+      toast({ title: "Error", description: "Please select a picking list first", variant: "destructive" });
       return;
     }
     
-    scanMutation.mutate({ barcode: barcode.trim(), taskId: nextPending.id });
+    // Scan any item - system will auto-find matching task by SKU
+    scanMutation.mutate({ barcode: barcode.trim(), listId: selectedListId });
   };
 
   const handleDeleteList = (id: string) => {
