@@ -1277,15 +1277,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/warehouse-settings/bypass-code", requireAuth, requireAdmin, async (req, res) => {
     try {
+      console.log("[BYPASS CODE] POST request received:", req.body);
       const { code } = req.body;
       
       // Allow setting to null or empty string to remove the code
       const codeToSet = code && code.trim() !== '' ? code.trim() : null;
       
+      console.log("[BYPASS CODE] Setting code to:", codeToSet ? "***" : null);
       await storage.setBypassCode(codeToSet);
+      console.log("[BYPASS CODE] Code set successfully");
       return res.json({ bypassCode: codeToSet });
     } catch (error: any) {
-      console.error("Set bypass code error:", error);
+      console.error("[BYPASS CODE] Set bypass code error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });

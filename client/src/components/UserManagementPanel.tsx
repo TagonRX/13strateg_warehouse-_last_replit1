@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Key, Eye, EyeOff, Edit } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 interface User {
   id: string;
@@ -85,14 +85,8 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
   // Update bypass code mutation
   const updateBypassCodeMutation = useMutation({
     mutationFn: async (code: string) => {
-      const response = await fetch('/api/warehouse-settings/bypass-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error('Failed to update bypass code');
-      return response.json();
+      const response = await apiRequest('POST', '/api/warehouse-settings/bypass-code', { code });
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/warehouse-settings/bypass-code'] });
