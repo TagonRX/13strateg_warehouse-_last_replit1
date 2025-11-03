@@ -161,6 +161,14 @@ export default function Dispatch() {
         description: `Заказ №${currentOrder?.orderNumber} успешно обработан`,
       });
 
+      // Invalidate all order queries to refresh all stations
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/orders');
+        }
+      });
+
       resetToPhase1();
       setConfirmDialogOpen(false);
     },
@@ -203,21 +211,34 @@ export default function Dispatch() {
   const handleItemScan = (code: string) => {
     if (!currentOrder) return;
 
-    // Check if this exact barcode was already scanned (duplicate scan prevention)
+    // CRITICAL: Prevent duplicate barcode scans
     if (scannedItemBarcodes.includes(code)) {
       toast({
         variant: "destructive",
-        title: "Дубликат баркода",
-        description: "Этот баркод уже был отсканирован",
+        title: "Уже отсканировано",
+        description: "Этот баркод уже был отсканирован для данного заказа",
       });
       return;
     }
 
-    const matchingItem = currentOrder.items.find(item => {
-      if (item.barcode && item.barcode === code) return true;
-      if (item.sku === code) return true;
-      return false;
-    });
+    // Find the SKU that this barcode belongs to (check inventory)
+    let matchingItem: OrderItem | undefined;
+    let matchedBySku = false;
+    
+    // First, try to match by exact SKU
+    matchingItem = currentOrder.items.find(item => item.sku === code);
+    if (matchingItem) {
+      matchedBySku = true;
+    }
+    
+    // If not matched by SKU, check if barcode belongs to any SKU in inventory
+    if (!matchingItem) {
+      const inventoryItem = inventory.find(inv => inv.barcode === code);
+      if (inventoryItem) {
+        // Found inventory item with this barcode - check if its SKU is in the order
+        matchingItem = currentOrder.items.find(item => item.sku === inventoryItem.sku);
+      }
+    }
 
     if (!matchingItem) {
       toast({
@@ -241,7 +262,7 @@ export default function Dispatch() {
       return;
     }
 
-    // Increment counter and add barcode
+    // Increment counter and add barcode (any barcode for this SKU counts)
     const newCount = currentCount + 1;
     setScannedCounts(prev => new Map(prev).set(matchingItem.sku, newCount));
     setScannedItemBarcodes(prev => [...prev, code]);
@@ -267,6 +288,55 @@ export default function Dispatch() {
       toast({
         title: "Товар отсканирован",
         description: `${matchingItem.sku}: ${newCount} / ${matchingItem.quantity}. Осталось: ${remaining} товар(ов)`,
+      });
+    }
+  };
+
+  const handleManualConfirm = (sku: string) => {
+    if (!currentOrder) return;
+
+    const item = currentOrder.items.find(i => i.sku === sku);
+    if (!item) return;
+
+    // Get current count for this SKU
+    const currentCount = scannedCounts.get(sku) || 0;
+
+    // Check if we've already scanned the required quantity for this SKU
+    if (currentCount >= item.quantity) {
+      toast({
+        variant: "destructive",
+        title: "Превышено количество",
+        description: `SKU ${sku}: уже подтверждено ${currentCount} из ${item.quantity}`,
+      });
+      return;
+    }
+
+    // Increment counter (use SKU as placeholder for items without barcode)
+    const newCount = currentCount + 1;
+    setScannedCounts(prev => new Map(prev).set(sku, newCount));
+    // Add SKU itself as the "barcode" for manual confirmation (backend will handle this)
+    setScannedItemBarcodes(prev => [...prev, sku]);
+
+    // Check if all items are fully scanned
+    const newScannedCounts = new Map(scannedCounts).set(sku, newCount);
+    const allItemsScanned = currentOrder.items.every(item => 
+      (newScannedCounts.get(item.sku) || 0) >= item.quantity
+    );
+
+    if (allItemsScanned) {
+      setCurrentPhase('scanning_label');
+      toast({
+        title: "Все товары подтверждены",
+        description: "Отсканируйте лейбл посылки",
+      });
+    } else {
+      const totalScanned = Array.from(newScannedCounts.values()).reduce((sum, count) => sum + count, 0);
+      const totalRequired = currentOrder.items.reduce((sum, item) => sum + item.quantity, 0);
+      const remaining = totalRequired - totalScanned;
+      
+      toast({
+        title: "Товар подтвержден",
+        description: `${sku}: ${newCount} / ${item.quantity}. Осталось: ${remaining} товар(ов)`,
       });
     }
   };
@@ -681,20 +751,34 @@ export default function Dispatch() {
                         </div>
                       </div>
 
-                      {item.ebayUrl && (
-                        <a
-                          href={item.ebayUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-shrink-0"
-                          data-testid={`link-ebay-${item.sku}`}
-                        >
-                          <Button size="sm" variant="outline">
-                            <ExternalLink className="w-4 h-4 mr-1" />
-                            eBay
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Кнопка "Готов" для товаров без баркода */}
+                        {!item.barcode && !isComplete && currentPhase === 'scanning_items' && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => handleManualConfirm(item.sku)}
+                            data-testid={`button-manual-confirm-${item.sku}`}
+                          >
+                            Готов
                           </Button>
-                        </a>
-                      )}
+                        )}
+                        
+                        {item.ebayUrl && (
+                          <a
+                            href={item.ebayUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-shrink-0"
+                            data-testid={`link-ebay-${item.sku}`}
+                          >
+                            <Button size="sm" variant="outline">
+                              <ExternalLink className="w-4 h-4 mr-1" />
+                              eBay
+                            </Button>
+                          </a>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

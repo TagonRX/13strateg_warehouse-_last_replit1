@@ -2440,17 +2440,46 @@ export class DbStorage implements IStorage {
     let searchCriteria;
     
     if (hasEbayData) {
-      // NEW eBay grouping logic
-      const buyerIdentifier = task.buyerUsername || task.buyerName || 'UNKNOWN';
+      // NEW format: POSTCODE_SKU1_SKU2_..._DDMM
       const postalCode = task.addressPostalCode || 'NOCODE';
-      const sellerId = task.sellerEbayId || 'NOSELLER';
-      
+      const buyerIdentifier = task.buyerUsername || task.buyerName || 'UNKNOWN';
       const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-      orderNumber = `${sanitize(sellerId)}_${sanitize(buyerIdentifier)}_${sanitize(postalCode)}`;
+      const sanitizedPostalCode = sanitize(postalCode);
       
+      // Get all tasks for this picking list to collect all SKUs
+      // IMPORTANT: Filter by ALL buyer/address discriminators to ensure unique grouping
+      const allTasks = await db.select()
+        .from(pickingTasks)
+        .where(and(
+          eq(pickingTasks.listId, task.listId),
+          task.buyerUsername ? eq(pickingTasks.buyerUsername, task.buyerUsername) : 
+            task.buyerName ? eq(pickingTasks.buyerName, task.buyerName) : 
+            sql`${pickingTasks.buyerUsername} IS NULL AND ${pickingTasks.buyerName} IS NULL`,
+          task.addressPostalCode ? eq(pickingTasks.addressPostalCode, task.addressPostalCode) : sql`${pickingTasks.addressPostalCode} IS NULL`,
+          task.sellerEbayId ? eq(pickingTasks.sellerEbayId, task.sellerEbayId) : sql`${pickingTasks.sellerEbayId} IS NULL`
+        ));
+      
+      // Collect unique SKUs and sort them
+      const skuSet = new Set(allTasks.map(t => sanitize(t.sku)));
+      const skus = Array.from(skuSet).sort();
+      const skuPart = skus.join('_');
+      
+      // Get date in DDMM format
+      const now = new Date();
+      const dd = String(now.getDate()).padStart(2, '0');
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const datePart = `${dd}${mm}`;
+      
+      orderNumber = `${sanitizedPostalCode}_${skuPart}_${datePart}`;
+      
+      // CRITICAL: Include ALL buyer/address discriminators in search to prevent collisions
       searchCriteria = and(
         eq(orders.orderNumber, orderNumber),
-        task.sellerEbayId ? eq(orders.sellerEbayId, task.sellerEbayId) : sql`${orders.sellerEbayId} IS NULL`
+        task.sellerEbayId ? eq(orders.sellerEbayId, task.sellerEbayId) : sql`${orders.sellerEbayId} IS NULL`,
+        task.buyerUsername ? eq(orders.buyerUsername, task.buyerUsername) : 
+          task.buyerName ? eq(orders.buyerName, task.buyerName) : 
+          sql`${orders.buyerUsername} IS NULL AND ${orders.buyerName} IS NULL`,
+        task.addressPostalCode ? eq(orders.addressPostalCode, task.addressPostalCode) : sql`${orders.addressPostalCode} IS NULL`
       );
     } else {
       // OLD fallback logic: use picking list name as order number
@@ -2570,9 +2599,9 @@ export class DbStorage implements IStorage {
     if (filters?.status) {
       return await db.select().from(orders)
         .where(eq(orders.status, filters.status))
-        .orderBy(orders.createdAt);
+        .orderBy(sql`${orders.createdAt} DESC`);
     }
-    return await db.select().from(orders).orderBy(orders.createdAt);
+    return await db.select().from(orders).orderBy(sql`${orders.createdAt} DESC`);
   }
 
   async getOrderById(id: string): Promise<Order | null> {
