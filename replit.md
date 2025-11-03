@@ -16,12 +16,17 @@ This project is a comprehensive warehouse management system designed to streamli
     - Hover tooltip shows detailed breakdown: Physical count, Expected count, and Difference (±X)
   - **Business Logic**: Solves synchronization issue where external system shows reduced quantity after sales, but physical warehouse items (with barcodes) remain intact until actually picked
   - **Reconciliation**: After picking/packing completion, physical quantity decreases to match expected quantity from external system
-- **Integrated Picking → Dispatch → Packing Workflow**: Implemented automated order creation and fulfillment pipeline:
-  - **Auto Order Creation**: When picking task is completed, system automatically creates/updates order with status PENDING for Dispatch section
+- **Incremental Order Creation Workflow**: Implemented real-time order creation system for Picking → Dispatch → Packing pipeline:
+  - **Immediate Order Creation**: Orders created/updated after EACH item scan (not waiting for full picking list completion) - critical for real-time Dispatch visibility
+  - **Quantity Tracking**: Orders track actual `pickedQuantity` (not required) for accurate real-time state during incremental collection
+  - **Status Protection**: `createOrUpdateOrderFromPickingTask` automatically skips updates for orders in DISPATCHED/PACKED status to prevent accidental rollback
+  - **Completion Validation**: Both Dispatch and Packing endpoints validate all picking tasks are complete (`pickedQuantity >= requiredQuantity`) before allowing status transitions
+  - **Detailed Error Reporting**: Validation failures return complete list of incomplete tasks with specific missing quantities for operator remediation
+  - **Migration Endpoint**: `/api/picking/migrate-orders` safely creates orders for existing partially-collected tasks without resurrecting completed orders
   - **Smart Dispatch**: Workers scan item barcode to see all pending orders containing that item; multi-order selection dialog shows complete order details for worker choice
-  - **Status Flow**: PENDING (from picking) → DISPATCHED (after scanning label) → PACKED (after packing verification)
+  - **Status Flow**: PENDING (from first item scan) → DISPATCHED (after label scan + validation) → PACKED (after packing verification + validation)
   - **Inventory Depletion**: Items are automatically removed from inventory after packing completion based on dispatched barcodes
-  - **Order Lifecycle**: createOrUpdateOrderFromPickingTask consolidates picking tasks into single order per picking list; orders transition through statuses as workers process them
+  - **Order Lifecycle**: createOrUpdateOrderFromPickingTask consolidates picking tasks into single order per picking list; orders transition through statuses as workers process them with full lifecycle integrity protection
 - **Barcode Scanner Auto-Input**: Added useGlobalBarcodeInput hook to inventory search field for automatic barcode scanner input routing
 - **Bypass Code Feature**: Implemented secure bypass code system for warehouse item placement:
   - **Database**: Added `bypassCode` field to `warehouseSettings` table for storing administrator-set code
