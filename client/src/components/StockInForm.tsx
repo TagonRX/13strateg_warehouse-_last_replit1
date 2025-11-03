@@ -327,13 +327,17 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
         return;
       }
       
-      onSubmit({
-        productId: productId || undefined,
-        name: name || undefined,
-        sku,
-        location,
-        quantity: scannedBarcodes.length,
-        barcode: scannedBarcodes[0],
+      // Вызываем onSubmit для каждого баркода отдельно
+      // Это создаст отдельный pending placement для каждого уникального баркода
+      scannedBarcodes.forEach(barcode => {
+        onSubmit({
+          productId: productId || undefined,
+          name: name || undefined,
+          sku,
+          location,
+          quantity: 1, // Каждый товар создается отдельно
+          barcode: barcode,
+        });
       });
       
       // Очистка формы
