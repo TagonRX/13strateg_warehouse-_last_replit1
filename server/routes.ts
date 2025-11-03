@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, insertInventoryItemSchema, insertEventLogSchema, insertOrderSchema } from "@shared/schema";
+import { insertUserSchema, insertInventoryItemSchema, insertEventLogSchema, insertOrderSchema, pickingTasks } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import { verifyPassword, hashPassword, createSession, requireAuth, requireAdmin } from "./auth";
 import { setupWebSocket } from "./websocket";
@@ -12,6 +12,8 @@ import { promises as dns } from "dns";
 import { compareTwoStrings } from 'string-similarity';
 import { parse } from 'fast-csv';
 import { Readable } from 'stream';
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
 // Helper function to extract location from SKU
 // SKU format examples:

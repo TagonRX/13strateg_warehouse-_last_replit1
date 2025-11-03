@@ -108,9 +108,15 @@ export const pickingLists = pgTable("picking_lists", {
 export const pickingTasks = pgTable("picking_tasks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   listId: varchar("list_id").references(() => pickingLists.id),
+  itemId: text("item_id"), // eBay item_id для идентификации товара
   sku: text("sku").notNull(), // SKU to pick (not specific item ID)
   itemName: text("item_name"), // Name of the item from inventory
   itemNameSource: text("item_name_source"), // 'file' (from CSV) or 'inventory' (looked up)
+  buyerUsername: text("buyer_username"), // eBay buyer username
+  buyerName: text("buyer_name"), // Имя покупателя
+  addressPostalCode: text("address_postal_code"), // Почтовый индекс адреса доставки
+  sellerEbayId: text("seller_ebay_id"), // seller_ebay_seller_id для группировки по продавцу
+  orderDate: timestamp("order_date"), // Дата заказа из CSV
   ebaySellerName: text("ebay_seller_name"), // Имя продавца eBay для сверки при сборке
   requiredQuantity: integer("required_quantity").notNull().default(1), // How many needed
   pickedQuantity: integer("picked_quantity").notNull().default(0), // How many picked
@@ -268,7 +274,11 @@ export const csvImportSessions = pgTable("csv_import_sessions", {
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   orderNumber: text("order_number").notNull().unique(), // Уникальный номер заказа
-  customerName: text("customer_name"), // Имя покупателя
+  buyerUsername: text("buyer_username"), // eBay buyer username (для группировки)
+  buyerName: text("buyer_name"), // Имя покупателя (для группировки)
+  addressPostalCode: text("address_postal_code"), // Почтовый индекс (для группировки)
+  sellerEbayId: text("seller_ebay_id"), // seller_ebay_seller_id (для разделения по магазинам)
+  customerName: text("customer_name"), // Имя покупателя (для отображения)
   shippingAddress: text("shipping_address"), // Адрес доставки
   orderDate: timestamp("order_date"), // Дата заказа
   status: text("status").notNull().default("PENDING"), // PENDING, DISPATCHED, PACKED, SHIPPED

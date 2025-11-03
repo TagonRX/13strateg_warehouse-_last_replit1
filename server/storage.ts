@@ -159,7 +159,7 @@ export interface IStorage {
   clearActiveLocations(): Promise<void>;
 
   // Picking List methods
-  createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }>;
+  createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string; itemId?: string; buyerUsername?: string; buyerName?: string; addressPostalCode?: string; sellerEbayId?: string; orderDate?: Date }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }>;
   getAllPickingLists(): Promise<PickingList[]>;
   getPickingListWithTasks(listId: string): Promise<{ list: PickingList; tasks: PickingTask[] } | null>;
   scanBarcodeForPickingTask(barcode: string, taskId: string, userId: string): Promise<{
@@ -167,11 +167,13 @@ export interface IStorage {
     message: string;
     item?: InventoryItem;
     task?: PickingTask;
+    order?: Order;
   }>;
   manualCollectForPickingTask(taskId: string, userId: string): Promise<{
     success: boolean;
     message: string;
     task?: PickingTask;
+    order?: Order;
   }>;
   deletePickingList(listId: string, userId: string): Promise<boolean>;
 
@@ -212,7 +214,7 @@ export interface IStorage {
   // Pending Placements methods
   createPendingPlacement(placement: InsertPendingPlacement): Promise<PendingPlacement>;
   getAllPendingPlacements(): Promise<PendingPlacement[]>;
-  deletePendingPlacement(id: string): Promise<void>;
+  deletePendingPlacement(id: string, userId: string): Promise<PendingPlacement | null>;
   getPendingPlacementByBarcode(barcode: string): Promise<PendingPlacement | undefined>;
   confirmPlacement(placementId: string, location: string, userId: string): Promise<InventoryItem>;
 
@@ -1393,7 +1395,7 @@ export class DbStorage implements IStorage {
   }
 
   // Daily Picking methods
-  async createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }> {
+  async createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string; itemId?: string; buyerUsername?: string; buyerName?: string; addressPostalCode?: string; sellerEbayId?: string; orderDate?: Date }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }> {
     // Create the picking list
     const [list] = await db.insert(pickingLists).values({
       name: data.name,
@@ -1445,9 +1447,15 @@ export class DbStorage implements IStorage {
 
         return {
           listId: list.id,
+          itemId: task.itemId || null,
           sku: task.sku,
           itemName,
           itemNameSource,
+          buyerUsername: task.buyerUsername || null,
+          buyerName: task.buyerName || null,
+          addressPostalCode: task.addressPostalCode || null,
+          sellerEbayId: task.sellerEbayId || null,
+          orderDate: task.orderDate || null,
           requiredQuantity: task.requiredQuantity,
           pickedQuantity: 0,
           status: "PENDING",
@@ -1486,6 +1494,7 @@ export class DbStorage implements IStorage {
     message: string;
     item?: InventoryItem;
     task?: PickingTask;
+    order?: Order;
   }> {
     // Get the task
     const [task] = await db.select().from(pickingTasks).where(eq(pickingTasks.id, taskId));
@@ -1567,7 +1576,7 @@ export class DbStorage implements IStorage {
       message: `Item picked successfully! Progress: ${newPickedQuantity}/${task.requiredQuantity}`,
       item,
       task: updatedTask,
-      order
+      order: order || undefined
     };
   }
 
@@ -1575,6 +1584,7 @@ export class DbStorage implements IStorage {
     success: boolean;
     message: string;
     task?: PickingTask;
+    order?: Order;
   }> {
     // Get the task
     const [task] = await db.select().from(pickingTasks).where(eq(pickingTasks.id, taskId));
@@ -1645,7 +1655,7 @@ export class DbStorage implements IStorage {
         success: true, 
         message: `Товар собран вручную! Прогресс: ${newPickedQuantity}/${task.requiredQuantity}`,
         task: updatedTask,
-        order
+        order: order || undefined
       };
     } else {
       // No item found in inventory with matching SKU
@@ -1681,7 +1691,7 @@ export class DbStorage implements IStorage {
         success: true, 
         message: `Товар собран вручную (нет в инвентаре)! Прогресс: ${newPickedQuantity}/${task.requiredQuantity}`,
         task: updatedTask,
-        order
+        order: order || undefined
       };
     }
   }
@@ -2405,15 +2415,22 @@ export class DbStorage implements IStorage {
       return null;
     }
 
-    // Get the picking list to use as order number
-    const [list] = await db.select().from(pickingLists).where(eq(pickingLists.id, task.listId));
-    if (!list) {
-      return null;
-    }
-
-    // Try to find existing order for this picking list
+    // NEW GROUPING LOGIC: Group by (buyerUsername OR buyerName) + addressPostalCode + sellerEbayId
+    // Generate unique order number based on grouping key
+    const buyerIdentifier = task.buyerUsername || task.buyerName || 'UNKNOWN';
+    const postalCode = task.addressPostalCode || 'NOCODE';
+    const sellerId = task.sellerEbayId || 'NOSELLER';
+    
+    // Create order number: SELLER_BUYER_POSTALCODE format (sanitized)
+    const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const orderNumber = `${sanitize(sellerId)}_${sanitize(buyerIdentifier)}_${sanitize(postalCode)}`;
+    
+    // Try to find existing order with this grouping
     const existingOrders = await db.select().from(orders)
-      .where(eq(orders.orderNumber, list.name));
+      .where(and(
+        eq(orders.orderNumber, orderNumber),
+        task.sellerEbayId ? eq(orders.sellerEbayId, task.sellerEbayId) : sql`${orders.sellerEbayId} IS NULL`
+      ));
     
     // CRITICAL: Do NOT modify orders that have been dispatched or packed
     if (existingOrders.length > 0 && (existingOrders[0].status === 'DISPATCHED' || existingOrders[0].status === 'PACKED')) {
@@ -2468,12 +2485,16 @@ export class DbStorage implements IStorage {
 
       return updatedOrder;
     } else {
-      // Create new order
+      // Create new order with grouping fields populated
       const newOrder = await this.createOrder({
-        orderNumber: list.name,
-        customerName: null,
-        shippingAddress: null,
-        orderDate: new Date(),
+        orderNumber,
+        buyerUsername: task.buyerUsername || null,
+        buyerName: task.buyerName || null,
+        addressPostalCode: task.addressPostalCode || null,
+        sellerEbayId: task.sellerEbayId || null,
+        customerName: task.buyerName || task.buyerUsername || null,
+        shippingAddress: task.addressPostalCode ? `Postal Code: ${task.addressPostalCode}` : null,
+        orderDate: task.orderDate || new Date(),
         status: "PENDING",
         items: JSON.stringify([orderItem]),
         createdBy: userId,

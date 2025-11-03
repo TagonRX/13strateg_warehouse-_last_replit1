@@ -303,7 +303,11 @@ export default function DailyPickingView() {
     }
 
     const lines = csvText.split("\n").filter(line => line.trim());
-    const tasksMap = new Map<string, { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string }>();
+    
+    if (lines.length === 0) {
+      toast({ title: "Error", description: "CSV is empty", variant: "destructive" });
+      return;
+    }
 
     // Auto-detect delimiter: tab, comma, semicolon, or whitespace
     let delimiter = ",";
@@ -318,56 +322,121 @@ export default function DailyPickingView() {
       delimiter = "whitespace";
     }
 
-    for (const line of lines) {
-      const parts = delimiter === "whitespace" 
-        ? line.trim().split(/\s+/).map(p => p.trim())
-        : line.split(delimiter).map(p => p.trim());
-        
-      if (parts.length >= 2) {
-        const sku = parts[0].toUpperCase();
-        let itemName: string | undefined;
-        let quantity: number;
-        let ebaySellerName: string | undefined;
+    // Parse first line as headers
+    const headerParts = delimiter === "whitespace" 
+      ? firstLine.trim().split(/\s+/).map(p => p.trim())
+      : firstLine.split(delimiter).map(p => p.trim());
+    
+    // Check if first line looks like headers (contains known field names)
+    const looksLikeHeaders = headerParts.some(h => 
+      h.toLowerCase().includes('sku') || 
+      h.toLowerCase().includes('item_id') ||
+      h.toLowerCase().includes('buyer') ||
+      h.toLowerCase().includes('quantity')
+    );
 
-        // Format: SKU, название (опционально), количество, ebaySellerName (опционально)
-        if (parts.length === 2) {
-          // SKU, количество
-          quantity = parseInt(parts[1]) || 1;
-        } else if (parts.length === 3) {
-          // SKU, название, количество
-          itemName = parts[1] || undefined;
-          quantity = parseInt(parts[2]) || 1;
-        } else {
-          // SKU, название, количество, ebaySellerName
-          itemName = parts[1] || undefined;
-          quantity = parseInt(parts[2]) || 1;
-          ebaySellerName = parts[3] || undefined;
+    let headers: string[] = [];
+    let dataLines: string[] = [];
+    
+    if (looksLikeHeaders) {
+      headers = headerParts;
+      dataLines = lines.slice(1);
+    } else {
+      // Old format without headers - treat as: SKU, name (optional), quantity, sellerName (optional)
+      dataLines = lines;
+    }
+
+    const tasks: Array<{
+      sku: string;
+      itemName?: string;
+      requiredQuantity: number;
+      itemId?: string;
+      buyerUsername?: string;
+      buyerName?: string;
+      addressPostalCode?: string;
+      sellerEbayId?: string;
+      orderDate?: Date;
+    }> = [];
+
+    if (headers.length > 0) {
+      // NEW FORMAT: CSV with headers
+      const itemIdCol = headers.find(h => h.toLowerCase().includes('item_id'));
+      const skuCol = headers.find(h => h.toLowerCase().includes('item_sku') || h.toLowerCase().includes('sku')) || headers[0];
+      const nameCol = headers.find(h => h.toLowerCase().includes('item_title') || h.toLowerCase().includes('title') || h.toLowerCase().includes('name'));
+      const qtyCol = headers.find(h => h.toLowerCase().includes('transaction_quantity') || h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty'));
+      const buyerUsernameCol = headers.find(h => h.toLowerCase().includes('buyer_username'));
+      const buyerNameCol = headers.find(h => h.toLowerCase().includes('buyer_name'));
+      const postalCodeCol = headers.find(h => h.toLowerCase().includes('address_postal_code') || h.toLowerCase().includes('postal_code'));
+      const sellerIdCol = headers.find(h => h.toLowerCase().includes('seller_ebay_seller_id') || h.toLowerCase().includes('seller_id'));
+      const orderDateCol = headers.find(h => h.toLowerCase().includes('order_date'));
+
+      for (const line of dataLines) {
+        const parts = delimiter === "whitespace" 
+          ? line.trim().split(/\s+/).map(p => p.trim())
+          : line.split(delimiter).map(p => p.trim());
+        
+        const row: Record<string, string> = {};
+        headers.forEach((header, i) => {
+          row[header] = parts[i] || '';
+        });
+
+        const sku = (row[skuCol] || '').trim().toUpperCase();
+        if (!sku) continue;
+
+        const task: any = {
+          sku,
+          requiredQuantity: qtyCol ? (parseInt(row[qtyCol] || '1', 10) || 1) : 1,
+        };
+
+        if (nameCol && row[nameCol]) task.itemName = row[nameCol].trim();
+        if (itemIdCol && row[itemIdCol]) task.itemId = row[itemIdCol].trim();
+        if (buyerUsernameCol && row[buyerUsernameCol]) task.buyerUsername = row[buyerUsernameCol].trim();
+        if (buyerNameCol && row[buyerNameCol]) task.buyerName = row[buyerNameCol].trim();
+        if (postalCodeCol && row[postalCodeCol]) task.addressPostalCode = row[postalCodeCol].trim();
+        if (sellerIdCol && row[sellerIdCol]) task.sellerEbayId = row[sellerIdCol].trim();
+        if (orderDateCol && row[orderDateCol]) {
+          try {
+            task.orderDate = new Date(row[orderDateCol]);
+          } catch {
+            // Invalid date, skip
+          }
         }
 
-        // Объединяем одинаковые SKU
-        if (tasksMap.has(sku)) {
-          const existing = tasksMap.get(sku)!;
-          existing.requiredQuantity += quantity;
-          // Если новое название указано, а старого нет - обновляем
-          if (itemName && !existing.itemName) {
-            existing.itemName = itemName;
+        tasks.push(task);
+      }
+    } else {
+      // OLD FORMAT: No headers, simple format (SKU, name?, quantity, sellerName?)
+      for (const line of dataLines) {
+        const parts = delimiter === "whitespace" 
+          ? line.trim().split(/\s+/).map(p => p.trim())
+          : line.split(delimiter).map(p => p.trim());
+          
+        if (parts.length >= 2) {
+          const sku = parts[0].toUpperCase();
+          let itemName: string | undefined;
+          let quantity: number;
+          let ebaySellerName: string | undefined;
+
+          if (parts.length === 2) {
+            quantity = parseInt(parts[1]) || 1;
+          } else if (parts.length === 3) {
+            itemName = parts[1] || undefined;
+            quantity = parseInt(parts[2]) || 1;
+          } else {
+            itemName = parts[1] || undefined;
+            quantity = parseInt(parts[2]) || 1;
+            ebaySellerName = parts[3] || undefined;
           }
-          // Если новое имя продавца указано, а старого нет - обновляем
-          if (ebaySellerName && !existing.ebaySellerName) {
-            existing.ebaySellerName = ebaySellerName;
-          }
-        } else {
-          tasksMap.set(sku, {
+
+          tasks.push({
             sku,
             itemName,
             requiredQuantity: quantity,
-            ebaySellerName,
+            sellerEbayId: ebaySellerName,
           });
         }
       }
     }
-
-    const tasks = Array.from(tasksMap.values());
 
     if (tasks.length === 0) {
       toast({ title: "Error", description: "No valid tasks found in CSV", variant: "destructive" });
@@ -448,58 +517,100 @@ export default function DailyPickingView() {
 
       const results = await Promise.all(loadPromises);
       
-      // Merge data from all sources - sum quantities for same SKU
-      const mergedData: Record<string, { sku: string; name: string; quantity: number }> = {};
+      // Build tasks array - each CSV row becomes a separate task (NO aggregation)
+      const tasks: Array<{
+        sku: string;
+        itemName?: string;
+        requiredQuantity: number;
+        itemId?: string;
+        buyerUsername?: string;
+        buyerName?: string;
+        addressPostalCode?: string;
+        sellerEbayId?: string;
+        orderDate?: Date;
+      }> = [];
       
       for (const { result } of results) {
-        // Extract columns automatically
+        // Find columns by name matching
+        const itemIdCol = result.headers.find((h: string) => 
+          h.toLowerCase().includes('item_id')
+        );
+        
         const skuCol = result.headers.find((h: string) => 
-          h.toLowerCase().includes('sku') || h.toLowerCase().includes('артикул')
+          h.toLowerCase().includes('item_sku') || h.toLowerCase().includes('sku')
         ) || result.headers[0];
         
         const nameCol = result.headers.find((h: string) => 
-          h.toLowerCase().includes('name') || h.toLowerCase().includes('title') || 
-          h.toLowerCase().includes('название') || h.toLowerCase().includes('товар')
+          h.toLowerCase().includes('item_title') || h.toLowerCase().includes('title') || h.toLowerCase().includes('name')
         );
         
         const qtyCol = result.headers.find((h: string) => 
-          h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty') || 
-          h.toLowerCase().includes('количество') || h.toLowerCase().includes('кол')
-        ) || result.headers[result.headers.length - 1];
+          h.toLowerCase().includes('transaction_quantity') || h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty')
+        );
         
-        // Process each row
+        const buyerUsernameCol = result.headers.find((h: string) => 
+          h.toLowerCase().includes('buyer_username')
+        );
+        
+        const buyerNameCol = result.headers.find((h: string) => 
+          h.toLowerCase().includes('buyer_name')
+        );
+        
+        const postalCodeCol = result.headers.find((h: string) => 
+          h.toLowerCase().includes('address_postal_code') || h.toLowerCase().includes('postal_code')
+        );
+        
+        const sellerIdCol = result.headers.find((h: string) => 
+          h.toLowerCase().includes('seller_ebay_seller_id') || h.toLowerCase().includes('seller_id')
+        );
+        
+        const orderDateCol = result.headers.find((h: string) => 
+          h.toLowerCase().includes('order_date')
+        );
+        
+        // Process each row - create separate task for each row
         for (const row of result.data) {
-          const sku = (row[skuCol] || '').trim();
-          const name = nameCol ? (row[nameCol] || '').trim() : '';
-          const qty = parseInt(row[qtyCol] || '0', 10);
-          
+          const sku = (row[skuCol] || '').trim().toUpperCase();
           if (!sku) continue;
           
-          if (mergedData[sku]) {
-            // Sum quantities for same SKU
-            mergedData[sku].quantity += qty;
-            // Update name if current is empty and new has value
-            if (!mergedData[sku].name && name) {
-              mergedData[sku].name = name;
+          const task: any = {
+            sku,
+            requiredQuantity: qtyCol ? (parseInt(row[qtyCol] || '1', 10) || 1) : 1,
+          };
+          
+          if (nameCol && row[nameCol]) task.itemName = row[nameCol].trim();
+          if (itemIdCol && row[itemIdCol]) task.itemId = row[itemIdCol].trim();
+          if (buyerUsernameCol && row[buyerUsernameCol]) task.buyerUsername = row[buyerUsernameCol].trim();
+          if (buyerNameCol && row[buyerNameCol]) task.buyerName = row[buyerNameCol].trim();
+          if (postalCodeCol && row[postalCodeCol]) task.addressPostalCode = row[postalCodeCol].trim();
+          if (sellerIdCol && row[sellerIdCol]) task.sellerEbayId = row[sellerIdCol].trim();
+          if (orderDateCol && row[orderDateCol]) {
+            try {
+              task.orderDate = new Date(row[orderDateCol]);
+            } catch {
+              // Invalid date, skip
             }
-          } else {
-            // Add new SKU
-            mergedData[sku] = { sku, name, quantity: qty };
           }
+          
+          tasks.push(task);
         }
       }
       
-      // Convert to CSV text
-      const csvLines = Object.values(mergedData).map(item => 
-        `${item.sku}, ${item.name}, ${item.quantity}`
-      ).join('\n');
+      if (tasks.length === 0) {
+        toast({
+          title: "Ошибка",
+          description: "Не найдено ни одной валидной задачи в CSV",
+          variant: "destructive",
+        });
+        return;
+      }
       
-      setCsvText(csvLines);
+      // Create the picking list directly with all tasks
+      createListMutation.mutate({ name: listName, tasks });
       
-      const totalItems = Object.keys(mergedData).length;
       toast({
         title: "Загружено",
-        description: `Загружено из ${enabledSources.length} источников, ${totalItems} уникальных позиций`,
+        description: `Создано ${tasks.length} задач из ${enabledSources.length} источников`,
       });
     } catch (error: any) {
       toast({
