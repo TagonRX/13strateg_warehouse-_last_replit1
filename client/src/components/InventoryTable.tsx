@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, ChevronDown, ChevronRight, Pencil, Save, X, Trash2, ExternalLink, Image as ImageIcon, Copy } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, Pencil, Save, X, Trash2, ExternalLink, Image as ImageIcon, Copy, AlertTriangle } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +40,7 @@ import ImageGalleryModal from "./ImageGalleryModal";
 import { DuplicatesDialog } from "./DuplicatesDialog";
 import { Progress } from "@/components/ui/progress";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 interface BarcodeMapping {
   code: string;
@@ -62,6 +63,7 @@ interface InventoryItem {
   height?: number;
   volume?: number;
   weight?: number;
+  expectedQuantity?: number | null; // Expected quantity from external system
   itemId?: string | null; // eBay item ID
   ebayUrl?: string | null; // eBay URL
   ebaySellerName?: string | null; // eBay seller name
@@ -230,6 +232,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     name: 250,
     sku: 150,
     quantity: 100,
+    qty: 100,
     barcode: 150,
     condition: 120,
     price: 100,
@@ -328,6 +331,44 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     });
     return cache;
   }, [filteredItems]);
+
+  // Group items by SKU for physical count calculation
+  const skuGroups = useMemo(() => {
+    const groups = new Map<string, InventoryItem[]>();
+    filteredItems.forEach(item => {
+      const group = groups.get(item.sku) || [];
+      group.push(item);
+      groups.set(item.sku, group);
+    });
+    return groups;
+  }, [filteredItems]);
+
+  // Calculate physical count and variance for each item
+  const itemsWithQtyData = useMemo(() => {
+    const dataMap = new Map<string, {
+      physicalCount: number;
+      expectedCount: number | null;
+      variance: number;
+      hasVariance: boolean;
+    }>();
+
+    filteredItems.forEach(item => {
+      const sameSkuItems = skuGroups.get(item.sku) || [];
+      const physicalCount = sameSkuItems.filter(i => i.barcode && i.barcode.trim() !== '').length;
+      const expectedCount = item.expectedQuantity ?? null;
+      const variance = expectedCount ? physicalCount - expectedCount : 0;
+      const hasVariance = expectedCount !== null && physicalCount !== expectedCount;
+
+      dataMap.set(item.id, {
+        physicalCount,
+        expectedCount,
+        variance,
+        hasVariance
+      });
+    });
+
+    return dataMap;
+  }, [filteredItems, skuGroups]);
 
   // Helper function to get condition (checks server-provided condition first, then ALL barcodes)
   const getConditionForItem = useCallback((item: InventoryItem, overrideBarcode?: string, overrideMappings?: BarcodeMapping[]): string | null => {
@@ -673,6 +714,20 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
               max={99999}
             />
           </TableCell>
+          <TableCell style={{ width: `${columnWidths.qty}px`, minWidth: `${columnWidths.qty}px` }} className="text-xs text-muted-foreground text-right">
+            {(() => {
+              const qtyData = itemsWithQtyData.get(item.id);
+              if (!qtyData) return "-";
+              const hasBarcode = item.barcode && item.barcode.trim() !== '';
+              if (!hasBarcode) {
+                return editingRow.quantity;
+              }
+              if (qtyData.expectedCount === null || qtyData.expectedCount === undefined) {
+                return editingRow.quantity;
+              }
+              return `${qtyData.physicalCount} / ${qtyData.expectedCount}`;
+            })()}
+          </TableCell>
           <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }}>
             <BarcodeEditor
               value={editingRow.barcodeMappings}
@@ -826,6 +881,72 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         </TableCell>
         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="font-mono text-xs">{item.sku}</TableCell>
         <TableCell style={{ width: `${columnWidths.quantity}px`, minWidth: `${columnWidths.quantity}px` }} className="text-right text-xs font-medium">{item.quantity}</TableCell>
+        <TableCell style={{ width: `${columnWidths.qty}px`, minWidth: `${columnWidths.qty}px` }} className="text-right text-xs">
+          {(() => {
+            const qtyData = itemsWithQtyData.get(item.id);
+            if (!qtyData) return <span className="text-muted-foreground">-</span>;
+            
+            const hasBarcode = item.barcode && item.barcode.trim() !== '';
+            
+            // For items WITHOUT barcode: show just quantity
+            if (!hasBarcode) {
+              return <span className="text-muted-foreground">{item.quantity}</span>;
+            }
+            
+            // For items WITH barcode but no expectedQuantity: show just quantity
+            if (qtyData.expectedCount === null || qtyData.expectedCount === undefined) {
+              return <span className="text-muted-foreground">{item.quantity}</span>;
+            }
+            
+            // For items WITH barcode AND expectedQuantity: show physicalCount / expectedCount
+            const displayText = `${qtyData.physicalCount} / ${qtyData.expectedCount}`;
+            
+            // If there's a variance, show warning icon and red text
+            if (qtyData.hasVariance) {
+              const tooltipContent = (
+                <div className="space-y-1">
+                  <div>Physical: {qtyData.physicalCount} (баркодов в системе)</div>
+                  <div>Expected: {qtyData.expectedCount} (из внешней системы)</div>
+                  <div>Difference: {qtyData.variance > 0 ? '+' : ''}{qtyData.variance}</div>
+                </div>
+              );
+              
+              return (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center justify-end gap-1 text-red-600 dark:text-red-400 font-medium cursor-help">
+                      <AlertTriangle className="w-3 h-3" />
+                      <span>{displayText}</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {tooltipContent}
+                  </TooltipContent>
+                </Tooltip>
+              );
+            }
+            
+            // No variance: show normal text with tooltip
+            const tooltipContent = (
+              <div className="space-y-1">
+                <div>Physical: {qtyData.physicalCount} (баркодов в системе)</div>
+                <div>Expected: {qtyData.expectedCount} (из внешней системы)</div>
+                <div>Difference: 0</div>
+              </div>
+            );
+            
+            return (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="cursor-help">{displayText}</span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {tooltipContent}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })()}
+        </TableCell>
         <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="font-mono text-xs">{displayBarcodes}</TableCell>
         <TableCell style={{ width: `${columnWidths.condition}px`, minWidth: `${columnWidths.condition}px` }} className="text-xs">
           {(() => {
@@ -1151,6 +1272,9 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                 <ResizableHeader columnKey="quantity" width={columnWidths.quantity} onResize={handleResize} className="text-right text-xs">
                   Кол-во
                 </ResizableHeader>
+                <ResizableHeader columnKey="qty" width={columnWidths.qty} onResize={handleResize} className="text-right text-xs">
+                  Qty
+                </ResizableHeader>
                 <ResizableHeader columnKey="barcode" width={columnWidths.barcode} onResize={handleResize} className="text-xs">
                   Штрихкод
                 </ResizableHeader>
@@ -1210,6 +1334,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                         </TableCell>
                         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.quantity}px`, minWidth: `${columnWidths.quantity}px` }} className="text-right text-xs font-medium">{totalQuantity}</TableCell>
+                        <TableCell style={{ width: `${columnWidths.qty}px`, minWidth: `${columnWidths.qty}px` }} className="text-xs text-muted-foreground text-right">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="text-xs text-muted-foreground">
                           {totalBarcodes} штрихкодов
                         </TableCell>
