@@ -302,27 +302,10 @@ export default function Packing() {
     setCurrentPhase('packing');
     setErrorMessage(null);
 
-    // Check if barcode is in dispatchedBarcodes
-    // Allow scans if: 
-    // 1. Barcode is in dispatched list, OR
-    // 2. Code is a SKU from the order items (for items without barcodes)
-    const isDispatchedBarcode = currentOrder.dispatchedBarcodes.includes(code);
-    const isSKUFromOrder = currentOrder.items.some(item => item.sku === code);
-    
-    if (!isDispatchedBarcode && !isSKUFromOrder) {
-      setErrorMessage(`Ошибка: товар не соответствует списку (${code})`);
-      toast({
-        variant: "destructive",
-        title: "Ошибка",
-        description: "Ошибка: товар не соответствует списку",
-      });
-      return;
-    }
-
     // Find the SKU that this barcode belongs to
     let matchingItem: OrderItem | undefined;
     
-    // First, try to match by exact SKU
+    // First, try to match by exact SKU (code is SKU)
     matchingItem = currentOrder.items.find(item => item.sku === code);
     
     // If not matched by SKU, check if barcode belongs to any SKU in inventory
@@ -333,6 +316,8 @@ export default function Packing() {
       }
     }
 
+    // IMPORTANT: Allow ANY barcode that belongs to a SKU in the order
+    // This allows scanning different barcodes for the same SKU (e.g., different units of same product)
     if (!matchingItem) {
       setErrorMessage(`Товар с кодом ${code} не найден в заказе`);
       toast({
