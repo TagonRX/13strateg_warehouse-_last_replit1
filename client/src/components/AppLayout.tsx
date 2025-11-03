@@ -138,9 +138,11 @@ export default function AppLayout({
         <Sidebar>
           <SidebarContent>
             <SidebarGroup>
-              <SidebarGroupLabel className="text-base font-bold px-4 py-3">
-                Складская Система
-              </SidebarGroupLabel>
+              <Link href="/" data-testid="link-home">
+                <SidebarGroupLabel className="text-base font-bold px-4 py-3 cursor-pointer hover-elevate">
+                  Складская Система
+                </SidebarGroupLabel>
+              </Link>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {workerMenuItems.map((item) => (
