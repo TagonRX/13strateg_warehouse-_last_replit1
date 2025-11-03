@@ -4,6 +4,13 @@
 This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
 
 ## Recent Changes (November 3, 2025)
+- **Dispatch Non-Barcoded Item Support**: Enhanced Dispatch workflow to handle items without barcodes:
+  - **Manual SKU Search**: Added input field for manual SKU entry when barcode scanning is not possible
+  - **Pending Orders List**: Displays all PENDING orders with visual indicators for items without barcodes
+  - **Smart Order Selection**: Workers can click any pending order to begin dispatch process
+  - **Hybrid Workflow**: Supports both barcode scanning (for items with barcodes) and manual selection (for items without barcodes)
+  - **Visual Indicators**: Badge system shows count of items without barcodes in each pending order
+  - **Existing API Support**: Leverages existing `/api/orders/scan` endpoint which already searches by both barcode and SKU
 - **Dual Inventory Quantity Tracking**: Implemented comprehensive system for tracking expected vs physical inventory:
   - **Database Schema**: Added `expectedQuantity` field to `inventoryItems` table for storing quantity from external systems/CSV imports
   - **Smart CSV Import Logic**: Modified `bulkUpsertInventoryItems` to preserve physical inventory during updates:

@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle2, Circle, ExternalLink, Image as ImageIcon, Package, Truck, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { CheckCircle2, Circle, ExternalLink, Image as ImageIcon, Package, Truck, AlertTriangle, Search } from "lucide-react";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ImageGalleryModal from "@/components/ImageGalleryModal";
 import type { Order, InventoryItem } from "@shared/schema";
@@ -44,6 +45,7 @@ export default function Dispatch() {
   const [shippingLabel, setShippingLabel] = useState<string>("");
   const [orderSelectionDialogOpen, setOrderSelectionDialogOpen] = useState(false);
   const [availableOrders, setAvailableOrders] = useState<ParsedOrder[]>([]);
+  const [manualSkuInput, setManualSkuInput] = useState<string>("");
 
   const { data: currentUser } = useQuery<any>({
     queryKey: ["/api/auth/me"],
@@ -51,6 +53,11 @@ export default function Dispatch() {
 
   const { data: inventory = [] } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory"],
+  });
+
+  const { data: pendingOrders = [], isLoading: pendingOrdersLoading } = useQuery<Order[]>({
+    queryKey: ["/api/orders", { status: "PENDING" }],
+    enabled: currentPhase === 'scanning_product' && !currentOrder,
   });
 
   const scanOrderMutation = useMutation({
@@ -343,6 +350,31 @@ export default function Dispatch() {
     return totalRequired > 0 ? (totalScanned / totalRequired) * 100 : 0;
   };
 
+  const handleManualSkuSearch = () => {
+    const sku = manualSkuInput.trim();
+    if (!sku) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: "Введите SKU для поиска",
+      });
+      return;
+    }
+    
+    scanOrderMutation.mutate(sku);
+    setManualSkuInput("");
+  };
+
+  const handlePendingOrderSelection = (order: ParsedOrder) => {
+    enrichOrderWithInventoryData(order);
+    handleOrderSelection(order);
+  };
+
+  const parsedPendingOrders: ParsedOrder[] = pendingOrders.map(order => ({
+    ...order,
+    items: order.items ? JSON.parse(order.items) : []
+  }));
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -356,6 +388,112 @@ export default function Dispatch() {
       </div>
 
       <BarcodeScanner onScan={handleScan} label={getScannerLabel()} />
+
+      {currentPhase === 'scanning_product' && !currentOrder && (
+        <Card data-testid="card-manual-search">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Search className="w-5 h-5" />
+              Поиск по SKU (для товаров без баркода)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input
+                value={manualSkuInput}
+                onChange={(e) => setManualSkuInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleManualSkuSearch();
+                  }
+                }}
+                placeholder="Введите SKU товара..."
+                data-testid="input-manual-sku"
+              />
+              <Button 
+                onClick={handleManualSkuSearch}
+                disabled={scanOrderMutation.isPending}
+                data-testid="button-search-sku"
+              >
+                <Search className="w-4 h-4 mr-2" />
+                Найти
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {currentPhase === 'scanning_product' && !currentOrder && parsedPendingOrders.length > 0 && (
+        <Card data-testid="card-pending-orders">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Ожидающие заказы ({parsedPendingOrders.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {parsedPendingOrders.map((order) => {
+                const itemsWithoutBarcodes = order.items.filter(item => !item.barcode);
+                const hasNonBarcodedItems = itemsWithoutBarcodes.length > 0;
+                
+                return (
+                  <Card 
+                    key={order.id} 
+                    className="cursor-pointer hover-elevate active-elevate-2 transition-all"
+                    onClick={() => handlePendingOrderSelection(order)}
+                    data-testid={`pending-order-${order.orderNumber}`}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg">Заказ №{order.orderNumber}</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <Badge>{order.items.length} товар(ов)</Badge>
+                          {hasNonBarcodedItems && (
+                            <Badge variant="secondary" data-testid={`badge-no-barcode-${order.orderNumber}`}>
+                              {itemsWithoutBarcodes.length} без баркода
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Покупатель:</span>
+                          <p className="font-medium">{order.customerName || 'Не указан'}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Дата:</span>
+                          <p className="font-medium">
+                            {order.orderDate ? format(new Date(order.orderDate), "dd.MM.yyyy") : 'Не указана'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">Товары:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {order.items.map((item, idx) => (
+                            <Badge 
+                              key={idx} 
+                              variant={item.barcode ? "default" : "secondary"}
+                              className="text-xs"
+                              data-testid={`item-badge-${order.orderNumber}-${item.sku}`}
+                            >
+                              {item.sku} {!item.barcode && '(без баркода)'}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {currentOrder && (
         <Card data-testid="card-current-order">
