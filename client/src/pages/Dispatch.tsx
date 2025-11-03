@@ -486,6 +486,42 @@ export default function Dispatch() {
         </Badge>
       </div>
 
+      <BarcodeScanner onScan={handleScan} label={getScannerLabel()} />
+
+      {currentPhase === 'scanning_product' && !currentOrder && (
+        <Card data-testid="card-manual-search">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Search className="w-5 h-5" />
+              Поиск по SKU (для товаров без баркода)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input
+                value={manualSkuInput}
+                onChange={(e) => setManualSkuInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleManualSkuSearch();
+                  }
+                }}
+                placeholder="Введите SKU товара..."
+                data-testid="input-manual-sku"
+              />
+              <Button 
+                onClick={handleManualSkuSearch}
+                disabled={scanOrderMutation.isPending}
+                data-testid="button-search-sku"
+              >
+                <Search className="w-4 h-4 mr-2" />
+                Найти
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Orders Table */}
       {parsedPendingOrders.length > 0 && currentPhase === 'scanning_product' && !currentOrder && (
         <Card data-testid="card-orders-table">
@@ -568,42 +604,6 @@ export default function Dispatch() {
                   })}
                 </TableBody>
               </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <BarcodeScanner onScan={handleScan} label={getScannerLabel()} />
-
-      {currentPhase === 'scanning_product' && !currentOrder && (
-        <Card data-testid="card-manual-search">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Search className="w-5 h-5" />
-              Поиск по SKU (для товаров без баркода)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2">
-              <Input
-                value={manualSkuInput}
-                onChange={(e) => setManualSkuInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleManualSkuSearch();
-                  }
-                }}
-                placeholder="Введите SKU товара..."
-                data-testid="input-manual-sku"
-              />
-              <Button 
-                onClick={handleManualSkuSearch}
-                disabled={scanOrderMutation.isPending}
-                data-testid="button-search-sku"
-              >
-                <Search className="w-4 h-4 mr-2" />
-                Найти
-              </Button>
             </div>
           </CardContent>
         </Card>
