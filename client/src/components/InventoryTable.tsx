@@ -1171,7 +1171,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   };
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader>
         <div className="flex flex-col sm:flex-row justify-between gap-4">
           <CardTitle>Инвентаризация</CardTitle>

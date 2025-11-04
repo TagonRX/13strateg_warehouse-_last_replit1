@@ -437,7 +437,7 @@ function AppContent() {
           </div>
         </Route>
         <Route path="/inventory">
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <h1 className="text-3xl font-bold">Инвентаризация</h1>
               {/* Show Remote Scanner button only on mobile/tablet devices */}
