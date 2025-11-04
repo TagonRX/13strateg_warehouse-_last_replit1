@@ -134,7 +134,7 @@ export default function AppLayout({
 
   return (
     <SidebarProvider defaultOpen={true} style={sidebarStyle}>
-      <div className="flex h-screen w-full">
+      <div className="flex h-screen w-full min-w-0">
         <Sidebar>
           <SidebarContent>
             <SidebarGroup>
@@ -193,7 +193,7 @@ export default function AppLayout({
           </SidebarContent>
         </Sidebar>
         
-        <div className="flex flex-col flex-1">
+        <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-4">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
