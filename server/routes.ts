@@ -1556,12 +1556,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { url, name, enabled, sortOrder } = req.body;
 
-      if (!url || !name) {
-        return res.status(400).json({ error: "URL и название обязательны" });
+      if (!name) {
+        return res.status(400).json({ error: "Название обязательно" });
       }
 
       const source = await storage.createCsvSource({
-        url,
+        url: url || "",
         name,
         enabled: enabled ?? true,
         sortOrder: sortOrder ?? 0
