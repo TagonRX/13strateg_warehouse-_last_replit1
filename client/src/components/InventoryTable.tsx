@@ -1255,7 +1255,7 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
           </div>
         )}
 
-        <div className="border rounded-md overflow-auto">
+        <div className="border rounded-md overflow-auto max-w-full">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
