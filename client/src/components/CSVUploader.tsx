@@ -339,7 +339,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
       toast({
         title: "Загрузка завершена",
-        description: `Создано: ${data.created || 0}, Обновлено: ${data.updated || 0}, Ошибок: ${data.errors || 0}`,
+        description: `Создано: ${data.details?.created || 0}, Обновлено: ${data.details?.updated || 0}, Ошибок: ${data.details?.errors || 0}`,
       });
     },
     onError: (error: any) => {
