@@ -101,6 +101,10 @@ function AppContent() {
       }
     },
     onError: (error: Error) => {
+      // Clear any existing token to avoid conflicts
+      api.setAuthToken(null);
+      setUser(null);
+      
       toast({
         title: "Ошибка входа",
         description: error.message,
