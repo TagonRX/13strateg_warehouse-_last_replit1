@@ -190,6 +190,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing 'data' field in request body" });
       }
       
+      // Validate that all required tables are present
+      const requiredTables = [
+        'migrations', 'users', 'globalSettings', 'warehouseSettings', 'activeLocations',
+        'csvSources', 'bulkUploadSources', 'schedulerSettings', 'inventoryItems',
+        'eventLogs', 'workerAnalytics', 'pickingLists', 'pickingTasks', 'skuErrors',
+        'pendingTests', 'testedItems', 'faultyStock', 'pendingPlacements',
+        'csvImportSessions', 'orders', 'archivedInventoryItems', 'importRuns'
+      ];
+      
+      for (const table of requiredTables) {
+        if (!data.hasOwnProperty(table)) {
+          return res.status(400).json({ 
+            error: `Missing required table: ${table}`,
+            hint: "Export data may be incomplete or corrupted"
+          });
+        }
+      }
+      
       const {
         migrations: migrationsTable, users, inventoryItems, eventLogs, workerAnalytics,
         pickingLists, pickingTasks, skuErrors, warehouseSettings, activeLocations,
@@ -198,62 +216,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
         archivedInventoryItems, schedulerSettings, importRuns
       } = await import('@shared/schema');
       
-      // Delete in reverse order (to avoid FK constraints)
-      await db.delete(importRuns);
-      await db.delete(archivedInventoryItems);
-      await db.delete(orders);
-      await db.delete(csvImportSessions);
-      await db.delete(pendingPlacements);
-      await db.delete(faultyStock);
-      await db.delete(testedItems);
-      await db.delete(pendingTests);
-      await db.delete(skuErrors);
-      await db.delete(pickingTasks);
-      await db.delete(pickingLists);
-      await db.delete(workerAnalytics);
-      await db.delete(eventLogs);
-      await db.delete(inventoryItems);
-      await db.delete(schedulerSettings);
-      await db.delete(bulkUploadSources);
-      await db.delete(csvSources);
-      await db.delete(activeLocations);
-      await db.delete(warehouseSettings);
-      await db.delete(globalSettings);
-      await db.delete(users);
-      await db.delete(migrationsTable);
+      console.log("Starting import transaction...");
       
-      // Insert in correct order (to satisfy FK constraints)
-      if (data.migrations?.length) await db.insert(migrationsTable).values(data.migrations);
-      if (data.users?.length) await db.insert(users).values(data.users);
-      if (data.globalSettings?.length) await db.insert(globalSettings).values(data.globalSettings);
-      if (data.warehouseSettings?.length) await db.insert(warehouseSettings).values(data.warehouseSettings);
-      if (data.activeLocations?.length) await db.insert(activeLocations).values(data.activeLocations);
-      if (data.csvSources?.length) await db.insert(csvSources).values(data.csvSources);
-      if (data.bulkUploadSources?.length) await db.insert(bulkUploadSources).values(data.bulkUploadSources);
-      if (data.schedulerSettings?.length) await db.insert(schedulerSettings).values(data.schedulerSettings);
-      if (data.inventoryItems?.length) await db.insert(inventoryItems).values(data.inventoryItems);
-      if (data.eventLogs?.length) await db.insert(eventLogs).values(data.eventLogs);
-      if (data.workerAnalytics?.length) await db.insert(workerAnalytics).values(data.workerAnalytics);
-      if (data.pickingLists?.length) await db.insert(pickingLists).values(data.pickingLists);
-      if (data.pickingTasks?.length) await db.insert(pickingTasks).values(data.pickingTasks);
-      if (data.skuErrors?.length) await db.insert(skuErrors).values(data.skuErrors);
-      if (data.pendingTests?.length) await db.insert(pendingTests).values(data.pendingTests);
-      if (data.testedItems?.length) await db.insert(testedItems).values(data.testedItems);
-      if (data.faultyStock?.length) await db.insert(faultyStock).values(data.faultyStock);
-      if (data.pendingPlacements?.length) await db.insert(pendingPlacements).values(data.pendingPlacements);
-      if (data.csvImportSessions?.length) await db.insert(csvImportSessions).values(data.csvImportSessions);
-      if (data.orders?.length) await db.insert(orders).values(data.orders);
-      if (data.archivedInventoryItems?.length) await db.insert(archivedInventoryItems).values(data.archivedInventoryItems);
-      if (data.importRuns?.length) await db.insert(importRuns).values(data.importRuns);
+      // Use transaction to ensure atomicity
+      await db.transaction(async (tx) => {
+        console.log("Deleting existing data in reverse order...");
+        
+        // Delete in reverse order (to avoid FK constraints)
+        await tx.delete(importRuns);
+        await tx.delete(archivedInventoryItems);
+        await tx.delete(orders);
+        await tx.delete(csvImportSessions);
+        await tx.delete(pendingPlacements);
+        await tx.delete(faultyStock);
+        await tx.delete(testedItems);
+        await tx.delete(pendingTests);
+        await tx.delete(skuErrors);
+        await tx.delete(pickingTasks);
+        await tx.delete(pickingLists);
+        await tx.delete(workerAnalytics);
+        await tx.delete(eventLogs);
+        await tx.delete(inventoryItems);
+        await tx.delete(schedulerSettings);
+        await tx.delete(bulkUploadSources);
+        await tx.delete(csvSources);
+        await tx.delete(activeLocations);
+        await tx.delete(warehouseSettings);
+        await tx.delete(globalSettings);
+        await tx.delete(users);
+        await tx.delete(migrationsTable);
+        
+        console.log("Inserting new data in correct order...");
+        
+        // Insert in correct order (to satisfy FK constraints)
+        if (data.migrations?.length) await tx.insert(migrationsTable).values(data.migrations);
+        if (data.users?.length) await tx.insert(users).values(data.users);
+        if (data.globalSettings?.length) await tx.insert(globalSettings).values(data.globalSettings);
+        if (data.warehouseSettings?.length) await tx.insert(warehouseSettings).values(data.warehouseSettings);
+        if (data.activeLocations?.length) await tx.insert(activeLocations).values(data.activeLocations);
+        if (data.csvSources?.length) await tx.insert(csvSources).values(data.csvSources);
+        if (data.bulkUploadSources?.length) await tx.insert(bulkUploadSources).values(data.bulkUploadSources);
+        if (data.schedulerSettings?.length) await tx.insert(schedulerSettings).values(data.schedulerSettings);
+        if (data.inventoryItems?.length) await tx.insert(inventoryItems).values(data.inventoryItems);
+        if (data.eventLogs?.length) await tx.insert(eventLogs).values(data.eventLogs);
+        if (data.workerAnalytics?.length) await tx.insert(workerAnalytics).values(data.workerAnalytics);
+        if (data.pickingLists?.length) await tx.insert(pickingLists).values(data.pickingLists);
+        if (data.pickingTasks?.length) await tx.insert(pickingTasks).values(data.pickingTasks);
+        if (data.skuErrors?.length) await tx.insert(skuErrors).values(data.skuErrors);
+        if (data.pendingTests?.length) await tx.insert(pendingTests).values(data.pendingTests);
+        if (data.testedItems?.length) await tx.insert(testedItems).values(data.testedItems);
+        if (data.faultyStock?.length) await tx.insert(faultyStock).values(data.faultyStock);
+        if (data.pendingPlacements?.length) await tx.insert(pendingPlacements).values(data.pendingPlacements);
+        if (data.csvImportSessions?.length) await tx.insert(csvImportSessions).values(data.csvImportSessions);
+        if (data.orders?.length) await tx.insert(orders).values(data.orders);
+        if (data.archivedInventoryItems?.length) await tx.insert(archivedInventoryItems).values(data.archivedInventoryItems);
+        if (data.importRuns?.length) await tx.insert(importRuns).values(data.importRuns);
+        
+        console.log("Transaction committed successfully");
+      });
       
       return res.json({
         success: true,
         message: "All data imported successfully",
         importedAt: new Date().toISOString(),
+        stats: {
+          users: data.users?.length || 0,
+          inventoryItems: data.inventoryItems?.length || 0,
+          orders: data.orders?.length || 0,
+          eventLogs: data.eventLogs?.length || 0,
+        }
       });
     } catch (error: any) {
       console.error("Import error:", error);
-      return res.status(500).json({ error: error.message, stack: error.stack });
+      return res.status(500).json({ 
+        error: "Import failed",
+        message: error.message,
+        hint: "Transaction was rolled back - no data was modified"
+      });
     }
   });
 
