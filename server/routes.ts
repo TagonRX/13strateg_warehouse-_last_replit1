@@ -93,6 +93,45 @@ function matchProductsByName(csvName: string, inventoryItems: any[]): { match: a
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Debug endpoint - check migration status and users (PUBLIC)
+  app.get("/api/debug/status", async (req, res) => {
+    try {
+      const allUsers = await db.select().from(users);
+      const migrationCheck = await db.execute(sql`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'migrations'
+        ) as migrations_table_exists
+      `);
+      
+      let migrationRecordsResult: any = { rows: [] };
+      try {
+        migrationRecordsResult = await db.execute(sql`SELECT * FROM migrations`);
+      } catch (e) {
+        // Table doesn't exist
+      }
+      
+      return res.json({
+        environment: process.env.NODE_ENV || 'unknown',
+        database: process.env.DATABASE_URL ? 'connected' : 'no url',
+        migrationsTableExists: migrationCheck.rows[0]?.migrations_table_exists || false,
+        migrationRecords: migrationRecordsResult.rows || [],
+        usersCount: allUsers.length,
+        users: allUsers.map(u => ({
+          id: u.id,
+          name: u.name,
+          login: u.login,
+          role: u.role,
+          hasPassword: !!u.password,
+          passwordLength: u.password?.length || 0,
+          requiresPasswordChange: u.requiresPasswordChange,
+        })),
+      });
+    } catch (error: any) {
+      return res.status(500).json({ error: error.message, stack: error.stack });
+    }
+  });
+
   // Get current user (check token validity)
   app.get("/api/auth/me", requireAuth, async (req, res) => {
     try {
