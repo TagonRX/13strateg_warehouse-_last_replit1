@@ -132,6 +132,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bootstrap endpoint - Create admin user (PUBLIC, ONE-TIME USE)
+  // ⚠️ DELETE THIS ENDPOINT AFTER FIRST USE FOR SECURITY
+  app.post("/api/admin/bootstrap", async (req, res) => {
+    try {
+      const targetLogin = "admin";
+      const targetPassword = "admin123";
+      const targetName = "Administrator";
+      
+      // Check if admin user already exists
+      const existingAdmin = await storage.getUserByLogin(targetLogin);
+      
+      if (existingAdmin) {
+        // Admin exists - update password
+        const hashedPassword = await hashPassword(targetPassword);
+        await db.update(users)
+          .set({ 
+            password: hashedPassword,
+            requiresPasswordChange: false,
+          })
+          .where(eq(users.login, targetLogin));
+        
+        return res.json({
+          success: true,
+          message: `Admin user password updated to: ${targetPassword}`,
+          action: "updated",
+          login: targetLogin,
+        });
+      } else {
+        // Admin doesn't exist - create new
+        const hashedPassword = await hashPassword(targetPassword);
+        const newAdmin = await storage.createUser({
+          name: targetName,
+          login: targetLogin,
+          password: hashedPassword,
+          role: "admin",
+          requiresPasswordChange: false,
+        });
+        
+        return res.json({
+          success: true,
+          message: `Admin user created with password: ${targetPassword}`,
+          action: "created",
+          login: targetLogin,
+          userId: newAdmin.id,
+        });
+      }
+    } catch (error: any) {
+      console.error("Bootstrap error:", error);
+      return res.status(500).json({ error: error.message, stack: error.stack });
+    }
+  });
+
   // Get current user (check token validity)
   app.get("/api/auth/me", requireAuth, async (req, res) => {
     try {
