@@ -132,6 +132,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Export all data from development database (ADMIN ONLY - for migration)
+  app.get("/api/admin/export-all", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const {
+        migrations: migrationsTable, users, inventoryItems, eventLogs, workerAnalytics,
+        pickingLists, pickingTasks, skuErrors, warehouseSettings, activeLocations,
+        csvSources, bulkUploadSources, globalSettings, pendingTests, testedItems,
+        faultyStock, pendingPlacements, csvImportSessions, orders,
+        archivedInventoryItems, schedulerSettings, importRuns
+      } = await import('@shared/schema');
+      
+      const exportData = {
+        migrations: await db.select().from(migrationsTable),
+        users: await db.select().from(users),
+        globalSettings: await db.select().from(globalSettings),
+        warehouseSettings: await db.select().from(warehouseSettings),
+        activeLocations: await db.select().from(activeLocations),
+        csvSources: await db.select().from(csvSources),
+        bulkUploadSources: await db.select().from(bulkUploadSources),
+        schedulerSettings: await db.select().from(schedulerSettings),
+        inventoryItems: await db.select().from(inventoryItems),
+        eventLogs: await db.select().from(eventLogs),
+        workerAnalytics: await db.select().from(workerAnalytics),
+        pickingLists: await db.select().from(pickingLists),
+        pickingTasks: await db.select().from(pickingTasks),
+        skuErrors: await db.select().from(skuErrors),
+        pendingTests: await db.select().from(pendingTests),
+        testedItems: await db.select().from(testedItems),
+        faultyStock: await db.select().from(faultyStock),
+        pendingPlacements: await db.select().from(pendingPlacements),
+        csvImportSessions: await db.select().from(csvImportSessions),
+        orders: await db.select().from(orders),
+        archivedInventoryItems: await db.select().from(archivedInventoryItems),
+        importRuns: await db.select().from(importRuns),
+      };
+      
+      return res.json({
+        success: true,
+        exportedAt: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'unknown',
+        data: exportData,
+      });
+    } catch (error: any) {
+      console.error("Export error:", error);
+      return res.status(500).json({ error: error.message, stack: error.stack });
+    }
+  });
+
+  // Import all data into production database (ADMIN ONLY - for migration)
+  // ⚠️ THIS WILL CLEAR ALL EXISTING DATA IN PRODUCTION
+  app.post("/api/admin/import-all", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { data } = req.body;
+      
+      if (!data) {
+        return res.status(400).json({ error: "Missing 'data' field in request body" });
+      }
+      
+      const {
+        migrations: migrationsTable, users, inventoryItems, eventLogs, workerAnalytics,
+        pickingLists, pickingTasks, skuErrors, warehouseSettings, activeLocations,
+        csvSources, bulkUploadSources, globalSettings, pendingTests, testedItems,
+        faultyStock, pendingPlacements, csvImportSessions, orders,
+        archivedInventoryItems, schedulerSettings, importRuns
+      } = await import('@shared/schema');
+      
+      // Delete in reverse order (to avoid FK constraints)
+      await db.delete(importRuns);
+      await db.delete(archivedInventoryItems);
+      await db.delete(orders);
+      await db.delete(csvImportSessions);
+      await db.delete(pendingPlacements);
+      await db.delete(faultyStock);
+      await db.delete(testedItems);
+      await db.delete(pendingTests);
+      await db.delete(skuErrors);
+      await db.delete(pickingTasks);
+      await db.delete(pickingLists);
+      await db.delete(workerAnalytics);
+      await db.delete(eventLogs);
+      await db.delete(inventoryItems);
+      await db.delete(schedulerSettings);
+      await db.delete(bulkUploadSources);
+      await db.delete(csvSources);
+      await db.delete(activeLocations);
+      await db.delete(warehouseSettings);
+      await db.delete(globalSettings);
+      await db.delete(users);
+      await db.delete(migrationsTable);
+      
+      // Insert in correct order (to satisfy FK constraints)
+      if (data.migrations?.length) await db.insert(migrationsTable).values(data.migrations);
+      if (data.users?.length) await db.insert(users).values(data.users);
+      if (data.globalSettings?.length) await db.insert(globalSettings).values(data.globalSettings);
+      if (data.warehouseSettings?.length) await db.insert(warehouseSettings).values(data.warehouseSettings);
+      if (data.activeLocations?.length) await db.insert(activeLocations).values(data.activeLocations);
+      if (data.csvSources?.length) await db.insert(csvSources).values(data.csvSources);
+      if (data.bulkUploadSources?.length) await db.insert(bulkUploadSources).values(data.bulkUploadSources);
+      if (data.schedulerSettings?.length) await db.insert(schedulerSettings).values(data.schedulerSettings);
+      if (data.inventoryItems?.length) await db.insert(inventoryItems).values(data.inventoryItems);
+      if (data.eventLogs?.length) await db.insert(eventLogs).values(data.eventLogs);
+      if (data.workerAnalytics?.length) await db.insert(workerAnalytics).values(data.workerAnalytics);
+      if (data.pickingLists?.length) await db.insert(pickingLists).values(data.pickingLists);
+      if (data.pickingTasks?.length) await db.insert(pickingTasks).values(data.pickingTasks);
+      if (data.skuErrors?.length) await db.insert(skuErrors).values(data.skuErrors);
+      if (data.pendingTests?.length) await db.insert(pendingTests).values(data.pendingTests);
+      if (data.testedItems?.length) await db.insert(testedItems).values(data.testedItems);
+      if (data.faultyStock?.length) await db.insert(faultyStock).values(data.faultyStock);
+      if (data.pendingPlacements?.length) await db.insert(pendingPlacements).values(data.pendingPlacements);
+      if (data.csvImportSessions?.length) await db.insert(csvImportSessions).values(data.csvImportSessions);
+      if (data.orders?.length) await db.insert(orders).values(data.orders);
+      if (data.archivedInventoryItems?.length) await db.insert(archivedInventoryItems).values(data.archivedInventoryItems);
+      if (data.importRuns?.length) await db.insert(importRuns).values(data.importRuns);
+      
+      return res.json({
+        success: true,
+        message: "All data imported successfully",
+        importedAt: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error("Import error:", error);
+      return res.status(500).json({ error: error.message, stack: error.stack });
+    }
+  });
+
   // Bootstrap endpoint - Create admin user (PUBLIC, ONE-TIME USE)
   // ⚠️ DELETE THIS ENDPOINT AFTER FIRST USE FOR SECURITY
   app.post("/api/admin/bootstrap", async (req, res) => {
