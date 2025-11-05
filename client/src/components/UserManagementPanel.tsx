@@ -38,6 +38,8 @@ interface User {
   name: string;
   login: string;
   role: "admin" | "worker";
+  defaultPassword?: string | null;
+  requiresPasswordChange?: boolean;
 }
 
 interface UserManagementPanelProps {
@@ -209,7 +211,7 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password">Пароль</Label>
+                    <Label htmlFor="password">Базовый пароль (минимум 4 символа)</Label>
                     <div className="relative">
                       <Input
                         id="password"
@@ -217,6 +219,7 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="********"
+                        minLength={4}
                         required
                         data-testid="input-user-password"
                         className="pr-10"
@@ -234,6 +237,9 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
+                    <p className="text-sm text-muted-foreground">
+                      Работник сможет сменить пароль при первом входе
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="role">Роль</Label>
@@ -265,6 +271,7 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
               <TableRow>
                 <TableHead>Имя</TableHead>
                 <TableHead>Логин</TableHead>
+                <TableHead>Базовый пароль</TableHead>
                 <TableHead>Роль</TableHead>
                 <TableHead className="w-[200px]"></TableHead>
               </TableRow>
@@ -274,6 +281,14 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
                 <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
                   <TableCell className="font-medium">{user.name}</TableCell>
                   <TableCell className="font-mono text-sm">{user.login}</TableCell>
+                  <TableCell className="font-mono text-sm">
+                    {user.defaultPassword || "—"}
+                    {user.requiresPasswordChange && (
+                      <Badge variant="outline" className="ml-2 text-xs">
+                        Требуется смена
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={user.role === "admin" ? "default" : "secondary"}>
                       {user.role === "admin" ? "Администратор" : "Работник"}
@@ -330,14 +345,14 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
         <DialogContent>
           <form onSubmit={handlePasswordChange}>
             <DialogHeader>
-              <DialogTitle>Изменить пароль</DialogTitle>
+              <DialogTitle>Сбросить пароль</DialogTitle>
               <DialogDescription>
-                Введите новый пароль для пользователя
+                Введите новый базовый пароль. Пользователю будет предложено сменить его при следующем входе.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="new-password">Новый пароль</Label>
+                <Label htmlFor="new-password">Новый базовый пароль (минимум 4 символа)</Label>
                 <div className="relative">
                   <Input
                     id="new-password"
@@ -345,7 +360,7 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="********"
-                    minLength={6}
+                    minLength={4}
                     required
                     data-testid="input-new-password"
                     className="pr-10"
@@ -367,7 +382,7 @@ export default function UserManagementPanel({ users, onCreateUser, onDeleteUser,
             </div>
             <DialogFooter>
               <Button type="submit" data-testid="button-save-password" disabled={isUpdatingPassword}>
-                {isUpdatingPassword ? "Сохранение..." : "Сохранить"}
+                {isUpdatingPassword ? "Сброс..." : "Сбросить"}
               </Button>
             </DialogFooter>
           </form>

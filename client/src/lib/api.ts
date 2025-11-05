@@ -7,6 +7,7 @@ export interface LoginResponse {
     name: string;
     login: string;
     role: string;
+    requiresPasswordChange?: boolean;
   };
 }
 
@@ -64,6 +65,7 @@ export async function getCurrentUser(): Promise<{
   name: string;
   login: string;
   role: string;
+  requiresPasswordChange?: boolean;
 }> {
   const response = await fetch("/api/auth/me", {
     headers: getHeaders(),
@@ -301,6 +303,21 @@ export async function updateUserLogin(id: string, login: string): Promise<Omit<U
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || "Failed to update user login");
+  }
+
+  return response.json();
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+  const response = await fetch("/api/auth/change-password", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to change password");
   }
 
   return response.json();

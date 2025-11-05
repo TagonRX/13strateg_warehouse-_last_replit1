@@ -10,6 +10,8 @@ export const users = pgTable("users", {
   login: text("login").notNull().unique(),
   password: text("password").notNull(),
   role: text("role").notNull(), // 'admin' или 'worker'
+  defaultPassword: text("default_password"), // Базовый пароль для показа администратору
+  requiresPasswordChange: boolean("requires_password_change").notNull().default(false), // Требуется смена пароля
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

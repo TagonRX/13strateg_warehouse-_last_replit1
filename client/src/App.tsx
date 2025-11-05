@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import LoginForm from "@/components/LoginForm";
+import ChangePasswordDialog from "@/components/ChangePasswordDialog";
 import AppLayout from "@/components/AppLayout";
 import StockInForm from "@/components/StockInForm";
 import CSVUploader from "@/components/CSVUploader";
@@ -32,7 +33,7 @@ import type { InventoryItem } from "@shared/schema";
 function AppContent() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [user, setUser] = useState<{ id: string; name: string; role: "admin" | "worker" } | null>(null);
+  const [user, setUser] = useState<{ id: string; name: string; role: "admin" | "worker"; requiresPasswordChange?: boolean } | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
   // State for location click from WarehouseLoadingSidebar to StockInForm
@@ -49,6 +50,7 @@ function AppContent() {
             id: currentUser.id,
             name: currentUser.name,
             role: currentUser.role as "admin" | "worker",
+            requiresPasswordChange: currentUser.requiresPasswordChange,
           });
         } catch (error) {
           // Token is invalid, clear it
@@ -87,16 +89,39 @@ function AppContent() {
         id: data.user.id,
         name: data.user.name,
         role: data.user.role as "admin" | "worker",
+        requiresPasswordChange: data.user.requiresPasswordChange,
       });
       setLocation("/"); // Navigate to home page after successful login
-      toast({
-        title: "Вход выполнен",
-        description: `Добро пожаловать, ${data.user.name}!`,
-      });
+      
+      if (!data.user.requiresPasswordChange) {
+        toast({
+          title: "Вход выполнен",
+          description: `Добро пожаловать, ${data.user.name}!`,
+        });
+      }
     },
     onError: (error: Error) => {
       toast({
         title: "Ошибка входа",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: ({ currentPassword, newPassword }: { currentPassword: string; newPassword: string }) =>
+      api.changePassword(currentPassword, newPassword),
+    onSuccess: () => {
+      setUser(prev => prev ? { ...prev, requiresPasswordChange: false } : null);
+      toast({
+        title: "Пароль изменен",
+        description: "Ваш пароль успешно изменен!",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
         description: error.message,
         variant: "destructive",
       });
@@ -383,6 +408,21 @@ function AppContent() {
     return <LoginForm onLogin={handleLogin} />;
   }
 
+  const handlePasswordChange = (currentPassword: string, newPassword: string) => {
+    changePasswordMutation.mutate({ currentPassword, newPassword });
+  };
+
+  // Show password change dialog without loading any sensitive data
+  if (user.requiresPasswordChange) {
+    return (
+      <ChangePasswordDialog 
+        open={true} 
+        onPasswordChange={handlePasswordChange}
+        isPending={changePasswordMutation.isPending}
+      />
+    );
+  }
+
   return (
     <AppLayout userRole={user.role} userName={user.name} onLogout={handleLogout}>
       <Switch>
@@ -516,6 +556,7 @@ function AppContent() {
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
+    </>
   );
 }
 

@@ -108,6 +108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: user.name,
         login: user.login,
         role: user.role,
+        requiresPasswordChange: user.requiresPasswordChange || false,
       });
     } catch (error: any) {
       console.error("Get current user error:", error);
@@ -154,10 +155,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: user.name,
           login: user.login,
           role: user.role,
+          requiresPasswordChange: user.requiresPasswordChange || false,
         },
       });
     } catch (error: any) {
       console.error("Login error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Change password for current user
+  app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: "Требуется текущий и новый пароль" });
+      }
+
+      if (newPassword.length < 4) {
+        return res.status(400).json({ error: "Новый пароль должен быть минимум 4 символа" });
+      }
+
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: "Пользователь не найден" });
+      }
+
+      // Verify current password
+      const isValid = await verifyPassword(currentPassword, user.password);
+      
+      if (!isValid) {
+        return res.status(401).json({ error: "Неверный текущий пароль" });
+      }
+
+      // Hash new password and update
+      const hashedPassword = await hashPassword(newPassword);
+      await storage.updateUserPassword(userId, hashedPassword);
+
+      // Remove password change requirement and clear default password (for security)
+      await storage.setPasswordChangeRequired(userId, false);
+      await db.update(users).set({ defaultPassword: null }).where(eq(users.id, userId));
+
+      // Log the password change event
+      await storage.createEventLog({
+        userId: user.id,
+        action: "PASSWORD_CHANGED",
+        details: `User ${user.name} changed their password`,
+      });
+
+      return res.json({ message: "Пароль успешно изменен" });
+    } catch (error: any) {
+      console.error("Change password error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });
@@ -1980,9 +2031,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser({
         ...validation.data,
         password: hashedPassword,
+        defaultPassword: validation.data.password,
+        requiresPasswordChange: true,
       });
       
-      // Don't send password to frontend
+      // Don't send hashed password to frontend, but include defaultPassword
       const { password, ...safeUser } = user;
       
       return res.status(201).json(safeUser);
@@ -2024,14 +2077,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { password } = req.body;
 
-      if (!password || password.length < 6) {
-        return res.status(400).json({ error: "Пароль должен быть не менее 6 символов" });
+      if (!password || password.length < 4) {
+        return res.status(400).json({ error: "Пароль должен быть не менее 4 символов" });
       }
 
       const hashedPassword = await hashPassword(password);
-      await storage.updateUserPassword(id, hashedPassword);
+      await storage.resetUserPassword(id, password, hashedPassword);
       
-      return res.json({ message: "Password updated successfully" });
+      return res.json({ message: "Пароль сброшен успешно" });
     } catch (error: any) {
       console.error("Update password error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
