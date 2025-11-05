@@ -3,6 +3,13 @@ import { pgTable, text, varchar, integer, timestamp, boolean } from "drizzle-orm
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Миграции (для отслеживания выполненных миграций)
+export const migrations = pgTable("migrations", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  executedAt: timestamp("executed_at").defaultNow().notNull(),
+});
+
 // Пользователи (упрощенная аутентификация)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
