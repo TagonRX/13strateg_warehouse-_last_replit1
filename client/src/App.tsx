@@ -556,7 +556,6 @@ function AppContent() {
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
-    </>
   );
 }
 
