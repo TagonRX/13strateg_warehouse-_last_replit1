@@ -34,6 +34,16 @@ The backend is built with Node.js and Express.js, using TypeScript and ES Module
 ### System Design Choices
 The database schema, managed by Drizzle ORM, includes tables for users, inventory, event logs, worker analytics, picking lists, and specific workflows. It uses UUID primary keys, automatic timestamps, and foreign key relationships. Product identification is by `itemId` or `sku`, and upsert patterns handle bulk inventory updates. The CSV import system is a 4-step wizard with source selection, intelligent column mapping (including bilingual suggestions, auto-detection, and Image URLs), intelligent matching and conflict resolution, and a final confirmation. Column mappings are persisted. Backend CSV processing is optimized for large files using batch processing and parallel chunk execution. Separated CSV source systems (`bulkUploadSources` for inventory and `csvSources` for picking lists) are implemented.
 
+### Data Migration System
+A complete data migration solution enables safe transfer of all data from development to production environments:
+*   **Bootstrap Endpoint** (`POST /api/admin/bootstrap`): Creates or resets admin user with login "admin" and password "admin123" - works in any environment without authentication
+*   **Export Endpoint** (`GET /api/admin/export-all`): Exports all 22 database tables from the current environment as JSON (requires admin authentication)
+*   **Import Endpoint** (`POST /api/admin/import-all`): Imports data into the current environment using a **database transaction** to ensure atomicity - if any error occurs, the transaction is rolled back and no data is lost (requires admin authentication)
+*   **Debug Endpoint** (`GET /api/debug/status`): Displays migration status and database contents for verification
+*   All passwords are bcrypt-hashed during export/import, maintaining security
+*   Foreign key dependencies are respected during deletion and insertion
+*   Validation ensures all required tables are present before import begins
+
 ## External Dependencies
 
 *   **Database**: Neon Serverless PostgreSQL (development), PostgreSQL 16 (production).
