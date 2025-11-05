@@ -119,21 +119,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
   app.post("/api/auth/login", async (req, res) => {
     try {
-      // Detailed logging for debugging old browser issues (without exposing passwords)
-      console.log("=== LOGIN REQUEST DEBUG ===");
-      console.log("Content-Type:", req.headers['content-type']);
-      console.log("User-Agent:", req.headers['user-agent']);
-      console.log("Body type:", typeof req.body);
-      console.log("Body keys:", req.body ? Object.keys(req.body) : 'null');
-      console.log("Login field present:", !!req.body?.login);
-      console.log("Password field present:", !!req.body?.password);
-      console.log("Login value:", req.body?.login);
-      console.log("=== END DEBUG ===");
-      
       const { login, password } = req.body;
       
       if (!login || !password) {
-        console.log("Missing login or password - login:", !!login, "password:", !!password);
         return res.status(400).json({ error: "Требуется логин и пароль" });
       }
 

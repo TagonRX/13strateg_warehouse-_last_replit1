@@ -68,6 +68,15 @@ app.use((req, res, next) => {
   }, async () => {
     log(`serving on port ${port}`);
     
+    // Run password reset migration once on first production deploy
+    // This syncs development and production databases
+    try {
+      const { resetAllPasswords } = await import('./migrations/reset-passwords');
+      await resetAllPasswords();
+    } catch (error) {
+      console.error('Migration error (non-fatal):', error);
+    }
+    
     // Start the scheduler
     try {
       const { startScheduler } = await import('./scheduler');
