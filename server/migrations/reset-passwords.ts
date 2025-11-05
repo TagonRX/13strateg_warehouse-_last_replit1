@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { users, migrations } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
 const SALT_ROUNDS = 10;
@@ -16,6 +16,15 @@ const MIGRATION_ID = "reset-passwords-2024";
  */
 export async function resetAllPasswords(): Promise<void> {
   try {
+    // Ensure migrations table exists (create if not exists)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS migrations (
+        id VARCHAR PRIMARY KEY,
+        name TEXT NOT NULL,
+        executed_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    
     // Check if migration has already been executed
     const existingMigration = await db
       .select()
