@@ -39,7 +39,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Upload, FileText, CheckCircle, RefreshCw, Plus, Trash2, Link as LinkIcon, ChevronLeft, ChevronRight, RotateCcw, Clock, Play } from "lucide-react";
+import { Upload, FileText, CheckCircle, RefreshCw, Plus, Trash2, Link as LinkIcon, ChevronLeft, ChevronRight, RotateCcw, Clock, Play, ChevronDown, Settings } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -253,6 +253,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
     url: string;
     enabled: boolean;
     sortOrder: number;
+    fieldSyncSettings: string | null;
   }>>({
     queryKey: ['/api/bulk-upload-sources'],
   });
@@ -517,6 +518,29 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
     }
   };
 
+  // Helper: Update field sync settings for source
+  const updateFieldSyncSettings = async (id: string, settings: Record<string, boolean>) => {
+    try {
+      const currentSource = savedSources.find(s => s.id === id);
+      
+      await apiRequest("PATCH", `/api/bulk-upload-sources/${id}`, {
+        fieldSyncSettings: JSON.stringify(settings),
+        enabled: currentSource?.enabled ?? false
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/bulk-upload-sources'] });
+    } catch (error) {
+      console.error('Failed to update field sync settings:', error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось сохранить настройки полей",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // State to track which source's field settings are expanded
+  const [expandedSourceSettings, setExpandedSourceSettings] = useState<string | null>(null);
+
   // Helper: Load multiple CSVs sequentially
   const loadMultipleCSVs = async (): Promise<File> => {
     const validSources = savedSources.filter(s => s.label && s.url);
@@ -777,7 +801,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
       // No conflicts - process as usual
       const deletedCount = data.deleted ?? 0;
       setResult({
-        success: data.created ?? 0,
+        created: data.created ?? 0,
         updated: data.updated ?? 0,
         errors: data.errors ?? 0,
         deleted: deletedCount,
@@ -1165,35 +1189,200 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
                     Нет сохраненных источников. Нажмите "Добавить" чтобы начать.
                   </p>
                 ) : (
-                  <div className="space-y-2">
-                    {savedSources.map((source) => (
-                      <div key={source.id} className="flex gap-2">
-                        <Input
-                          placeholder="ABCD"
-                          value={source.label}
-                          onChange={(e) => updateSource(source.id, 'label', e.target.value)}
-                          className="w-20 font-mono"
-                          maxLength={4}
-                          data-testid={`input-source-label-${source.id}`}
-                        />
-                        <Input
-                          type="url"
-                          placeholder="https://example.com/data.csv"
-                          value={source.url}
-                          onChange={(e) => updateSource(source.id, 'url', e.target.value)}
-                          className="flex-1"
-                          data-testid={`input-source-url-${source.id}`}
-                        />
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => removeSource(source.id)}
-                          data-testid={`button-remove-source-${source.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
+                  <div className="space-y-3">
+                    {savedSources.map((source) => {
+                      const fieldSettings = source.fieldSyncSettings 
+                        ? JSON.parse(source.fieldSyncSettings) 
+                        : {
+                            quantity: true,
+                            name: true,
+                            price: true,
+                            itemId: true,
+                            dimensions: true,
+                            images: true,
+                            condition: true,
+                            ebayUrl: true,
+                            ebaySellerName: true,
+                          };
+                      
+                      const isExpanded = expandedSourceSettings === source.id;
+                      
+                      return (
+                        <div key={source.id} className="border rounded-md p-3 space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="ABCD"
+                              value={source.label}
+                              onChange={(e) => updateSource(source.id, 'label', e.target.value)}
+                              className="w-20 font-mono"
+                              maxLength={4}
+                              data-testid={`input-source-label-${source.id}`}
+                            />
+                            <Input
+                              type="url"
+                              placeholder="https://example.com/data.csv"
+                              value={source.url}
+                              onChange={(e) => updateSource(source.id, 'url', e.target.value)}
+                              className="flex-1"
+                              data-testid={`input-source-url-${source.id}`}
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setExpandedSourceSettings(isExpanded ? null : source.id)}
+                              data-testid={`button-toggle-settings-${source.id}`}
+                              title="Настроить поля синхронизации"
+                            >
+                              <Settings className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => removeSource(source.id)}
+                              data-testid={`button-remove-source-${source.id}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          
+                          {isExpanded && (
+                            <div className="border-t pt-3 space-y-2">
+                              <div className="text-sm font-medium mb-2">Какие поля обновлять при импорте:</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`${source.id}-quantity`}
+                                    checked={fieldSettings.quantity ?? true}
+                                    onCheckedChange={(checked) => {
+                                      updateFieldSyncSettings(source.id, { ...fieldSettings, quantity: checked as boolean });
+                                    }}
+                                    data-testid={`checkbox-quantity-${source.id}`}
+                                  />
+                                  <Label htmlFor={`${source.id}-quantity`} className="text-sm cursor-pointer">
+                                    Количество
+                                  </Label>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`${source.id}-name`}
+                                    checked={fieldSettings.name ?? true}
+                                    onCheckedChange={(checked) => {
+                                      updateFieldSyncSettings(source.id, { ...fieldSettings, name: checked as boolean });
+                                    }}
+                                    data-testid={`checkbox-name-${source.id}`}
+                                  />
+                                  <Label htmlFor={`${source.id}-name`} className="text-sm cursor-pointer">
+                                    Название
+                                  </Label>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`${source.id}-price`}
+                                    checked={fieldSettings.price ?? true}
+                                    onCheckedChange={(checked) => {
+                                      updateFieldSyncSettings(source.id, { ...fieldSettings, price: checked as boolean });
+                                    }}
+                                    data-testid={`checkbox-price-${source.id}`}
+                                  />
+                                  <Label htmlFor={`${source.id}-price`} className="text-sm cursor-pointer">
+                                    Цена
+                                  </Label>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`${source.id}-itemId`}
+                                    checked={fieldSettings.itemId ?? true}
+                                    onCheckedChange={(checked) => {
+                                      updateFieldSyncSettings(source.id, { ...fieldSettings, itemId: checked as boolean });
+                                    }}
+                                    data-testid={`checkbox-itemId-${source.id}`}
+                                  />
+                                  <Label htmlFor={`${source.id}-itemId`} className="text-sm cursor-pointer">
+                                    ID товара
+                                  </Label>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`${source.id}-dimensions`}
+                                    checked={fieldSettings.dimensions ?? true}
+                                    onCheckedChange={(checked) => {
+                                      updateFieldSyncSettings(source.id, { ...fieldSettings, dimensions: checked as boolean });
+                                    }}
+                                    data-testid={`checkbox-dimensions-${source.id}`}
+                                  />
+                                  <Label htmlFor={`${source.id}-dimensions`} className="text-sm cursor-pointer">
+                                    Размеры (L×W×H, вес)
+                                  </Label>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`${source.id}-images`}
+                                    checked={fieldSettings.images ?? true}
+                                    onCheckedChange={(checked) => {
+                                      updateFieldSyncSettings(source.id, { ...fieldSettings, images: checked as boolean });
+                                    }}
+                                    data-testid={`checkbox-images-${source.id}`}
+                                  />
+                                  <Label htmlFor={`${source.id}-images`} className="text-sm cursor-pointer">
+                                    Изображения (1-24)
+                                  </Label>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`${source.id}-condition`}
+                                    checked={fieldSettings.condition ?? true}
+                                    onCheckedChange={(checked) => {
+                                      updateFieldSyncSettings(source.id, { ...fieldSettings, condition: checked as boolean });
+                                    }}
+                                    data-testid={`checkbox-condition-${source.id}`}
+                                  />
+                                  <Label htmlFor={`${source.id}-condition`} className="text-sm cursor-pointer">
+                                    Состояние
+                                  </Label>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`${source.id}-ebayUrl`}
+                                    checked={fieldSettings.ebayUrl ?? true}
+                                    onCheckedChange={(checked) => {
+                                      updateFieldSyncSettings(source.id, { ...fieldSettings, ebayUrl: checked as boolean });
+                                    }}
+                                    data-testid={`checkbox-ebayUrl-${source.id}`}
+                                  />
+                                  <Label htmlFor={`${source.id}-ebayUrl`} className="text-sm cursor-pointer">
+                                    eBay URL
+                                  </Label>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`${source.id}-ebaySellerName`}
+                                    checked={fieldSettings.ebaySellerName ?? true}
+                                    onCheckedChange={(checked) => {
+                                      updateFieldSyncSettings(source.id, { ...fieldSettings, ebaySellerName: checked as boolean });
+                                    }}
+                                    data-testid={`checkbox-ebaySellerName-${source.id}`}
+                                  />
+                                  <Label htmlFor={`${source.id}-ebaySellerName`} className="text-sm cursor-pointer">
+                                    Продавец eBay
+                                  </Label>
+                                </div>
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-2">
+                                Эти настройки будут применяться автоматически при загрузке из этого источника
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1244,7 +1433,7 @@ export default function CSVUploader({ onUpload }: CSVUploaderProps) {
                 <AlertDescription>
                   <strong>Загрузка завершена</strong>
                   <div className="mt-2 space-y-1 text-sm">
-                    <p>✓ Новых записей: {result.success}</p>
+                    <p>✓ Новых записей: {result.created}</p>
                     <p>↻ Обновлено: {result.updated}</p>
                     {result.isSync && (
                       <p className="text-muted-foreground">Удалено: {result.deleted ?? 0}</p>
