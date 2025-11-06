@@ -22,6 +22,7 @@ The backend is built with Node.js and Express.js, using TypeScript and ES Module
 *   **Warehouse Loading View**: Provides dynamic filtering, configuration of warehouse settings for capacity analysis, and validation against managed locations.
 *   **User Management**: Basic user administration with robust deletion safeguards.
 *   **Event Logging**: Comprehensive audit trail of all warehouse operations with full product information and cost traceability, supporting CSV export and visual indicators. Detailed import statistics are tracked and persisted.
+*   **Import History**: Admin-only page displaying complete history of all CSV imports (both manual and scheduled) with detailed statistics including total rows processed, items created/updated, quantity changes, errors, duration, and status. Supports filtering by source type (manual/scheduler) and configurable result limits (25/50/100/200). Accessible via sidebar navigation at /import-history.
 *   **Worker Analytics**: Displays key metrics and cost totals for all users, including packing statistics, and searchable event history.
 *   **Barcode and QR Code Scanner Workflow**: Supports dual-mode scanning (USB/keyboard devices and mobile camera via WebSocket) with zoom controls, tooltips, and capacity validation. Auto-input for barcode scanners is supported.
 *   **Product Testing Workflow**: Optional two-phase system for incoming products.
