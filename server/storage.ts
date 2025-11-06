@@ -242,6 +242,7 @@ export interface IStorage {
   createImportRun(run: InsertImportRun): Promise<ImportRun>;
   getLatestImportRun(sourceType?: string): Promise<ImportRun | undefined>;
   getImportRunById(id: string): Promise<ImportRun | undefined>;
+  getImportRuns(filters?: { sourceType?: string; limit?: number; offset?: number }): Promise<ImportRun[]>;
 
   // Bypass Code methods
   getBypassCode(): Promise<string | null>;
@@ -3278,6 +3279,26 @@ export class DbStorage implements IStorage {
   async getImportRunById(id: string): Promise<ImportRun | undefined> {
     const [run] = await db.select().from(importRuns).where(eq(importRuns.id, id)).limit(1);
     return run;
+  }
+
+  async getImportRuns(filters?: { sourceType?: string; limit?: number; offset?: number }): Promise<ImportRun[]> {
+    let query = db.select().from(importRuns);
+    
+    if (filters?.sourceType) {
+      query = query.where(eq(importRuns.sourceType, filters.sourceType)) as any;
+    }
+    
+    query = query.orderBy(sql`${importRuns.createdAt} DESC`) as any;
+    
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as any;
+    }
+    
+    if (filters?.offset) {
+      query = query.offset(filters.offset) as any;
+    }
+    
+    return await query;
   }
 
   // Bypass Code methods
