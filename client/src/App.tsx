@@ -26,6 +26,7 @@ import ScannerMode from "@/pages/ScannerMode";
 import Placement from "@/pages/Placement";
 import Dispatch from "@/pages/Dispatch";
 import Packing from "@/pages/Packing";
+import ImportHistory from "@/pages/ImportHistory";
 import NotFound from "@/pages/not-found";
 import * as api from "@/lib/api";
 import type { InventoryItem } from "@shared/schema";
@@ -537,6 +538,11 @@ function AppContent() {
         <Route path="/logs">
           <EventLogsView users={users} />
         </Route>
+        {user.role === "admin" && (
+          <Route path="/import-history">
+            <ImportHistory />
+          </Route>
+        )}
         <Route path="/product-testing">
           <ProductTesting />
         </Route>
