@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   Smartphone,
   PackageCheck,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -122,6 +123,7 @@ export default function AppLayout({
   const adminMenuItems = [
     { title: "Пользователи", url: "/users", icon: Users },
     { title: "Массовая загрузка", url: "/bulk-upload", icon: Upload },
+    { title: "История импортов", url: "/import-history", icon: History },
     { title: "Бракованные товары", url: "/faulty-stock", icon: AlertTriangle },
     { title: "Логи событий", url: "/logs", icon: FileText },
     { title: "SKU Errors", url: "/sku-errors", icon: AlertCircle, showBadge: hasUnresolvedErrors },
