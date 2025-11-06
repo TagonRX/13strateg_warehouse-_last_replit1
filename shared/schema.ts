@@ -186,6 +186,7 @@ export const bulkUploadSources = pgTable("bulk_upload_sources", {
   url: text("url").notNull(),
   label: text("label").notNull(), // Короткая метка (например "MM", "TOP")
   enabled: boolean("enabled").notNull().default(true),
+  fieldSyncSettings: text("field_sync_settings"), // JSON объект с настройками синхронизации полей: { quantity: true, name: true, price: false, ... }
   sortOrder: integer("sort_order").notNull().default(0), // Порядок отображения
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
