@@ -596,41 +596,46 @@ export class DbStorage implements IStorage {
             // Check if item has barcode
             const hasBarcode = existingWithData.barcode && existingWithData.barcode.trim() !== '';
             
-            const updates: Partial<InsertInventoryItem> = {
-              price: item.price || existingWithData.price,
-            };
+            const updates: Partial<InsertInventoryItem> = {};
             
-            if (hasBarcode) {
-              // For items WITH barcode: update expectedQuantity only
-              updates.expectedQuantity = newQuantity;
-            } else {
-              // For items WITHOUT barcode: update quantity as before
-              updates.quantity = newQuantity;
-              
-              // Track quantity change only for non-barcoded items
-              stats.totalQuantityChange += (newQuantity - oldQuantity);
-              
-              // Determine zeroQuantitySince based on quantity transition
-              let zeroQuantitySince = existingWithData.zeroQuantitySince;
-              if (oldQuantity > 0 && newQuantity <= 0) {
-                zeroQuantitySince = new Date();
-              } else if (oldQuantity <= 0 && newQuantity > 0) {
-                zeroQuantitySince = null;
-              }
-              updates.zeroQuantitySince = zeroQuantitySince;
+            // Apply field sync settings for price
+            if (shouldSyncPrice) {
+              updates.price = item.price || existingWithData.price;
             }
             
-            // Only update name/itemId if they are missing in existing item
-            if (!existingWithData.name && item.name) {
+            if (shouldSyncQuantity) {
+              if (hasBarcode) {
+                // For items WITH barcode: update expectedQuantity only
+                updates.expectedQuantity = newQuantity;
+              } else {
+                // For items WITHOUT barcode: update quantity as before
+                updates.quantity = newQuantity;
+                
+                // Track quantity change only for non-barcoded items
+                stats.totalQuantityChange += (newQuantity - oldQuantity);
+                
+                // Determine zeroQuantitySince based on quantity transition
+                let zeroQuantitySince = existingWithData.zeroQuantitySince;
+                if (oldQuantity > 0 && newQuantity <= 0) {
+                  zeroQuantitySince = new Date();
+                } else if (oldQuantity <= 0 && newQuantity > 0) {
+                  zeroQuantitySince = null;
+                }
+                updates.zeroQuantitySince = zeroQuantitySince;
+              }
+            }
+            
+            // Only update name/itemId/ebay fields if they are missing in existing item AND sync is enabled
+            if (shouldSyncName && !existingWithData.name && item.name) {
               updates.name = item.name;
             }
-            if (!existingWithData.itemId && item.itemId) {
+            if (shouldSyncItemId && !existingWithData.itemId && item.itemId) {
               updates.itemId = item.itemId;
             }
-            if (!existingWithData.ebayUrl && item.ebayUrl) {
+            if (shouldSyncEbayUrl && !existingWithData.ebayUrl && item.ebayUrl) {
               updates.ebayUrl = item.ebayUrl;
             }
-            if (!existingWithData.ebaySellerName && item.ebaySellerName) {
+            if (shouldSyncEbaySellerName && !existingWithData.ebaySellerName && item.ebaySellerName) {
               updates.ebaySellerName = item.ebaySellerName;
             }
             
@@ -652,31 +657,69 @@ export class DbStorage implements IStorage {
             const hasBarcode = firstMatch.barcode && firstMatch.barcode.trim() !== '';
             
             const updates: Partial<InsertInventoryItem> = {
-              price: item.price || firstMatch.price,
-              name: item.name || firstMatch.name,
-              itemId: item.itemId || firstMatch.itemId,
-              barcode: item.barcode || firstMatch.barcode,
               location: location,
             };
             
-            if (hasBarcode) {
-              // For items WITH barcode: update expectedQuantity only
-              updates.expectedQuantity = newQuantity;
-            } else {
-              // For items WITHOUT barcode: update quantity as before
-              updates.quantity = newQuantity;
-              
-              // Track quantity change only for non-barcoded items
-              stats.totalQuantityChange += (newQuantity - oldQuantity);
-              
-              // Determine zeroQuantitySince based on quantity transition
-              let zeroQuantitySince = firstMatch.zeroQuantitySince;
-              if (oldQuantity > 0 && newQuantity <= 0) {
-                zeroQuantitySince = new Date();
-              } else if (oldQuantity <= 0 && newQuantity > 0) {
-                zeroQuantitySince = null;
+            // Apply field sync settings
+            if (shouldSyncPrice) {
+              updates.price = item.price || firstMatch.price;
+            }
+            if (shouldSyncName) {
+              updates.name = item.name || firstMatch.name;
+            }
+            if (shouldSyncItemId) {
+              updates.itemId = item.itemId || firstMatch.itemId;
+            }
+            
+            // Barcode is not a syncable field in this context (preserved from scanning)
+            updates.barcode = item.barcode || firstMatch.barcode;
+            
+            if (shouldSyncQuantity) {
+              if (hasBarcode) {
+                // For items WITH barcode: update expectedQuantity only
+                updates.expectedQuantity = newQuantity;
+              } else {
+                // For items WITHOUT barcode: update quantity as before
+                updates.quantity = newQuantity;
+                
+                // Track quantity change only for non-barcoded items
+                stats.totalQuantityChange += (newQuantity - oldQuantity);
+                
+                // Determine zeroQuantitySince based on quantity transition
+                let zeroQuantitySince = firstMatch.zeroQuantitySince;
+                if (oldQuantity > 0 && newQuantity <= 0) {
+                  zeroQuantitySince = new Date();
+                } else if (oldQuantity <= 0 && newQuantity > 0) {
+                  zeroQuantitySince = null;
+                }
+                updates.zeroQuantitySince = zeroQuantitySince;
               }
-              updates.zeroQuantitySince = zeroQuantitySince;
+            }
+            
+            // Apply additional syncable fields
+            if (shouldSyncCondition && item.condition) {
+              updates.condition = item.condition;
+            }
+            if (shouldSyncEbayUrl && item.ebayUrl) {
+              updates.ebayUrl = item.ebayUrl;
+            }
+            if (shouldSyncEbaySellerName && item.ebaySellerName) {
+              updates.ebaySellerName = item.ebaySellerName;
+            }
+            if (shouldSyncDimensions) {
+              if (item.length) updates.length = item.length;
+              if (item.width) updates.width = item.width;
+              if (item.height) updates.height = item.height;
+              if (item.weight) updates.weight = item.weight;
+            }
+            if (shouldSyncImages) {
+              for (let i = 1; i <= 24; i++) {
+                const key = `imageUrl${i}` as keyof InsertInventoryItem;
+                const value = item[key];
+                if (value && typeof value === 'string') {
+                  (updates as any)[key] = value;
+                }
+              }
             }
             
             itemsToUpdate.push({
