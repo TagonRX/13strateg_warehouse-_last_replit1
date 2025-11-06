@@ -12,19 +12,14 @@ export default function ImportHistory() {
   const [sourceTypeFilter, setSourceTypeFilter] = useState<string>("all");
   const [limit, setLimit] = useState<number>(50);
 
+  const queryParams = new URLSearchParams();
+  if (sourceTypeFilter && sourceTypeFilter !== "all") {
+    queryParams.append("sourceType", sourceTypeFilter);
+  }
+  queryParams.append("limit", limit.toString());
+  
   const { data: importRuns = [], isLoading, refetch, isFetching } = useQuery<ImportRun[]>({
-    queryKey: ["/api/import-runs", sourceTypeFilter, limit],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (sourceTypeFilter && sourceTypeFilter !== "all") {
-        params.append("sourceType", sourceTypeFilter);
-      }
-      params.append("limit", limit.toString());
-      
-      const response = await fetch(`/api/import-runs?${params.toString()}`);
-      if (!response.ok) throw new Error("Failed to fetch import runs");
-      return response.json();
-    },
+    queryKey: [`/api/import-runs?${queryParams.toString()}`],
   });
 
   const getStatusBadge = (status: string) => {
