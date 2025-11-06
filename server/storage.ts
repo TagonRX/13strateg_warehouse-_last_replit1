@@ -104,7 +104,7 @@ export interface IStorage {
   updateInventoryItemById(id: string, updates: Partial<InsertInventoryItem>): Promise<InventoryItem>;
   deleteInventoryItem(id: string, userId: string): Promise<boolean>;
   deleteAllInventoryItems(userId: string): Promise<number>;
-  bulkUpsertInventoryItems(items: InsertInventoryItem[], context?: { sourceType?: string; sourceRef?: string; userId?: string }): Promise<ImportStats>;
+  bulkUpsertInventoryItems(items: InsertInventoryItem[], context?: { sourceType?: string; sourceRef?: string; userId?: string; fieldSyncSettings?: Record<string, boolean> }): Promise<ImportStats>;
   updateItemCondition(itemId: string, condition: string, userId: string): Promise<void>;
   getConditionByBarcode(barcode: string): Promise<string | null>;
   
@@ -404,8 +404,32 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async bulkUpsertInventoryItems(items: InsertInventoryItem[], context?: { sourceType?: string; sourceRef?: string; userId?: string }): Promise<ImportStats> {
+  async bulkUpsertInventoryItems(items: InsertInventoryItem[], context?: { sourceType?: string; sourceRef?: string; userId?: string; fieldSyncSettings?: Record<string, boolean> }): Promise<ImportStats> {
     const startTime = Date.now();
+    
+    // Extract field sync settings
+    const fieldSyncSettings = context?.fieldSyncSettings || {};
+    const shouldSyncQuantity = fieldSyncSettings.quantity !== false;
+    const shouldSyncName = fieldSyncSettings.name !== false;
+    const shouldSyncPrice = fieldSyncSettings.price !== false;
+    const shouldSyncItemId = fieldSyncSettings.itemId !== false;
+    const shouldSyncDimensions = fieldSyncSettings.dimensions !== false;
+    const shouldSyncImages = fieldSyncSettings.images !== false;
+    const shouldSyncCondition = fieldSyncSettings.condition !== false;
+    const shouldSyncEbayUrl = fieldSyncSettings.ebayUrl !== false;
+    const shouldSyncEbaySellerName = fieldSyncSettings.ebaySellerName !== false;
+    
+    console.log('[BULK UPSERT] Field sync settings:', {
+      quantity: shouldSyncQuantity,
+      name: shouldSyncName,
+      price: shouldSyncPrice,
+      itemId: shouldSyncItemId,
+      dimensions: shouldSyncDimensions,
+      images: shouldSyncImages,
+      condition: shouldSyncCondition,
+      ebayUrl: shouldSyncEbayUrl,
+      ebaySellerName: shouldSyncEbaySellerName,
+    });
     
     // Initialize detailed statistics
     const stats: ImportStats = {
@@ -477,29 +501,66 @@ export class DbStorage implements IStorage {
           // Check if item has barcode (physical item with scanned barcode)
           const hasBarcode = existing.barcode && existing.barcode.trim() !== '';
           
-          const updates: Partial<InsertInventoryItem> = {
-            price: item.price,
-          };
+          const updates: Partial<InsertInventoryItem> = {};
           
-          if (hasBarcode) {
-            // For items WITH barcode: update expectedQuantity, NOT quantity
-            updates.expectedQuantity = newQuantity;
-            // Keep physical quantity unchanged - it's determined by barcode count
-          } else {
-            // For items WITHOUT barcode: update quantity as before
-            updates.quantity = newQuantity;
-            
-            // Track quantity change only for non-barcoded items
-            stats.totalQuantityChange += (newQuantity - oldQuantity);
-            
-            // Determine zeroQuantitySince based on quantity transition
-            let zeroQuantitySince = existing.zeroQuantitySince;
-            if (oldQuantity > 0 && newQuantity <= 0) {
-              zeroQuantitySince = new Date();
-            } else if (oldQuantity <= 0 && newQuantity > 0) {
-              zeroQuantitySince = null;
+          // Apply field sync settings
+          if (shouldSyncPrice) {
+            updates.price = item.price;
+          }
+          
+          if (shouldSyncQuantity) {
+            if (hasBarcode) {
+              // For items WITH barcode: update expectedQuantity, NOT quantity
+              updates.expectedQuantity = newQuantity;
+              // Keep physical quantity unchanged - it's determined by barcode count
+            } else {
+              // For items WITHOUT barcode: update quantity as before
+              updates.quantity = newQuantity;
+              
+              // Track quantity change only for non-barcoded items
+              stats.totalQuantityChange += (newQuantity - oldQuantity);
+              
+              // Determine zeroQuantitySince based on quantity transition
+              let zeroQuantitySince = existing.zeroQuantitySince;
+              if (oldQuantity > 0 && newQuantity <= 0) {
+                zeroQuantitySince = new Date();
+              } else if (oldQuantity <= 0 && newQuantity > 0) {
+                zeroQuantitySince = null;
+              }
+              updates.zeroQuantitySince = zeroQuantitySince;
             }
-            updates.zeroQuantitySince = zeroQuantitySince;
+          }
+          
+          // Apply additional field updates based on settings
+          if (shouldSyncName && item.name) {
+            updates.name = item.name;
+          }
+          if (shouldSyncItemId && item.itemId) {
+            updates.itemId = item.itemId;
+          }
+          if (shouldSyncCondition && item.condition) {
+            updates.condition = item.condition;
+          }
+          if (shouldSyncEbayUrl && item.ebayUrl) {
+            updates.ebayUrl = item.ebayUrl;
+          }
+          if (shouldSyncEbaySellerName && item.ebaySellerName) {
+            updates.ebaySellerName = item.ebaySellerName;
+          }
+          if (shouldSyncDimensions) {
+            if (item.length) updates.length = item.length;
+            if (item.width) updates.width = item.width;
+            if (item.height) updates.height = item.height;
+            if (item.weight) updates.weight = item.weight;
+          }
+          if (shouldSyncImages) {
+            for (let i = 1; i <= 24; i++) {
+              const key = `imageUrl${i}` as keyof InsertInventoryItem;
+              const value = item[key];
+              if (value && typeof value === 'string') {
+                (updates as any)[key] = value;
+              }
+            }
           }
           
           itemsToUpdate.push({

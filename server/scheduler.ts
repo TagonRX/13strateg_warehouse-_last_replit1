@@ -127,10 +127,22 @@ export async function runScheduledImport(): Promise<{ success: boolean; message:
         console.log(`[SCHEDULER] Downloaded ${items.length} items from ${source.label}`);
         
         if (items.length > 0) {
+          // Parse field sync settings from source
+          let fieldSyncSettings: Record<string, boolean> | undefined = undefined;
+          if (source.fieldSyncSettings) {
+            try {
+              fieldSyncSettings = JSON.parse(source.fieldSyncSettings);
+              console.log(`[SCHEDULER] Using field sync settings for ${source.label}:`, fieldSyncSettings);
+            } catch (e) {
+              console.warn(`[SCHEDULER] Failed to parse fieldSyncSettings for ${source.label}:`, e);
+            }
+          }
+          
           const result = await storage.bulkUpsertInventoryItems(items, {
             sourceType: 'scheduler',
             sourceRef: source.label,
             userId: undefined,
+            fieldSyncSettings,
           });
           
           totalCreated += result.created;
