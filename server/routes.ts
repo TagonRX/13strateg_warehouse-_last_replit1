@@ -3684,6 +3684,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Import runs endpoints
+  app.get("/api/import-runs", requireAuth, async (req, res) => {
+    try {
+      const sourceType = req.query.sourceType as string | undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+      const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
+      
+      const runs = await storage.getImportRuns({ sourceType, limit, offset });
+      return res.json(runs);
+    } catch (error: any) {
+      console.error("[IMPORT RUNS] Get list error:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get("/api/import-runs/latest", requireAuth, async (req, res) => {
     try {
       const sourceType = req.query.sourceType as string | undefined;
