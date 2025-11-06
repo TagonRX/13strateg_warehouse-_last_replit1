@@ -297,12 +297,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Bootstrap endpoint - Create admin user (PUBLIC, ONE-TIME USE)
+  // Supports custom password via request body: { "password": "YourPassword123!" }
   // ⚠️ DELETE THIS ENDPOINT AFTER FIRST USE FOR SECURITY
   app.post("/api/admin/bootstrap", async (req, res) => {
     try {
       const targetLogin = "admin";
-      const targetPassword = "admin123";
+      const targetPassword = req.body?.password || "admin123"; // Accept custom password or use default
       const targetName = "Administrator";
+      
+      // Validate password strength if custom password provided
+      if (req.body?.password && req.body.password.length < 8) {
+        return res.status(400).json({ 
+          error: "Password too weak",
+          hint: "Password must be at least 8 characters long"
+        });
+      }
       
       // Check if admin user already exists
       const existingAdmin = await storage.getUserByLogin(targetLogin);
@@ -319,9 +328,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         return res.json({
           success: true,
-          message: `Admin user password updated to: ${targetPassword}`,
+          message: `Admin user password updated successfully`,
           action: "updated",
           login: targetLogin,
+          passwordLength: targetPassword.length,
         });
       } else {
         // Admin doesn't exist - create new
@@ -336,10 +346,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         return res.json({
           success: true,
-          message: `Admin user created with password: ${targetPassword}`,
+          message: `Admin user created successfully`,
           action: "created",
           login: targetLogin,
           userId: newAdmin.id,
+          passwordLength: targetPassword.length,
         });
       }
     } catch (error: any) {
