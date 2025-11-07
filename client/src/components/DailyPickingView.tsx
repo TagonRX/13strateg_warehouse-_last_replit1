@@ -1072,7 +1072,31 @@ export default function DailyPickingView() {
                     
                     // Get inventory item for this task
                     const inventoryItem = skuToInventoryMap.get(task.sku);
-                    const imageUrls = inventoryItem?.imageUrls ? JSON.parse(inventoryItem.imageUrls) : [];
+                    
+                    // Collect images from both imageUrls JSON and imageUrl1...imageUrl24 columns
+                    const imageUrls: string[] = [];
+                    if (inventoryItem?.imageUrls) {
+                      try {
+                        const parsed = JSON.parse(inventoryItem.imageUrls);
+                        if (Array.isArray(parsed)) {
+                          imageUrls.push(...parsed.filter(Boolean));
+                        }
+                      } catch (e) {
+                        console.warn('Failed to parse imageUrls:', e);
+                      }
+                    }
+                    
+                    // Add individual image URL columns
+                    if (inventoryItem) {
+                      for (let i = 1; i <= 24; i++) {
+                        const urlKey = `imageUrl${i}` as keyof typeof inventoryItem;
+                        const url = inventoryItem[urlKey];
+                        if (url && typeof url === 'string' && !imageUrls.includes(url)) {
+                          imageUrls.push(url);
+                        }
+                      }
+                    }
+                    
                     const firstImageUrl = imageUrls.length > 0 ? imageUrls[0] : null;
                     const ebayUrl = inventoryItem?.ebayUrl;
                     

@@ -17,7 +17,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Usb, Smartphone, Wifi, Check, X, Package, Trash2, Eye, EyeOff } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Usb, Smartphone, Wifi, Check, X, Package, Trash2, Edit, Eye, EyeOff } from "lucide-react";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +45,9 @@ export default function PlacementView() {
   const [feedback, setFeedback] = useState<"success" | "error" | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [placementToDelete, setPlacementToDelete] = useState<PendingPlacement | null>(null);
+  const [editBarcodeDialogOpen, setEditBarcodeDialogOpen] = useState(false);
+  const [placementToEdit, setPlacementToEdit] = useState<PendingPlacement | null>(null);
+  const [newBarcode, setNewBarcode] = useState("");
   const [bypassCode, setBypassCode] = useState("");
   const [showBypassInput, setShowBypassInput] = useState(false);
   const [showBypassCode, setShowBypassCode] = useState(false);
@@ -78,6 +89,31 @@ export default function PlacementView() {
       toast({
         title: "Ошибка",
         description: error.message || "Не удалось удалить pending placement",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update barcode mutation
+  const updateBarcodeMutation = useMutation({
+    mutationFn: async ({ id, barcode }: { id: string; barcode: string }) => {
+      const response = await apiRequest("PATCH", `/api/pending-placements/${id}/barcode`, { barcode });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pending-placements"] });
+      toast({
+        title: "Обновлено",
+        description: "Баркод успешно изменён",
+      });
+      setEditBarcodeDialogOpen(false);
+      setPlacementToEdit(null);
+      setNewBarcode("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось изменить баркод",
         variant: "destructive",
       });
     },
@@ -300,6 +336,18 @@ export default function PlacementView() {
   const handleDeleteConfirm = () => {
     if (placementToDelete) {
       deletePlacementMutation.mutate(placementToDelete.id);
+    }
+  };
+
+  const handleEditBarcodeClick = (placement: PendingPlacement) => {
+    setPlacementToEdit(placement);
+    setNewBarcode(placement.barcode);
+    setEditBarcodeDialogOpen(true);
+  };
+
+  const handleEditBarcodeConfirm = () => {
+    if (placementToEdit && newBarcode.trim()) {
+      updateBarcodeMutation.mutate({ id: placementToEdit.id, barcode: newBarcode.trim() });
     }
   };
 
@@ -570,15 +618,26 @@ export default function PlacementView() {
                           </TableCell>
                           {user?.role === "admin" && (
                             <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteClick(placement)}
-                                disabled={deletePlacementMutation.isPending}
-                                data-testid={`button-delete-placement-${placement.id}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditBarcodeClick(placement)}
+                                  disabled={updateBarcodeMutation.isPending}
+                                  data-testid={`button-edit-barcode-${placement.id}`}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteClick(placement)}
+                                  disabled={deletePlacementMutation.isPending}
+                                  data-testid={`button-delete-placement-${placement.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           )}
                         </TableRow>
@@ -622,6 +681,60 @@ export default function PlacementView() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Edit Barcode Dialog */}
+        <Dialog open={editBarcodeDialogOpen} onOpenChange={setEditBarcodeDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Исправить баркод</DialogTitle>
+              <DialogDescription>
+                Введите новый баркод для этого товара
+                {placementToEdit && (
+                  <div className="mt-2 p-2 bg-muted rounded-md">
+                    <div className="text-sm space-y-1">
+                      <div><strong>Текущий баркод:</strong> {placementToEdit.barcode}</div>
+                      <div><strong>SKU:</strong> {placementToEdit.sku}</div>
+                      {placementToEdit.name && <div><strong>Название:</strong> {placementToEdit.name}</div>}
+                    </div>
+                  </div>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Label htmlFor="new-barcode">Новый баркод</Label>
+              <Input
+                id="new-barcode"
+                value={newBarcode}
+                onChange={(e) => setNewBarcode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newBarcode.trim()) {
+                    handleEditBarcodeConfirm();
+                  }
+                }}
+                placeholder="Введите новый баркод"
+                className="mt-2 font-mono"
+                data-testid="input-new-barcode"
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setEditBarcodeDialogOpen(false)}
+                data-testid="button-cancel-edit"
+              >
+                Отмена
+              </Button>
+              <Button
+                onClick={handleEditBarcodeConfirm}
+                disabled={!newBarcode.trim() || updateBarcodeMutation.isPending}
+                data-testid="button-confirm-edit"
+              >
+                {updateBarcodeMutation.isPending ? "Сохранение..." : "Сохранить"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </div>
   );
 }

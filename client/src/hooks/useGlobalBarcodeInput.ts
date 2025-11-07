@@ -115,6 +115,14 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
 
     // Глобальный keydown listener - строгая маршрутизация с pre-buffering
     const handleKeyDown = (e: KeyboardEvent) => {
+      // КРИТИЧНО: Не перехватываем события если открыт Dialog/Modal
+      // Проверяем наличие aria-hidden="false" overlay (Radix Dialog портал)
+      const isDialogOpen = document.querySelector('[role="dialog"]') !== null;
+      if (isDialogOpen) {
+        // Dialog открыт - не перехватываем события, пусть работает нормально
+        return;
+      }
+
       // Логирование для отладки сканера (только в dev режиме)
       if (import.meta.env.DEV && e.key.length === 1) {
         console.log('[Barcode Scanner Debug]', {
@@ -391,6 +399,12 @@ export function useGlobalBarcodeInput(enabled: boolean = true) {
 
     // Дополнительный обработчик для АГРЕССИВНОЙ блокировки браузерных действий
     const preventBrowserActions = (e: KeyboardEvent) => {
+      // Не блокируем если открыт Dialog
+      const isDialogOpen = document.querySelector('[role="dialog"]') !== null;
+      if (isDialogOpen) {
+        return;
+      }
+
       // Блокируем ВСЕ Ctrl/Cmd/Alt комбинации - сканеры могут генерировать
       // случайные комбинации которые открывают окна, диалоги, меню и т.д.
       if (e.ctrlKey || e.metaKey || e.altKey) {

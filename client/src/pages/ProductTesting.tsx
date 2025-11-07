@@ -6,8 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Scan, CheckCircle2, AlertCircle, Usb, Smartphone, Wifi, Trash2 } from "lucide-react";
+import { Loader2, Scan, CheckCircle2, AlertCircle, Usb, Smartphone, Wifi, Trash2, Edit } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -23,6 +31,9 @@ export default function ProductTesting() {
   const [selectedCondition, setSelectedCondition] = useState<string>("");
   const [currentTest, setCurrentTest] = useState<PendingTest | null>(null);
   const [scannerMode, setScannerMode] = useState<ScannerMode>("usb");
+  const [editBarcodeDialogOpen, setEditBarcodeDialogOpen] = useState(false);
+  const [testToEdit, setTestToEdit] = useState<PendingTest | null>(null);
+  const [newBarcode, setNewBarcode] = useState("");
   const { toast } = useToast();
 
   // WebSocket for phone mode
@@ -199,6 +210,31 @@ export default function ProductTesting() {
     },
   });
 
+  // Update barcode mutation
+  const updateBarcodeMutation = useMutation({
+    mutationFn: async ({ id, barcode }: { id: string; barcode: string }) => {
+      const res = await apiRequest("PATCH", `/api/product-testing/pending/${id}/barcode`, { barcode });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/product-testing/pending"] });
+      toast({
+        title: "Обновлено",
+        description: "Баркод успешно изменён",
+      });
+      setEditBarcodeDialogOpen(false);
+      setTestToEdit(null);
+      setNewBarcode("");
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: error.message,
+      });
+    },
+  });
+
   // Delete tested item mutation (admin only)
   const deleteTestedItemMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -227,6 +263,19 @@ export default function ProductTesting() {
     setSelectedCondition("");
     setBarcode("");
     setTimeout(() => barcodeInputRef.current?.focus(), 100);
+  };
+
+  // Edit barcode handlers
+  const handleEditBarcodeClick = (test: PendingTest) => {
+    setTestToEdit(test);
+    setNewBarcode(test.barcode);
+    setEditBarcodeDialogOpen(true);
+  };
+
+  const handleEditBarcodeConfirm = () => {
+    if (testToEdit && newBarcode.trim()) {
+      updateBarcodeMutation.mutate({ id: testToEdit.id, barcode: newBarcode.trim() });
+    }
   };
 
   // Auto-focus on mount (простой подход как в StockInForm)
@@ -450,15 +499,27 @@ export default function ProductTesting() {
                       </TableCell>
                       {currentUser?.role === "admin" && (
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deletePendingTestMutation.mutate(test.id)}
-                            data-testid={`button-delete-pending-${test.barcode}`}
-                            className="h-8 w-8"
-                          >
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditBarcodeClick(test)}
+                              disabled={updateBarcodeMutation.isPending}
+                              data-testid={`button-edit-barcode-${test.barcode}`}
+                              className="h-8 w-8"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deletePendingTestMutation.mutate(test.id)}
+                              data-testid={`button-delete-pending-${test.barcode}`}
+                              className="h-8 w-8"
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -537,6 +598,60 @@ export default function ProductTesting() {
           </CardContent>
         </Card>
       )}
+
+      {/* Edit Barcode Dialog */}
+      <Dialog open={editBarcodeDialogOpen} onOpenChange={setEditBarcodeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Исправить баркод</DialogTitle>
+            <DialogDescription>
+              Введите новый баркод для этого товара
+              {testToEdit && (
+                <div className="mt-2 p-2 bg-muted rounded-md">
+                  <div className="text-sm space-y-1">
+                    <div><strong>Текущий баркод:</strong> {testToEdit.barcode}</div>
+                    <div><strong>SKU:</strong> {testToEdit.sku || "-"}</div>
+                    {testToEdit.name && <div><strong>Название:</strong> {testToEdit.name}</div>}
+                  </div>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="new-barcode-test">Новый баркод</Label>
+            <Input
+              id="new-barcode-test"
+              value={newBarcode}
+              onChange={(e) => setNewBarcode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newBarcode.trim()) {
+                  handleEditBarcodeConfirm();
+                }
+              }}
+              placeholder="Введите новый баркод"
+              className="mt-2 font-mono"
+              data-testid="input-new-barcode-test"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditBarcodeDialogOpen(false)}
+              data-testid="button-cancel-edit-test"
+            >
+              Отмена
+            </Button>
+            <Button
+              onClick={handleEditBarcodeConfirm}
+              disabled={!newBarcode.trim() || updateBarcodeMutation.isPending}
+              data-testid="button-confirm-edit-test"
+            >
+              {updateBarcodeMutation.isPending ? "Сохранение..." : "Сохранить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

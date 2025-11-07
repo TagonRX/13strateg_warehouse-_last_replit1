@@ -665,6 +665,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update barcode for pending placement
+  app.patch("/api/pending-placements/:id/barcode", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { id } = req.params;
+      const { barcode } = req.body;
+
+      if (!barcode || typeof barcode !== 'string' || !barcode.trim()) {
+        return res.status(400).json({ error: "Требуется корректный баркод" });
+      }
+
+      const updated = await storage.updatePendingPlacementBarcode(id, barcode.trim(), userId);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Pending placement не найден" });
+      }
+
+      return res.json({ success: true, placement: updated });
+    } catch (error: any) {
+      console.error("Update pending placement barcode error:", error);
+      return res.status(500).json({ error: error.message || "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Confirm placement (move from pending to inventory)
   app.post("/api/placements/confirm", requireAuth, async (req, res) => {
     try {
@@ -2701,6 +2725,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Delete pending test error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Update barcode for pending test
+  app.patch("/api/product-testing/pending/:id/barcode", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      const { id } = req.params;
+      const { barcode } = req.body;
+
+      if (!barcode || typeof barcode !== 'string' || !barcode.trim()) {
+        return res.status(400).json({ error: "Требуется корректный баркод" });
+      }
+
+      const updated = await storage.updatePendingTestBarcode(id, barcode.trim(), userId);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Pending test не найден" });
+      }
+
+      return res.json({ success: true, test: updated });
+    } catch (error: any) {
+      console.error("Update pending test barcode error:", error);
+      return res.status(500).json({ error: error.message || "Внутренняя ошибка сервера" });
     }
   });
 

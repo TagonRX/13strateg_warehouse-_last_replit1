@@ -202,6 +202,7 @@ export interface IStorage {
   completePendingTest(barcode: string, condition: string, decisionBy: string, workingMinutes: number): Promise<TestedItem | FaultyStock>;
   removePendingTestByBarcode(barcode: string): Promise<void>;
   deletePendingTest(id: string): Promise<void>;
+  updatePendingTestBarcode(id: string, newBarcode: string, userId: string): Promise<PendingTest | null>;
   
   // Tested Items methods
   getAllTestedItems(): Promise<TestedItem[]>;
@@ -217,6 +218,7 @@ export interface IStorage {
   createPendingPlacement(placement: InsertPendingPlacement): Promise<PendingPlacement>;
   getAllPendingPlacements(): Promise<PendingPlacement[]>;
   deletePendingPlacement(id: string, userId: string): Promise<PendingPlacement | null>;
+  updatePendingPlacementBarcode(id: string, newBarcode: string, userId: string): Promise<PendingPlacement | null>;
   getPendingPlacementByBarcode(barcode: string): Promise<PendingPlacement | undefined>;
   confirmPlacement(placementId: string, location: string, userId: string): Promise<InventoryItem>;
 
@@ -2237,6 +2239,45 @@ export class DbStorage implements IStorage {
     await db.delete(pendingTests).where(eq(pendingTests.id, id));
   }
 
+  async updatePendingTestBarcode(id: string, newBarcode: string, userId: string): Promise<PendingTest | null> {
+    // Get the test before updating for logging
+    const test = await db.select().from(pendingTests).where(eq(pendingTests.id, id)).limit(1);
+    if (!test || test.length === 0) {
+      return null;
+    }
+
+    const oldTest = test[0];
+    const oldBarcode = oldTest.barcode;
+
+    // Check if new barcode is already in use
+    const existing = await db.select().from(pendingTests).where(eq(pendingTests.barcode, newBarcode)).limit(1);
+    if (existing && existing.length > 0 && existing[0].id !== id) {
+      throw new Error(`Баркод ${newBarcode} уже используется другим товаром в тестировании`);
+    }
+
+    // Update the barcode
+    const updated = await db.update(pendingTests)
+      .set({ barcode: newBarcode })
+      .where(eq(pendingTests.id, id))
+      .returning();
+
+    if (!updated || updated.length === 0) {
+      return null;
+    }
+
+    // Log the barcode update event
+    await db.insert(eventLogs).values({
+      userId,
+      action: "PENDING_TEST_BARCODE_UPDATED",
+      details: `Изменен баркод тестируемого товара: ${oldBarcode} → ${newBarcode} для ${oldTest.name || oldTest.sku || 'неизвестного товара'}`,
+      productId: oldTest.productId,
+      itemName: oldTest.name,
+      sku: oldTest.sku,
+    });
+
+    return updated[0];
+  }
+
   // Tested Items methods
   async getAllTestedItems(): Promise<TestedItem[]> {
     return await db.select().from(testedItems).orderBy(testedItems.decisionAt);
@@ -2308,6 +2349,48 @@ export class DbStorage implements IStorage {
     });
 
     return deletedPlacement;
+  }
+
+  async updatePendingPlacementBarcode(id: string, newBarcode: string, userId: string): Promise<PendingPlacement | null> {
+    // Get the placement before updating for logging
+    const placement = await db.select().from(pendingPlacements).where(eq(pendingPlacements.id, id)).limit(1);
+    if (!placement || placement.length === 0) {
+      return null;
+    }
+
+    const oldPlacement = placement[0];
+    const oldBarcode = oldPlacement.barcode;
+
+    // Check if new barcode is already in use
+    const existing = await db.select().from(pendingPlacements).where(eq(pendingPlacements.barcode, newBarcode)).limit(1);
+    if (existing && existing.length > 0 && existing[0].id !== id) {
+      throw new Error(`Баркод ${newBarcode} уже используется другим товаром`);
+    }
+
+    // Update the barcode
+    const updated = await db.update(pendingPlacements)
+      .set({ barcode: newBarcode })
+      .where(eq(pendingPlacements.id, id))
+      .returning();
+
+    if (!updated || updated.length === 0) {
+      return null;
+    }
+
+    // Log the barcode update event
+    await db.insert(eventLogs).values({
+      userId,
+      action: "PENDING_PLACEMENT_BARCODE_UPDATED",
+      details: `Изменен баркод: ${oldBarcode} → ${newBarcode} для ${oldPlacement.name || oldPlacement.sku}`,
+      productId: oldPlacement.productId,
+      itemName: oldPlacement.name,
+      sku: oldPlacement.sku,
+      location: oldPlacement.location,
+      quantity: oldPlacement.quantity,
+      price: oldPlacement.price,
+    });
+
+    return updated[0];
   }
 
   async getPendingPlacementByBarcode(barcode: string): Promise<PendingPlacement | undefined> {
