@@ -199,42 +199,32 @@ export default function PlacementView() {
 
     // Submit bypass code to server for verification
     try {
-      const response = await fetch("/api/placements/confirm", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
-          placementId: currentPlacement.id,
-          location: targetLocation.toUpperCase(),
-          bypassCode: bypassCode.trim(),
-        }),
+      const response = await apiRequest("POST", "/api/placements/confirm", {
+        placementId: currentPlacement.id,
+        location: targetLocation.toUpperCase(),
+        bypassCode: bypassCode.trim(),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Check if item is in testing (409 status)
-        if (response.status === 409) {
-          toast({
-            title: "❌ Товар на тестировании",
-            description: data.error || "Завершите тест перед размещением",
-            variant: "destructive",
-          });
-          resetForm();
-          return;
-        }
-        
-        throw new Error(data.error || "Ошибка размещения");
+      // Check for testing conflict
+      if (response.status === 409) {
+        const data = await response.json();
+        toast({
+          title: "❌ Товар на тестировании",
+          description: data.error || "Завершите тест перед размещением",
+          variant: "destructive",
+        });
+        resetForm();
+        return;
       }
+
+      await response.json(); // Consume response
+
+      // Invalidate queries to refresh data BEFORE showing success
+      await queryClient.invalidateQueries({ queryKey: ["/api/pending-placements"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
 
       setFeedback("success");
       setStep("success");
-
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ["/api/pending-placements"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
 
       toast({
         title: "✅ Bypass-код принят!",
@@ -279,41 +269,31 @@ export default function PlacementView() {
     if (actualLocation === targetLocation.toUpperCase()) {
       // Success! Move to inventory
       try {
-        const response = await fetch("/api/placements/confirm", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify({
-            placementId: currentPlacement.id,
-            location: targetLocation.toUpperCase(),
-          }),
+        const response = await apiRequest("POST", "/api/placements/confirm", {
+          placementId: currentPlacement.id,
+          location: targetLocation.toUpperCase(),
         });
 
-        if (!response.ok) {
+        // Check for testing conflict
+        if (response.status === 409) {
           const errorData = await response.json();
-          
-          // Check if item is in testing (409 status)
-          if (response.status === 409) {
-            toast({
-              title: "❌ Товар на тестировании",
-              description: errorData.error || "Завершите тест перед размещением",
-              variant: "destructive",
-            });
-            resetForm();
-            return;
-          }
-          
-          throw new Error(errorData.error || "Ошибка размещения");
+          toast({
+            title: "❌ Товар на тестировании",
+            description: errorData.error || "Завершите тест перед размещением",
+            variant: "destructive",
+          });
+          resetForm();
+          return;
         }
+
+        await response.json(); // Consume response
+
+        // Invalidate queries to refresh data BEFORE showing success
+        await queryClient.invalidateQueries({ queryKey: ["/api/pending-placements"] });
+        await queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
 
         setFeedback("success");
         setStep("success");
-
-        // Invalidate queries to refresh data
-        queryClient.invalidateQueries({ queryKey: ["/api/pending-placements"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
 
         const verificationMethod = barcodeToLocationMap.has(cleanCode.toUpperCase()) 
           ? "баркод локации" 
