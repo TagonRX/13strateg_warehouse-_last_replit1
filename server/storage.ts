@@ -2407,6 +2407,12 @@ export class DbStorage implements IStorage {
 
     const p = placement[0];
 
+    // Check if item is currently being tested (exists in pendingTests)
+    const itemInTesting = await db.select().from(pendingTests).where(eq(pendingTests.barcode, p.barcode)).limit(1);
+    if (itemInTesting && itemInTesting.length > 0) {
+      throw new Error("ITEM_IN_TESTING");
+    }
+
     // Check if item with same productId already exists in inventory
     let inventoryItem: InventoryItem;
     

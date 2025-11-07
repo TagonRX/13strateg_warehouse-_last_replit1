@@ -65,6 +65,17 @@ export default function PlacementView() {
     queryKey: ["/api/pending-placements"],
   });
 
+  // Fetch pending tests to filter out items currently being tested
+  const { data: pendingTests = [] } = useQuery<Array<{ barcode: string }>>({
+    queryKey: ["/api/product-testing/pending"],
+  });
+
+  // Filter pending placements to exclude items currently being tested
+  const filteredPendingPlacements = useMemo(() => {
+    const testingBarcodes = new Set(pendingTests.map(test => test.barcode));
+    return pendingPlacements.filter(placement => !testingBarcodes.has(placement.barcode));
+  }, [pendingPlacements, pendingTests]);
+
   // Fetch active locations with barcodes
   const { data: activeLocations = [] } = useQuery<ActiveLocation[]>({
     queryKey: ["/api/warehouse/active-locations"],
@@ -156,15 +167,25 @@ export default function PlacementView() {
     const cleanBarcode = barcode.trim();
     setScannedBarcode(cleanBarcode);
     
-    // Find placement with this barcode
-    const placement = pendingPlacements.find(p => p.barcode === cleanBarcode);
+    // Find placement with this barcode (use filtered list to exclude items in testing)
+    const placement = filteredPendingPlacements.find(p => p.barcode === cleanBarcode);
     
     if (!placement) {
-      toast({
-        title: "Товар не найден",
-        description: "Этот товар не ожидает размещения",
-        variant: "destructive",
-      });
+      // Check if item exists but is in testing
+      const inTesting = pendingPlacements.find(p => p.barcode === cleanBarcode);
+      if (inTesting) {
+        toast({
+          title: "Товар на тестировании",
+          description: "Завершите тест перед размещением",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Товар не найден",
+          description: "Этот товар не ожидает размещения",
+          variant: "destructive",
+        });
+      }
       return;
     }
 
@@ -178,13 +199,35 @@ export default function PlacementView() {
 
     // Submit bypass code to server for verification
     try {
-      const response = await apiRequest("POST", "/api/placements/confirm", {
-        placementId: currentPlacement.id,
-        location: targetLocation.toUpperCase(),
-        bypassCode: bypassCode.trim(),
+      const response = await fetch("/api/placements/confirm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          placementId: currentPlacement.id,
+          location: targetLocation.toUpperCase(),
+          bypassCode: bypassCode.trim(),
+        }),
       });
 
       const data = await response.json();
+
+      if (!response.ok) {
+        // Check if item is in testing (409 status)
+        if (response.status === 409) {
+          toast({
+            title: "❌ Товар на тестировании",
+            description: data.error || "Завершите тест перед размещением",
+            variant: "destructive",
+          });
+          resetForm();
+          return;
+        }
+        
+        throw new Error(data.error || "Ошибка размещения");
+      }
 
       setFeedback("success");
       setStep("success");
@@ -205,8 +248,8 @@ export default function PlacementView() {
     } catch (error: any) {
       console.error("Placement error:", error);
       toast({
-        title: "❌ Неверный код!",
-        description: error.message || "Bypass-код неправильный",
+        title: "❌ Ошибка размещения",
+        description: error.message || "Проверьте bypass-код и попробуйте снова",
         variant: "destructive",
       });
       setBypassCode("");
@@ -249,7 +292,20 @@ export default function PlacementView() {
         });
 
         if (!response.ok) {
-          throw new Error("Ошибка размещения");
+          const errorData = await response.json();
+          
+          // Check if item is in testing (409 status)
+          if (response.status === 409) {
+            toast({
+              title: "❌ Товар на тестировании",
+              description: errorData.error || "Завершите тест перед размещением",
+              variant: "destructive",
+            });
+            resetForm();
+            return;
+          }
+          
+          throw new Error(errorData.error || "Ошибка размещения");
         }
 
         setFeedback("success");
@@ -435,7 +491,7 @@ export default function PlacementView() {
                   </div>
 
                   <div className="text-sm text-muted-foreground">
-                    Товаров ожидает размещения: {pendingPlacements.length}
+                    Товаров ожидает размещения: {filteredPendingPlacements.length}
                   </div>
                 </div>
               )}
@@ -586,11 +642,11 @@ export default function PlacementView() {
           </Card>
 
           {/* Pending Placements List */}
-          {pendingPlacements.length > 0 && (
+          {filteredPendingPlacements.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">
-                  Ожидают размещения ({pendingPlacements.length})
+                  Ожидают размещения ({filteredPendingPlacements.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -607,7 +663,7 @@ export default function PlacementView() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pendingPlacements.map((placement) => (
+                      {filteredPendingPlacements.map((placement) => (
                         <TableRow key={placement.id} data-testid={`row-placement-${placement.id}`}>
                           <TableCell className="font-mono text-sm">{placement.barcode}</TableCell>
                           <TableCell className="font-mono text-sm">{placement.sku}</TableCell>

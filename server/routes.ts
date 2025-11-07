@@ -740,6 +740,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(inventoryItem);
     } catch (error: any) {
       console.error("Confirm placement error:", error);
+      
+      // Check if item is in testing
+      if (error.message === "ITEM_IN_TESTING") {
+        return res.status(409).json({ error: "Товар на тестировании. Завершите тест перед размещением." });
+      }
+      
       return res.status(500).json({ error: error.message || "Внутренняя ошибка сервера" });
     }
   });
