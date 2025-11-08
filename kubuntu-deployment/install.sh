@@ -196,12 +196,46 @@ npm install --legacy-peer-deps
 print_success "Все пакеты установлены"
 
 # =====================================================
+# 6.5. Проверка подключения к БД
+# =====================================================
+print_info "Проверка подключения к PostgreSQL..."
+
+if node test-connection.js > /dev/null 2>&1; then
+    print_success "Подключение к БД работает!"
+else
+    print_error "Не удалось подключиться к БД"
+    echo ""
+    echo -e "${YELLOW}Возможная проблема с аутентификацией PostgreSQL${NC}"
+    echo ""
+    echo "Попробуйте запустить скрипт исправления:"
+    echo -e "  ${GREEN}./fix-postgres.sh${NC}"
+    echo ""
+    echo "Или пересоздайте пользователя вручную:"
+    echo "  sudo -u postgres psql << EOF"
+    echo "  DROP USER IF EXISTS warehouse_user;"
+    echo "  CREATE USER warehouse_user WITH PASSWORD 'warehouse_pass123';"
+    echo "  GRANT ALL PRIVILEGES ON DATABASE warehouse_local TO warehouse_user;"
+    echo "  EOF"
+    echo ""
+    exit 1
+fi
+
+# =====================================================
 # 7. Применение схемы БД
 # =====================================================
 print_header "Шаг 7/8: Применение схемы базы данных"
 
 print_info "Создание таблиц в базе данных..."
-npm run db:push -- --force
+
+# Попробовать применить схему
+if npm run db:push -- --force 2>&1 | tee /tmp/db-push.log | grep -q "error:"; then
+    print_error "Ошибка при применении схемы БД"
+    echo ""
+    cat /tmp/db-push.log
+    echo ""
+    echo -e "${YELLOW}Запустите ./fix-postgres.sh для исправления${NC}"
+    exit 1
+fi
 
 print_success "Схема базы данных применена"
 
