@@ -176,79 +176,12 @@ sudo chmod 755 /var/log/warehouse
 print_success "Директории для логов созданы: /var/log/warehouse"
 
 # =====================================================
-# 8. Создание admin пользователя
+# 8. Инструкция по созданию admin пользователя
 # =====================================================
 print_info "Шаг 8/8: Создание admin пользователя..."
 
-# Используем bootstrap endpoint для создания admin
-cat > /tmp/create_admin.js << 'EOFJS'
-const http = require('http');
-
-const options = {
-  hostname: 'localhost',
-  port: 5000,
-  path: '/api/admin/bootstrap',
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  }
-};
-
-const req = http.request(options, (res) => {
-  let data = '';
-  res.on('data', (chunk) => { data += chunk; });
-  res.on('end', () => {
-    if (res.statusCode === 200) {
-      console.log('SUCCESS');
-    } else {
-      console.log('FAILED');
-    }
-  });
-});
-
-req.on('error', (error) => {
-  console.log('ERROR');
-});
-
-req.end();
-EOFJS
-
-# Запускаем сервер в фоне временно для создания admin
-print_info "Запуск сервера для создания admin пользователя..."
-npm run dev > /tmp/warehouse_setup.log 2>&1 &
-SERVER_PID=$!
-
-# Ждем пока сервер запустится (max 30 секунд)
-echo -n "Ожидание запуска сервера"
-for i in {1..30}; do
-    if curl -s http://localhost:5000 > /dev/null 2>&1; then
-        echo ""
-        break
-    fi
-    echo -n "."
-    sleep 1
-done
-echo ""
-
-# Создаем admin через bootstrap endpoint
-ADMIN_RESULT=$(node /tmp/create_admin.js)
-
-# Останавливаем временный сервер
-kill $SERVER_PID 2>/dev/null || true
-wait $SERVER_PID 2>/dev/null || true
-
-if [ "$ADMIN_RESULT" == "SUCCESS" ]; then
-    print_success "Admin пользователь создан"
-    print_success "Логин: admin"
-    print_success "Пароль: admin123"
-else
-    print_warning "Не удалось создать admin автоматически"
-    print_info "После первого запуска создайте admin вручную через:"
-    print_info "curl -X POST http://localhost:5000/api/admin/bootstrap"
-fi
-
-# Очистка
-rm -f /tmp/create_admin.js /tmp/warehouse_setup.log
+print_info "После запуска сервера создайте admin пользователя через bootstrap endpoint"
+print_success "Инструкция готова"
 
 # =====================================================
 # Финальная информация
@@ -271,14 +204,17 @@ echo ""
 echo "3. Проверка статуса:"
 echo "   ${GREEN}sudo systemctl status warehouse${NC}"
 echo ""
-echo "4. Доступ к приложению:"
+echo "4. Создание admin пользователя:"
+echo "   ${GREEN}curl -X POST http://localhost:5000/api/admin/bootstrap${NC}"
+echo ""
+echo "5. Доступ к приложению:"
 echo "   ${GREEN}http://localhost:5000${NC}"
 echo ""
-echo "5. Учетные данные admin:"
+echo "6. Учетные данные admin (после создания):"
 echo "   Логин: ${GREEN}admin${NC}"
 echo "   Пароль: ${GREEN}admin123${NC}"
 echo ""
-echo "6. Сбор логов для отладки:"
+echo "7. Сбор логов для отладки:"
 echo "   ${GREEN}./collect-logs.sh${NC}"
 echo ""
 print_info "Подробная документация: README-LOCAL.md"
