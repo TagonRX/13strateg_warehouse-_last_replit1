@@ -1,0 +1,107 @@
+ruslan@ruslan-pc:~$ cd ~/Desktop
+tar -xzf warehouse.tar.gz
+cd warehouse
+./install.sh
+./start.sh
+bash: cd: warehouse: No such file or directory
+
+╔══════════════════════════════════════════════════════╗
+║  УСТАНОВКА WAREHOUSE MANAGEMENT SYSTEM               ║
+╚══════════════════════════════════════════════════════╝
+
+Будет установлено:
+  • Node.js 20
+  • PostgreSQL (БЕЗ паролей)
+  • Все данные (72,439 записей)
+
+Продолжить? (y/N): y
+
+[1/5] Установка Node.js 20
+✓ Node.js v20.19.5 установлен
+
+[2/5] Установка PostgreSQL
+✓ PostgreSQL установлен
+
+[3/5] Настройка PostgreSQL
+[sudo: authenticate] Password: 
+[sudo: authenticate] Password: 
+✓ PostgreSQL настроен БЕЗ паролей
+
+[4/5] Создание базы данных
+DROP DATABASE
+CREATE DATABASE
+✓ База данных создана
+✓ Конфигурация создана
+
+[5/5] Установка пакетов и данных
+Это займет 10-15 минут...
+npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+npm warn deprecated string-similarity@4.0.4: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+
+added 504 packages, and audited 505 packages in 8s
+
+65 packages are looking for funding
+  run `npm fund` for details
+
+8 vulnerabilities (3 low, 5 moderate)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+> rest-express@1.0.0 db:push
+> drizzle-kit push --force
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/ruslan/Desktop/drizzle.config.ts'
+Using 'pg' driver for database querying
+[⣷] Pulling schema from database...
+Error: SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string
+    at /home/ruslan/Desktop/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async Object.query (/home/ruslan/Desktop/node_modules/drizzle-kit/bin.cjs:80601:26)
+    at async fromDatabase2 (/home/ruslan/Desktop/node_modules/drizzle-kit/bin.cjs:19253:25)
+node:internal/modules/esm/resolve:283
+    throw new ERR_MODULE_NOT_FOUND(
+          ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/home/ruslan/Desktop/server/db.js' imported from /home/ruslan/Desktop/import-data.js
+    at finalizeResolution (node:internal/modules/esm/resolve:283:11)
+    at moduleResolve (node:internal/modules/esm/resolve:952:10)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:708:12)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:657:25)
+    at ModuleLoader.resolve (node:internal/modules/esm/loader:640:38)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:264:38)
+    at ModuleJob._link (node:internal/modules/esm/module_job:168:49) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///home/ruslan/Desktop/server/db.js'
+}
+
+Node.js v20.19.5
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Warehouse Management System
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+➜ Запуск сервера...
+
+✓ Сервер запущен!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  📍 URL:    http://localhost:5000
+  👤 Логин:  admin
+  🔑 Пароль: admin123
+
+  📝 Логи:   tail -f warehouse.log
+  🛑 Стоп:   ./stop.sh
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ruslan@ruslan-pc:~/Desktop$ 
