@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build output
+dist/
+server/public
+vite.config.ts.*
+
+# Environment variables
+.env
+*.env
+warehouse.env
+
+# Database
+*.db
+*.sqlite
+
+# Data files (excluding inventory_sync.csv template)
+data/arhiv/*.csv
+
+# Backups (created by sync script)
+backups/
+*.backup
+*.tar.gz
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+*.tmp
