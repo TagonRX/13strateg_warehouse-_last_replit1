@@ -113,9 +113,33 @@ else
 fi
 
 # =====================================================
-# 3. Создание базы данных
+# 3. Настройка PostgreSQL аутентификации
 # =====================================================
-print_header "Шаг 3/7: Создание базы данных"
+print_header "Шаг 3/7: Настройка PostgreSQL"
+
+print_info "Настройка pg_hba.conf для MD5 аутентификации..."
+
+# Находим файл pg_hba.conf
+PG_HBA=$(sudo -u postgres psql -t -P format=unaligned -c 'SHOW hba_file;')
+
+# Резервная копия
+sudo cp "$PG_HBA" "${PG_HBA}.backup" 2>/dev/null || true
+
+# Добавляем правило для локальных подключений с MD5
+if ! sudo grep -q "host.*all.*all.*127.0.0.1/32.*md5" "$PG_HBA"; then
+    sudo sed -i '/^# IPv4 local connections:/a host    all             all             127.0.0.1/32            md5' "$PG_HBA"
+fi
+
+# Перезапускаем PostgreSQL
+sudo systemctl restart postgresql
+sleep 2
+
+print_success "PostgreSQL настроен для MD5 аутентификации"
+
+# =====================================================
+# 4. Создание базы данных
+# =====================================================
+print_header "Шаг 4/7: Создание базы данных"
 
 DB_NAME="warehouse_local"
 DB_USER="warehouse_user"
@@ -132,6 +156,10 @@ sudo -u postgres psql << EOF
 CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';
 CREATE DATABASE $DB_NAME OWNER $DB_USER;
 GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;
+\c $DB_NAME
+GRANT ALL ON SCHEMA public TO $DB_USER;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $DB_USER;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO $DB_USER;
 EOF
 
 print_success "База данных создана"
@@ -140,9 +168,9 @@ print_success "  • Пользователь: $DB_USER"
 print_success "  • Пароль: $DB_PASSWORD"
 
 # =====================================================
-# 4. Создание .env файла
+# 5. Создание .env файла
 # =====================================================
-print_header "Шаг 4/7: Создание конфигурации"
+print_header "Шаг 5/7: Создание конфигурации"
 
 cat > .env << EOF
 # PostgreSQL Database
@@ -158,9 +186,9 @@ EOF
 print_success ".env файл создан"
 
 # =====================================================
-# 5. Установка npm пакетов
+# 6. Установка npm пакетов
 # =====================================================
-print_header "Шаг 5/7: Установка зависимостей"
+print_header "Шаг 6/7: Установка зависимостей"
 
 print_info "Установка npm пакетов (это может занять несколько минут)..."
 npm install --legacy-peer-deps
@@ -168,9 +196,9 @@ npm install --legacy-peer-deps
 print_success "Все пакеты установлены"
 
 # =====================================================
-# 6. Применение схемы БД
+# 7. Применение схемы БД
 # =====================================================
-print_header "Шаг 6/7: Применение схемы базы данных"
+print_header "Шаг 7/7: Применение схемы базы данных"
 
 print_info "Создание таблиц в базе данных..."
 npm run db:push -- --force
@@ -178,20 +206,37 @@ npm run db:push -- --force
 print_success "Схема базы данных применена"
 
 # =====================================================
-# 7. Импорт данных
+# 8. Импорт данных
 # =====================================================
-print_header "Шаг 7/7: Импорт данных"
+print_header "Шаг 8/8: Импорт данных (72,439 записей)"
 
 print_info "Импорт данных из data-export.json..."
+print_info "Это может занять 5-10 минут..."
 
-# Создаем скрипт импорта
+# Создаем скрипт импорта для локального PostgreSQL
 cat > import-data-auto.js << 'EOFIMPORT'
-import { neon } from '@neondatabase/serverless';
+import pg from 'pg';
 import fs from 'fs/promises';
 
-const sql = neon(process.env.DATABASE_URL);
+const { Pool } = pg;
+
+// Читаем DATABASE_URL из .env
+const envContent = await fs.readFile('.env', 'utf-8');
+const dbUrlMatch = envContent.match(/DATABASE_URL=(.+)/);
+const DATABASE_URL = dbUrlMatch ? dbUrlMatch[1].trim() : null;
+
+if (!DATABASE_URL) {
+  console.error('Ошибка: DATABASE_URL не найден в .env файле');
+  process.exit(1);
+}
+
+const pool = new Pool({
+  connectionString: DATABASE_URL
+});
 
 async function importData() {
+  const client = await pool.connect();
+  
   try {
     console.log('Загрузка данных из data-export.json...');
     const dataStr = await fs.readFile('data-export.json', 'utf-8');
@@ -225,6 +270,8 @@ async function importData() {
       'migrations'
     ];
     
+    let totalImported = 0;
+    
     for (const tableName of importOrder) {
       if (!data[tableName] || data[tableName].length === 0) {
         console.log(`  ⊘ ${tableName} - нет данных`);
@@ -237,22 +284,23 @@ async function importData() {
       // Получаем имена колонок из первой строки
       const columns = Object.keys(rows[0]);
       const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-      const columnNames = columns.join(', ');
+      const columnNames = columns.map(c => `"${c}"`).join(', ');
       
       // Импортируем по одной строке
       let imported = 0;
       for (const row of rows) {
         try {
           const values = columns.map(col => row[col]);
-          await sql(
+          await client.query(
             `INSERT INTO ${tableName} (${columnNames}) VALUES (${placeholders})`,
             values
           );
           imported++;
+          totalImported++;
         } catch (err) {
-          // Игнорируем дубликаты и другие ошибки
+          // Игнорируем дубликаты
           if (!err.message.includes('duplicate') && !err.message.includes('unique')) {
-            console.log(`    ⚠ Ошибка в строке: ${err.message.substring(0, 100)}`);
+            console.log(`    ⚠ Ошибка: ${err.message.substring(0, 80)}`);
           }
         }
       }
@@ -260,10 +308,13 @@ async function importData() {
       console.log(`  ✓ ${tableName} - импортировано ${imported}/${rows.length} строк`);
     }
     
-    console.log('\n✓ Импорт завершен успешно!');
+    console.log(`\n✓ Импорт завершен! Всего импортировано: ${totalImported} записей`);
   } catch (error) {
     console.error('Ошибка импорта:', error);
     process.exit(1);
+  } finally {
+    client.release();
+    await pool.end();
   }
 }
 
@@ -273,7 +324,7 @@ EOFIMPORT
 # Запускаем импорт
 node import-data-auto.js
 
-print_success "Данные импортированы"
+print_success "Данные импортированы успешно!"
 
 # Удаляем временный скрипт
 rm -f import-data-auto.js
