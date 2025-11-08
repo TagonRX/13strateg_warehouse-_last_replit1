@@ -30,19 +30,18 @@
 └──────────────────────────────────────────────────────────────────────┘
 
 1. Скопируйте файл warehouse-kubuntu-package.tar.gz на компьютер 
-   с Kubuntu 25.10
+   с Kubuntu 25.10 (например, на рабочий стол)
 
 2. Откройте терминал (Ctrl+Alt+T)
 
 3. Перейдите в папку с архивом:
    
-   cd ~/Downloads
+   cd ~/Desktop
    
-4. Создайте папку и распакуйте:
+4. Распакуйте архив:
 
-   mkdir -p ~/warehouse-system
-   tar -xzf warehouse-kubuntu-package.tar.gz -C ~/warehouse-system
-   cd ~/warehouse-system
+   tar -xzf warehouse-kubuntu-package.tar.gz
+   cd warehouse-kubuntu-package
 
 
 ┌──────────────────────────────────────────────────────────────────────┐

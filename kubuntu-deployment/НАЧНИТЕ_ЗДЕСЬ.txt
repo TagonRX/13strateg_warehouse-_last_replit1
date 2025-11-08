@@ -16,7 +16,7 @@
 
 2. Перейдите в эту папку:
    
-   cd ~/Desktop/warehouse-system
+   cd ~/Desktop/warehouse-kubuntu-package
    
 3. Запустите установку:
 
