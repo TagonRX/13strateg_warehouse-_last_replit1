@@ -1,0 +1,131 @@
+
+========================================
+УСТАНОВКА WAREHOUSE MANAGEMENT SYSTEM
+========================================
+
+Эта программа автоматически установит:
+  • Node.js 20
+  • PostgreSQL
+  • Warehouse Management System
+  • Все необходимые пакеты и данные
+
+После установки вы сможете:
+  • Запустить систему через ./start.sh
+  • Войти как admin/admin123
+
+Продолжить установку? (y/N): y
+
+========================================
+Шаг 1/7: Установка Node.js 20
+========================================
+
+✓ Node.js v20.19.5 уже установлен
+
+========================================
+Шаг 2/7: Установка PostgreSQL
+========================================
+
+✓ PostgreSQL уже установлен
+
+========================================
+Шаг 3/7: Создание базы данных
+========================================
+
+➜ Создание пользователя и базы данных...
+[sudo: authenticate] Password: 
+DROP DATABASE
+ERROR:  role "warehouse_user" already exists
+CREATE DATABASE
+GRANT
+✓ База данных создана
+✓   • База: warehouse_local
+✓   • Пользователь: warehouse_user
+✓   • Пароль: warehouse_pass123
+
+========================================
+Шаг 4/7: Создание конфигурации
+========================================
+
+✓ .env файл создан
+
+========================================
+Шаг 5/7: Установка зависимостей
+========================================
+
+➜ Установка npm пакетов (это может занять несколько минут)...
+npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+npm warn deprecated string-similarity@4.0.4: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+
+added 503 packages, and audited 504 packages in 6s
+
+64 packages are looking for funding
+  run `npm fund` for details
+
+8 vulnerabilities (3 low, 5 moderate)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+✓ Все пакеты установлены
+
+========================================
+Шаг 6/7: Применение схемы базы данных
+========================================
+
+➜ Создание таблиц в базе данных...
+
+> rest-express@1.0.0 db:push
+> drizzle-kit push --force
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/ruslan/Desktop/warehouse-kubuntu-package/drizzle.config.ts'
+Using 'pg' driver for database querying
+[⣷] Pulling schema from database...
+error: password authentication failed for user "warehouse_user"
+    at /home/ruslan/Desktop/warehouse-kubuntu-package/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async Object.query (/home/ruslan/Desktop/warehouse-kubuntu-package/node_modules/drizzle-kit/bin.cjs:80601:26)
+    at async fromDatabase2 (/home/ruslan/Desktop/warehouse-kubuntu-package/node_modules/drizzle-kit/bin.cjs:19253:25) {
+  length: 110,
+  severity: 'FATAL',
+  code: '28P01',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'auth.c',
+  line: '329',
+  routine: 'auth_failed'
+}
+✓ Схема базы данных применена
+
+========================================
+Шаг 7/7: Импорт данных
+========================================
+
+➜ Импорт данных из data-export.json...
+file:///home/ruslan/Desktop/warehouse-kubuntu-package/node_modules/@neondatabase/serverless/index.mjs:1524
+queryCallback:u,resultCallback:c,authToken:h}={}){if(!r)throw new Error("No data\
+                                                              ^
+
+Error: No database connection string was provided to `neon()`. Perhaps an environment variable has not been set?
+    at neon (file:///home/ruslan/Desktop/warehouse-kubuntu-package/node_modules/@neondatabase/serverless/index.mjs:1524:63)
+    at file:///home/ruslan/Desktop/warehouse-kubuntu-package/import-data-auto.js:4:13
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.19.5
+
