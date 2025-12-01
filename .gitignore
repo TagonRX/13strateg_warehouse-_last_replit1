@@ -1,4 +1,8 @@
-# Dependencies
+# ═══════════════════════════════════════════════════════════════════
+# WAREHOUSE MANAGEMENT SYSTEM - .gitignore для GitHub
+# ═══════════════════════════════════════════════════════════════════
+
+# Dependencies (устанавливаются через npm install)
 node_modules/
 package-lock.json
 
@@ -7,27 +11,39 @@ dist/
 server/public
 vite.config.ts.*
 
-# Environment variables
+# Environment variables (НИКОГДА не коммитить!)
 .env
 *.env
+.env.*
 warehouse.env
 
-# Database
+# Database files
 *.db
 *.sqlite
+*.sqlite3
+warehouse.db
 
-# Data files (excluding inventory_sync.csv template)
-data/arhiv/*.csv
+# Large data files (экспорт/импорт)
+database-export.json
+data-export.json
+*.sql
 
-# Backups (created by sync script)
+# Archives (создаются отдельно)
+*.tar.gz
+*.zip
+
+# Backups
 backups/
 *.backup
-*.tar.gz
 
 # Logs
 *.log
 logs/
 npm-debug.log*
+warehouse.log
+
+# PID files
+*.pid
 
 # OS files
 .DS_Store
@@ -38,8 +54,29 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+*.sublime-*
 
 # Temporary files
 tmp/
 temp/
 *.tmp
+.cache/
+
+# Replit specific
+.replit
+.upm/
+.config/
+.local/
+replit.md
+
+# Archive folder (старые версии файлов)
+_archive/
+
+# Attached assets (скриншоты и т.д.)
+attached_assets/
+
+# Data folder
+data/
+
+# Migrations (генерируются автоматически)
+migrations/
