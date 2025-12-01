@@ -1142,52 +1142,54 @@ export class DbStorage implements IStorage {
     const deleted: string[] = [];
     const failed: Array<{ id: string; error: string }> = [];
 
-    // Process deletions in parallel batches of 10
-    const batchSize = 10;
-    for (let i = 0; i < ids.length; i += batchSize) {
-      const batch = ids.slice(i, i + batchSize);
+    try {
+      // 1. Get all items at once (single query instead of 200)
+      const items = await db
+        .select()
+        .from(inventoryItems)
+        .where(inArray(inventoryItems.id, ids));
+
+      // Map found items by id
+      const foundItems = new Map(items.map(item => [item.id, item]));
       
-      const results = await Promise.allSettled(
-        batch.map(async (id) => {
-          // Get item for logging before deletion
-          const items = await db
-            .select()
-            .from(inventoryItems)
-            .where(eq(inventoryItems.id, id));
+      // Track which IDs exist
+      const existingIds = items.map(item => item.id);
+      
+      // Mark missing IDs as failed
+      ids.forEach(id => {
+        if (!foundItems.has(id)) {
+          failed.push({ id, error: "Товар не найден" });
+        }
+      });
 
-          if (items.length === 0) {
-            throw new Error("Товар не найден");
-          }
+      if (existingIds.length === 0) {
+        return { deleted, failed };
+      }
 
-          const item = items[0];
+      // 2. Delete all existing items at once (single query)
+      await db
+        .delete(inventoryItems)
+        .where(inArray(inventoryItems.id, existingIds));
 
-          // Delete item
-          await db
-            .delete(inventoryItems)
-            .where(eq(inventoryItems.id, id));
+      // Mark all as deleted
+      existingIds.forEach(id => deleted.push(id));
 
-          // Log the deletion
-          await this.createEventLog({
-            userId,
-            action: "DELETE_ITEM",
-            details: `Deleted item: ${item.name} (${item.sku})`,
-            productId: item.productId || null,
-            itemName: item.name || null,
-            sku: item.sku,
-            location: item.location,
-          });
+      // 3. Create single event log for bulk deletion (instead of 200 logs)
+      const skuList = items.slice(0, 10).map(item => item.sku).join(', ');
+      const moreCount = items.length > 10 ? ` и ещё ${items.length - 10}` : '';
+      
+      await this.createEventLog({
+        userId,
+        action: "BULK_DELETE_ITEMS",
+        details: `Массовое удаление: ${items.length} товаров (${skuList}${moreCount})`,
+      });
 
-          return id;
-        })
-      );
-
-      // Collect results
-      results.forEach((result, index) => {
-        const id = batch[index];
-        if (result.status === "fulfilled") {
-          deleted.push(id);
-        } else {
-          failed.push({ id, error: result.reason?.message || "Ошибка удаления" });
+    } catch (error: any) {
+      console.error("Batch delete error:", error);
+      // If bulk operation fails, mark all as failed
+      ids.forEach(id => {
+        if (!deleted.includes(id) && !failed.find(f => f.id === id)) {
+          failed.push({ id, error: error.message || "Ошибка удаления" });
         }
       });
     }
