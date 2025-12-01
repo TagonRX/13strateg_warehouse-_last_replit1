@@ -1,62 +1,251 @@
 # Warehouse Management System
 
 ## Overview
-This project is a comprehensive warehouse management system designed to streamline inventory tracking, stock management, and operational analytics. It offers role-based access for warehouse workers and administrators. Key capabilities include individual and bulk stock intake with barcode assignment, location-based picking, real-time inventory tracking, warehouse capacity monitoring, daily picking list management, robust worker performance analytics, and a complete event audit log. The business vision is to optimize warehouse operations, reduce manual errors, and provide actionable insights for improved efficiency and cost savings.
+
+This is a comprehensive warehouse management system designed to streamline inventory tracking, stock operations, and worker analytics. The application supports barcode scanning (USB devices and mobile cameras), CSV imports, picking list management, order fulfillment workflows, and detailed event logging. It features role-based access control with admin and worker roles, and includes specialized workflows for product testing, placement, dispatch, and packing operations.
 
 ## User Preferences
+
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### UI/UX Decisions
-The frontend uses React 18 with TypeScript and Vite, leveraging Radix UI primitives and shadcn/ui components ("New York" style). Typography is based on IBM Plex Sans/Mono, and the color palette supports both light and dark modes. Key UI patterns include role-based sidebar navigation, responsive design, card-based interfaces, real-time toast notifications, and resizable table columns. Barcode and QR code scanning is integrated with universal scanner support (USB, Zebra TC57, keyboard-emulating devices) and mobile camera mode via WebSocket. The picking interface features a compact vertical layout.
+### Frontend Architecture
 
-### Technical Implementations
-The backend is built with Node.js and Express.js, using TypeScript and ES Modules. It exposes a RESTful JSON API with session-based and Bearer token authentication, featuring role-based middleware. Drizzle ORM manages PostgreSQL database interactions. The project follows a monorepo structure, sharing TypeScript types and utilizing Zod for schema validation. Real-time communication is handled via a WebSocket server. A unique auto-location extraction feature derives warehouse locations from SKUs.
+**Technology Stack:**
+- React 18 with TypeScript and Vite for development and building
+- Radix UI primitives for accessible component foundations
+- shadcn/ui component library ("New York" style variant)
+- TailwindCSS for styling with custom design tokens
+- TanStack React Query for server state management
+- React Hook Form with Zod resolvers for form validation
 
-### Feature Specifications
-*   **Inventory Management**: Supports bulk imports via a CSV import wizard with intelligent product matching, real-time updates, location consistency checks, price tracking, archiving, and automatic condition transfer. Includes an automated CSV scheduler and advanced duplicate management. Dual inventory quantity tracking (`expectedQuantity` vs. `physicalCount`) is implemented for barcoded and non-barcoded items, with UI for variance detection. Item ID filtering is enforced for imports. In bulk stock-in mode, each scanned barcode creates a separate pending placement (quantity=1), ensuring accurate physical inventory tracking even when multiple items share the same SKU. **Selective Field Synchronization**: Each bulk upload source can configure which fields to update during CSV imports (quantity, name, price, itemId, dimensions, images, condition, eBay fields). Settings are saved per source and automatically applied during scheduled imports, allowing precise control over which data gets synchronized.
-*   **Location Management**: Mass-upload locations and barcodes via CSV.
-*   **Cost Analytics**: Tracks costs through event logs for stock-in/out operations and worker performance.
-*   **Picking Lists**: Manages daily picking lists with enhanced CSV/Excel/URL import capabilities, global credentials, persistent selections, and inventory depletion warnings. Displays product photos, eBay external links, and eBay Seller information. Smart order grouping: uses eBay data `(buyerUsername OR buyerName) + addressPostalCode + sellerEbayId` when available, automatically falls back to grouping by picking list name for non-eBay orders. Orders are created incrementally after each item scan with complete eBay metadata. **Flexible scanning workflow**: workers can scan items in any order - the system automatically finds the matching task by SKU without requiring sequential scanning.
-*   **Warehouse Loading View**: Provides dynamic filtering, configuration of warehouse settings for capacity analysis, and validation against managed locations.
-*   **User Management**: Basic user administration with robust deletion safeguards.
-*   **Event Logging**: Comprehensive audit trail of all warehouse operations with full product information and cost traceability, supporting CSV export and visual indicators. Detailed import statistics are tracked and persisted.
-*   **Import History**: Admin-only page displaying complete history of all CSV imports (both manual and scheduled) with detailed statistics including total rows processed, items created/updated, quantity changes, errors, duration, and status. Supports filtering by source type (manual/scheduler) and configurable result limits (25/50/100/200). Accessible via sidebar navigation at /import-history.
-*   **Worker Analytics**: Displays key metrics and cost totals for all users, including packing statistics, and searchable event history.
-*   **Barcode and QR Code Scanner Workflow**: Supports dual-mode scanning (USB/keyboard devices and mobile camera via WebSocket) with zoom controls, tooltips, and capacity validation. Auto-input for barcode scanners is supported.
-*   **Product Testing Workflow**: Optional two-phase system for incoming products. **Testing-Placement Integration**: Items currently undergoing testing are automatically filtered from the Placement view and blocked from placement via both frontend filtering (using `filteredPendingPlacements`) and backend validation (returns 409 error). Attempting to scan an item in testing displays a specific error message. Once testing completes, the item becomes available for placement immediately.
-*   **Pending Placement Management**: Administrators can delete pending placements.
-*   **Dispatch Workflow**: Complete order preparation system with 4-phase non-stop barcode scanning, including support for non-barcoded items via manual SKU search. Incremental order creation and status protection ensure real-time visibility and data integrity. Includes "Back to orders list" button for exiting at any workflow stage.
-*   **Packing Workflow**: Multi-worker order fulfillment with **shipping label-based order lookup**. System searches by priority: shipping label → item barcode → SKU. Orders display as `orderNumber__shippingLabel` format for easy identification. **Strict barcode verification**: Only accepts barcodes that were scanned in Dispatch (`dispatchedBarcodes`). If no item barcodes were scanned in Dispatch, allows immediate packing completion without item verification. Supports barcode → SKU mapping via inventory for validation. Supports concurrent packing sessions with real-time updates. Displays pending orders reference table at bottom for read-only access.
-*   **Bypass Code Feature**: Secure system for warehouse item placement allowing an administrator-set bypass code as an alternative to scanning location barcodes.
-*   **Bulk Order Deletion**: Admin-only bulk delete functionality via DELETE /api/orders/bulk endpoint with status filtering (PENDING, DISPATCHED, PACKED). Includes confirmation dialogs showing exact deletion counts. Dispatch page deletes pending orders; Packing page deletes dispatched and packed orders.
-*   **Barcode Editing**: Admin-only capability to correct barcodes across Testing, Stock-In, and Placement workflows. Edit buttons with dialog UI allow barcode modification for pending placements and pending tests. Features duplicate barcode validation, event logging for audit trail, and dialog-aware global scanner routing that prevents unwanted navigation during editing. Accessible via PATCH endpoints `/api/pending-placements/:id/barcode` and `/api/product-testing/pending/:barcode/barcode`.
+**Design System:**
+- Typography: IBM Plex Sans (body text) and IBM Plex Mono (data/codes)
+- Color scheme: Supports light and dark modes with HSL-based theming
+- Component architecture: Modular components in `client/src/components/`
+- Path aliases: `@/` for client source, `@shared/` for shared types, `@assets/` for assets
 
-### System Design Choices
-The database schema, managed by Drizzle ORM, includes tables for users, inventory, event logs, worker analytics, picking lists, and specific workflows. It uses UUID primary keys, automatic timestamps, and foreign key relationships. Product identification is by `itemId` or `sku`, and upsert patterns handle bulk inventory updates. The CSV import system is a 4-step wizard with source selection, intelligent column mapping (including bilingual suggestions, auto-detection, and Image URLs), intelligent matching and conflict resolution, and a final confirmation. Column mappings are persisted. Backend CSV processing is optimized for large files using batch processing and parallel chunk execution. Separated CSV source systems (`bulkUploadSources` for inventory and `csvSources` for picking lists) are implemented.
+**Key UI Features:**
+- Responsive layout with collapsible sidebar navigation
+- Real-time barcode scanner integration (USB and camera-based)
+- WebSocket support for remote scanning capabilities
+- CSV import wizards with drag-and-drop file upload
+- Data tables with inline editing and filtering
+- Photo gallery displays for product images
 
-### Data Migration System
-A complete data migration solution enables safe transfer of all data from development to production environments:
-*   **Bootstrap Endpoint** (`POST /api/admin/bootstrap`): Creates or resets admin user with login "admin" and password "admin123" - works in any environment without authentication
-*   **Export Endpoint** (`GET /api/admin/export-all`): Exports all 22 database tables from the current environment as JSON (requires admin authentication)
-*   **Import Endpoint** (`POST /api/admin/import-all`): Imports data into the current environment using a **database transaction** to ensure atomicity - if any error occurs, the transaction is rolled back and no data is lost (requires admin authentication)
-*   **Debug Endpoint** (`GET /api/debug/status`): Displays migration status and database contents for verification
-*   All passwords are bcrypt-hashed during export/import, maintaining security
-*   Foreign key dependencies are respected during deletion and insertion
-*   Validation ensures all required tables are present before import begins
+### Backend Architecture
+
+**Technology Stack:**
+- Node.js with Express.js framework
+- TypeScript with ES Modules
+- Drizzle ORM for database operations
+- Session-based and Bearer token authentication
+- WebSocket server for real-time scanning features
+- bcrypt for password hashing
+
+**API Design:**
+- RESTful JSON API structure
+- Endpoints organized by feature domain
+- Role-based middleware (`requireAuth`, `requireAdmin`)
+- Request size limits: 50MB for handling large CSV uploads
+- Comprehensive error handling with proper HTTP status codes
+
+**Database Layer:**
+- Drizzle ORM with PostgreSQL dialect
+- Dual database driver support:
+  - Neon serverless driver for cloud deployments (Replit)
+  - node-postgres (pg) driver for local/standard PostgreSQL installations
+- Automatic driver selection based on DATABASE_URL pattern
+- UUID primary keys across all tables
+- Automatic timestamp management (createdAt, updatedAt)
+
+**Session Management:**
+- In-memory session storage with expiry (24 hours)
+- Token-based authentication for API requests
+- Automatic session cleanup for expired tokens
+
+### Core Features and Workflows
+
+**Inventory Management:**
+- Individual and bulk CSV import (up to 2000 rows)
+- Intelligent product matching with SKU conflict resolution
+- Automatic location extraction from SKU patterns (e.g., A101-F → A101)
+- Barcode mapping system supporting multiple barcodes per item
+- Price tracking and archiving with 4-day zero-quantity grace period
+- Product image storage (up to 24 images per item)
+- Inline editing with real-time validation
+
+**Location Management:**
+- Active location registry with barcode assignments
+- CSV mass-upload for locations
+- Location pattern-based warehouse settings (TSKU/MAXQ limits)
+- Dynamic filtering and capacity analysis
+
+**Barcode Scanning:**
+- Dual-mode scanner support (USB keyboard devices and mobile camera)
+- WebSocket-based remote scanning for distributed workflows
+- HTTPS requirement detection for camera access
+- Auto-focus and zoom controls for mobile scanning
+- Real-time barcode validation against inventory
+
+**Picking Lists:**
+- Daily picking list creation and management
+- Multi-source CSV/Excel import with URL support
+- Global credential storage for remote imports
+- Automatic source merging and deduplication
+- Inventory depletion warnings
+- Product photo display in picking interface
+- Persistent selection state
+
+**Testing and Placement Workflow:**
+- Optional two-phase system for incoming products
+- Testing phase with condition assignment (New, Used, Exdisplay, Parts, Faulty)
+- Automatic filtering of items under test from placement views
+- Barcode editing capability for admins
+- Pending placement management with bulk operations
+
+**Dispatch Workflow:**
+- Four-phase non-stop barcode scanning process
+- Support for non-barcoded items via manual SKU search
+- Incremental order creation with status tracking
+- Shipping label integration
+- Admin-only bulk order deletion with status filtering
+
+**Packing Workflow:**
+- Multi-worker order fulfillment system
+- Shipping label-based order lookup (priority: label → barcode → SKU)
+- Order display format: `orderNumber__shippingLabel`
+- Real-time packing statistics per worker
+
+**Bypass Code System:**
+- Secure alternative to location barcode scanning
+- Admin-configurable bypass code
+- Confirmation dialogs for placement operations
+
+**Analytics and Reporting:**
+- Worker performance metrics and cost tracking
+- Event log with full audit trail (CSV export supported)
+- Import history with detailed statistics
+- Visual indicators for operation types
+- Searchable and filterable event history
+
+**File Synchronization:**
+- Scheduled CSV imports with cron expressions
+- Automatic archiving of changes
+- Import history tracking
+- Configurable import field settings
+
+### Database Schema
+
+**Core Tables:**
+- `users` - User accounts with role-based access (admin/worker), password management
+- `inventory_items` - Main inventory with SKU, location, barcodes, dimensions, pricing, images
+- `archived_inventory_items` - Historical inventory data
+- `active_locations` - Warehouse location registry
+- `pending_placements` - Items awaiting physical placement
+- `pending_tests` - Items in testing phase
+- `tested_items` - Completed test records
+- `faulty_stock` - Defective items tracking
+
+**Workflow Tables:**
+- `picking_lists` - Daily picking tasks
+- `picking_tasks` - Individual items within picking lists (legacy support)
+- `orders` - Order records with status (PENDING, DISPATCHED, PACKED)
+- `csv_import_sessions` - Import tracking and validation
+
+**Configuration Tables:**
+- `warehouse_settings` - Location-based capacity rules (TSKU, MAXQ)
+- `global_settings` - System-wide configuration (bypass codes, etc.)
+- `csv_sources` - Registered CSV import sources with credentials
+- `bulk_upload_sources` - File-based import configurations
+- `scheduler_settings` - Automated import scheduling
+- `column_mappings` - CSV field mapping configurations
+
+**Analytics Tables:**
+- `event_logs` - Comprehensive audit trail with quantity and cost tracking
+- `worker_analytics` - Performance metrics per user
+- `import_history` - Complete import operation history
+- `import_runs` - Individual import execution records
+
+**Foreign Key Relationships:**
+- All operations link to `users` for attribution
+- Event logs reference inventory items, orders, and users
+- Picking tasks reference picking lists
+- Import sessions track source configurations
+
+### Authentication and Authorization
+
+**Authentication:**
+- bcrypt password hashing (10 salt rounds)
+- Session tokens (32-byte random hex strings)
+- 24-hour session expiry
+- Password change enforcement flag
+
+**Authorization:**
+- Two roles: `admin` and `worker`
+- Role-based middleware for route protection
+- Admin-only features: user management, SKU conflict resolution, warehouse configuration, bulk deletions, barcode editing, analytics access
+
+### Data Migration and Bootstrap System
+
+**Bootstrap Endpoint:**
+- `POST /api/admin/bootstrap` - Creates/resets admin user (login: "admin", password: "admin123")
+- No authentication required
+- Works in any environment
+
+**Export Endpoint:**
+- `GET /api/admin/export-all` - Exports all 22 database tables as JSON
+- Admin authentication required
+- Passwords remain bcrypt-hashed during export
+
+**Import Endpoint:**
+- `POST /api/admin/import-all` - Imports complete database snapshot
+- Uses database transactions for atomicity (rollback on any error)
+- Validates table presence before import
+- Respects foreign key dependencies during deletion and insertion
+
+**Debug Endpoint:**
+- `GET /api/debug/status` - Displays migration status and database contents
 
 ## External Dependencies
 
-*   **Database**: Neon Serverless PostgreSQL (development), PostgreSQL 16 (production).
-*   **UI Components**: Radix UI, shadcn/ui, Lucide React, cmdk, vaul.
-*   **Form Handling**: React Hook Form, @hookform/resolvers, Zod.
-*   **Data Fetching**: TanStack Query.
-*   **Authentication**: BCrypt.
-*   **Styling**: Tailwind CSS, class-variance-authority, tailwind-merge.
-*   **Date Handling**: date-fns.
-*   **Barcode Scanning**: html5-qrcode.
-*   **CSV Parsing**: fast-csv.
-*   **String Matching**: string-similarity.
-*   **Image Carousel**: embla-carousel-react.
-*   **Build Tools**: Vite, esbuild, TypeScript, Drizzle Kit.
+### Database
+- **PostgreSQL** - Primary data store (version 14+)
+- **Neon Serverless** (@neondatabase/serverless) - Cloud PostgreSQL driver for Replit deployments
+- **node-postgres** (pg) - Standard PostgreSQL driver for local installations
+- **Drizzle ORM** (drizzle-orm, drizzle-kit) - Type-safe database operations and migrations
+
+### Backend Services
+- **Express.js** - Web framework (version 5.x)
+- **WebSocket** (ws) - Real-time bidirectional communication for remote scanner
+- **bcrypt** - Password hashing and verification
+- **node-cron** - Scheduled task execution for automated imports
+- **fast-csv** - CSV parsing for imports
+- **string-similarity** - Fuzzy matching for product identification
+
+### Frontend Libraries
+- **React** (@vitejs/plugin-react) - UI framework
+- **Radix UI** - Headless UI component primitives (30+ components including accordion, dialog, dropdown, select, toast, etc.)
+- **TanStack React Query** - Server state management and caching
+- **React Hook Form** - Form state management
+- **Zod** - Schema validation (@hookform/resolvers for integration)
+- **class-variance-authority & clsx** - Conditional class name utilities
+- **cmdk** - Command palette component
+
+### Development Tools
+- **Vite** - Build tool and dev server
+- **TypeScript** - Type safety and developer experience
+- **TailwindCSS** - Utility-first CSS framework
+- **PostCSS & Autoprefixer** - CSS processing
+- **ESBuild** - Fast JavaScript bundler for production builds
+- **tsx** - TypeScript execution for development
+
+### Replit-Specific Integrations
+- **@replit/vite-plugin-runtime-error-modal** - Development error overlay
+- **@replit/vite-plugin-cartographer** - Development environment integration
+- **@replit/vite-plugin-dev-banner** - Development environment banner
+
+### Additional Utilities
+- **nanoid** - Unique ID generation
+- **dotenv** - Environment variable management
