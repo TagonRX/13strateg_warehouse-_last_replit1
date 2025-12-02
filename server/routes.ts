@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, insertInventoryItemSchema, insertEventLogSchema, insertOrderSchema, pickingTasks, users } from "@shared/schema";
+import { insertUserSchema, insertInventoryItemSchema, insertEventLogSchema, insertOrderSchema, pickingTasks, users, ebayAccounts, insertEbayAccountSchema, orders } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import { verifyPassword, hashPassword, createSession, requireAuth, requireAdmin } from "./auth";
 import { setupWebSocket } from "./websocket";
@@ -3789,6 +3789,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error: any) {
       console.error("[SCHEDULER] Manual run error:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // =============== eBay Integration API (Admin) ===============
+  app.get("/api/integrations/ebay/accounts", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const list = await db.select().from(ebayAccounts);
+      return res.json(list);
+    } catch (error: any) {
+      console.error("[EBAY] List accounts error:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/integrations/ebay/accounts", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertEbayAccountSchema.parse(req.body);
+      const [acc] = await db.insert(ebayAccounts).values(parsed).returning();
+      return res.status(201).json(acc);
+    } catch (error: any) {
+      console.error("[EBAY] Create account error:", error);
+      return res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/integrations/ebay/accounts/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates: any = { ...req.body, updatedAt: new Date().toISOString() };
+      const [acc] = await db.update(ebayAccounts).set(updates).where(eq(ebayAccounts.id, id)).returning();
+      return res.json(acc);
+    } catch (error: any) {
+      console.error("[EBAY] Update account error:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/integrations/ebay/accounts/:id/test", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { ensureAccessToken } = await import("./integrations/ebay/client");
+      const { id } = req.params;
+      const token = await ensureAccessToken(id);
+      return res.json({ ok: true, tokenExpiresAt: token.expiresAt });
+    } catch (error: any) {
+      console.error("[EBAY] Test account error:", error);
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  app.post("/api/integrations/ebay/pull-orders", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { pullOrdersForAllAccounts } = await import("./integrations/ebay/ordersPull");
+      const result = await pullOrdersForAllAccounts();
+      return res.json({ ok: true, result });
+    } catch (error: any) {
+      console.error("[EBAY] Pull orders error:", error);
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  // Worker endpoint to pull orders via API, gated by setting allow_worker_orders_pull
+  app.post("/api/integrations/ebay/pull-orders-worker", requireAuth, async (req, res) => {
+    try {
+      const setting = await storage.getGlobalSetting('allow_worker_orders_pull');
+      const allowed = setting?.value === 'true';
+      if (!allowed) {
+        return res.status(403).json({ ok: false, error: 'Недоступно. Обратитесь к администратору.' });
+      }
+      const { pullOrdersForAllAccounts } = await import("./integrations/ebay/ordersPull");
+      const result = await pullOrdersForAllAccounts();
+      return res.json({ ok: true, result });
+    } catch (error: any) {
+      console.error("[EBAY] Worker pull orders error:", error);
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  app.post("/api/integrations/ebay/pull-inventory", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      // Check inventory sync mode allows pull
+      const modeSetting = await storage.getGlobalSetting('inventory_sync_mode');
+      const mode = modeSetting?.value || 'none';
+      if (!(mode === 'pull' || mode === 'both')) {
+        return res.status(400).json({ ok: false, error: 'Синхронизация инвентаря отключена' });
+      }
+      const { pullInventoryForAllAccounts } = await import("./integrations/ebay/inventoryPull");
+      const result = await pullInventoryForAllAccounts();
+      return res.json({ ok: true, result });
+    } catch (error: any) {
+      console.error("[EBAY] Pull inventory error:", error);
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  // Aggregate pending orders into a picking list by SKU
+  app.post("/api/integrations/ebay/create-picking-list", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const now = new Date();
+      const name = `eBay Picking ${now.toISOString().slice(0,16).replace('T',' ')}`;
+      const pending = await db.select().from(orders).where(eq(orders.status, "PENDING"));
+
+      const skuMap = new Map<string, { sku: string; qty: number }>();
+      for (const o of pending) {
+        if (!o.items) continue;
+        try {
+          const items = JSON.parse(o.items) as Array<{ sku?: string; quantity?: number }>;
+          for (const it of items) {
+            if (!it?.sku) continue;
+            const key = it.sku.trim().toUpperCase();
+            const rec = skuMap.get(key) || { sku: key, qty: 0 };
+            rec.qty += Math.max(1, it.quantity ?? 1);
+            skuMap.set(key, rec);
+          }
+        } catch {}
+      }
+
+      const tasks = Array.from(skuMap.values()).map(t => ({ sku: t.sku, requiredQuantity: t.qty }));
+      if (tasks.length === 0) return res.status(400).json({ error: "No pending order items to aggregate" });
+
+      const result = await storage.createPickingList({ name, userId: (req as any).user.id, tasks });
+      return res.status(201).json(result);
+    } catch (error: any) {
+      console.error("[EBAY] Create picking list from orders error:", error);
       return res.status(500).json({ error: error.message });
     }
   });

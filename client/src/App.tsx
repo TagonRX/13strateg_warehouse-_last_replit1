@@ -20,6 +20,8 @@ import EventLogsView from "@/components/EventLogsView";
 import WorkerAnalytics from "@/components/WorkerAnalytics";
 import SkuErrorsView from "@/components/SkuErrorsView";
 import RemoteBarcodeScanner from "@/components/RemoteBarcodeScanner";
+import InventorySyncStatus from "@/components/InventorySyncStatus";
+import EbayIntegrationPanel from "@/components/EbayIntegrationPanel";
 import ProductTesting from "@/pages/ProductTesting";
 import FaultyStockPage from "@/pages/FaultyStock";
 import ScannerMode from "@/pages/ScannerMode";
@@ -479,6 +481,7 @@ function AppContent() {
           <div className="space-y-4">
             <h1 className="text-3xl font-bold">Массовая загрузка</h1>
             <CSVUploader onUpload={handleCSVUpload} />
+            {user.role === "admin" && <EbayIntegrationPanel />}
           </div>
         </Route>
         <Route path="/inventory">
@@ -490,6 +493,10 @@ function AppContent() {
                 <RemoteBarcodeScanner />
               </div>
             </div>
+            {/* Inventory sync status and action (admin only) */}
+            {user.role === "admin" && (
+              <InventorySyncStatus />
+            )}
             <InventoryTable items={inventory} userRole={user.role} />
           </div>
         </Route>

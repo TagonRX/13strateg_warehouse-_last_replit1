@@ -342,6 +342,42 @@ export async function initializeDatabase(): Promise<void> {
         duration INTEGER,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
       );
+
+      -- eBay accounts (multiple stores)
+      CREATE TABLE IF NOT EXISTS ebay_accounts (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        site_id TEXT,
+        client_id TEXT NOT NULL,
+        client_secret TEXT NOT NULL,
+        refresh_token TEXT NOT NULL,
+        access_token TEXT,
+        access_token_expires_at TEXT,
+        enabled INTEGER DEFAULT 1 NOT NULL,
+        last_orders_since TEXT,
+        last_inventory_since TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+
+      -- Idempotency index for external orders
+      CREATE TABLE IF NOT EXISTS external_orders_index (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        external_order_id TEXT NOT NULL,
+        order_id TEXT NOT NULL,
+        imported_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+
+      -- External inventory mapping
+      CREATE TABLE IF NOT EXISTS external_inventory_index (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        external_item_id TEXT NOT NULL,
+        sku TEXT,
+        inventory_item_id TEXT,
+        imported_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
     `;
 
     // Выполняем создание таблиц

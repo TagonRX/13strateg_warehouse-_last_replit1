@@ -7,6 +7,7 @@ import { parse } from 'fast-csv';
 
 let cronTask: ScheduledTask | null = null;
 let archiveCronTask: ScheduledTask | null = null;
+let ebayCronTask: ScheduledTask | null = null;
 let isRunning = false;
 
 export async function startScheduler() {
@@ -52,6 +53,31 @@ export async function startScheduler() {
   });
 
   console.log('[SCHEDULER] Archive cleanup task scheduled (daily at 2 AM)');
+
+  // eBay pull task (orders & inventory) at 6 AM and 12 PM daily
+  if (ebayCronTask) {
+    ebayCronTask.stop();
+    ebayCronTask = null;
+  }
+  ebayCronTask = cron.schedule('0 6,12 * * *', async () => {
+    try {
+      const { pullOrdersForAllAccounts } = await import('./integrations/ebay/ordersPull');
+      const { pullInventoryForAllAccounts } = await import('./integrations/ebay/inventoryPull');
+      console.log('[SCHEDULER][EBAY] Pulling orders...');
+      await pullOrdersForAllAccounts();
+      // Inventory pull only if sync mode allows
+      const modeSetting = await storage.getGlobalSetting('inventory_sync_mode');
+      const mode = modeSetting?.value || 'none';
+      if (mode === 'pull' || mode === 'both') {
+        console.log('[SCHEDULER][EBAY] Pulling inventory...');
+        await pullInventoryForAllAccounts();
+      } else {
+        console.log('[SCHEDULER][EBAY] Inventory sync disabled by settings');
+      }
+    } catch (e) {
+      console.error('[SCHEDULER][EBAY] Pull failed:', e);
+    }
+  });
 }
 
 export async function stopScheduler() {

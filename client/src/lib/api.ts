@@ -348,3 +348,116 @@ export async function getEventLogs(limit?: number): Promise<any[]> {
 
   return response.json();
 }
+
+// =============== eBay Integration API (Admin) ===============
+export interface EbayAccount {
+  id: string;
+  label: string;
+  siteId?: string | null;
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  accessToken?: string | null;
+  accessTokenExpiresAt?: string | null;
+  enabled: boolean;
+  lastOrdersSince?: string | null;
+  lastInventorySince?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getEbayAccounts(): Promise<EbayAccount[]> {
+  const response = await fetch("/api/integrations/ebay/accounts", {
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Не удалось получить список аккаунтов eBay");
+  return response.json();
+}
+
+export async function createEbayAccount(input: {
+  label: string;
+  siteId?: string;
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  enabled?: boolean;
+}): Promise<EbayAccount> {
+  const response = await fetch("/api/integrations/ebay/accounts", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(input),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || "Ошибка создания аккаунта eBay");
+  return data;
+}
+
+export async function updateEbayAccount(id: string, updates: Partial<{
+  label: string;
+  siteId?: string;
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  enabled: boolean;
+  lastOrdersSince?: string | null;
+  lastInventorySince?: string | null;
+}>): Promise<EbayAccount> {
+  const response = await fetch(`/api/integrations/ebay/accounts/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(updates),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || "Ошибка обновления аккаунта eBay");
+  return data;
+}
+
+export async function testEbayAccount(id: string): Promise<{ ok: boolean; tokenExpiresAt?: string; error?: string }>{
+  const response = await fetch(`/api/integrations/ebay/accounts/${id}/test`, {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok || data?.ok === false) throw new Error(data?.error || "Тест аккаунта не выполнен");
+  return data;
+}
+
+export async function pullEbayOrders(): Promise<{ ok: boolean; result?: any; error?: string }>{
+  const response = await fetch("/api/integrations/ebay/pull-orders", {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok || data?.ok === false) throw new Error(data?.error || "Ошибка загрузки заказов eBay");
+  return data;
+}
+
+export async function pullEbayOrdersWorker(): Promise<{ ok: boolean; result?: any; error?: string }>{
+  const response = await fetch("/api/integrations/ebay/pull-orders-worker", {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok || data?.ok === false) throw new Error(data?.error || "Ошибка загрузки заказов eBay");
+  return data;
+}
+
+export async function pullEbayInventory(): Promise<{ ok: boolean; result?: any; error?: string }>{
+  const response = await fetch("/api/integrations/ebay/pull-inventory", {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok || data?.ok === false) throw new Error(data?.error || "Ошибка загрузки инвентаря eBay");
+  return data;
+}
+
+export async function createPickingListFromEbay(): Promise<{ id: string; name: string }>{
+  const response = await fetch("/api/integrations/ebay/create-picking-list", {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || "Ошибка создания листа отбора");
+  return data;
+}

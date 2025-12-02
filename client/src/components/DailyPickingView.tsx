@@ -20,6 +20,7 @@ import type { PickingList, PickingTask, InventoryItem } from "@shared/schema";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { format } from "date-fns";
+import { pullEbayOrdersWorker, createPickingListFromEbay } from "@/lib/api";
 
 export default function DailyPickingView() {
   const { toast } = useToast();
@@ -57,6 +58,35 @@ export default function DailyPickingView() {
       localStorage.removeItem("selectedPickingListId");
     }
   }, [selectedListId]);
+
+  // Admin toggle: allow workers to pull orders via API
+  const { data: allowWorkerPullSetting } = useQuery<{ key: string; value: string }>({
+    queryKey: ["/api/settings", "allow_worker_orders_pull"],
+    queryFn: async () => {
+      const res = await fetch("/api/settings/allow_worker_orders_pull");
+      if (res.status === 404) return { key: "allow_worker_orders_pull", value: "false" };
+      return res.json();
+    },
+  });
+  const allowWorkerOrdersPull = allowWorkerPullSetting?.value === "true";
+
+  const pullOrdersMutation = useMutation({
+    mutationFn: () => pullEbayOrdersWorker(),
+    onSuccess: () => {
+      toast({ title: "Заказы загружены", description: "Заказы eBay подтянуты" });
+    },
+    onError: (e: any) => toast({ title: "Ошибка", description: e?.message || "Не удалось загрузить заказы", variant: "destructive" }),
+  });
+
+  const createFromOrdersMutation = useMutation({
+    mutationFn: () => createPickingListFromEbay(),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/picking/lists"] });
+      if (res?.id) setSelectedListId(res.id);
+      toast({ title: "Лист отбора создан", description: res?.name || "Сгруппировано по SKU" });
+    },
+    onError: (e: any) => toast({ title: "Ошибка", description: e?.message || "Не удалось создать лист отбора", variant: "destructive" }),
+  });
 
   // Fetch global credentials from database
   const { data: globalUsernameData } = useQuery<{ key: string; value: string }>({
@@ -860,6 +890,26 @@ export default function DailyPickingView() {
                 }}
               />
             </div>
+
+            {allowWorkerOrdersPull && (
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => pullOrdersMutation.mutate()}
+                  disabled={pullOrdersMutation.isPending}
+                >
+                  {pullOrdersMutation.isPending ? "Грузим заказы..." : "Загрузить заказы (eBay)"}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => createFromOrdersMutation.mutate()}
+                  disabled={createFromOrdersMutation.isPending}
+                >
+                  {createFromOrdersMutation.isPending ? "Создание..." : "Создать лист из заказов"}
+                </Button>
+              </div>
+            )}
 
             <Button
               data-testid="button-create-list"

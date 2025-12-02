@@ -389,6 +389,51 @@ export const importRuns = sqliteTable("import_runs", {
   createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// eBay Accounts (multiple stores support)
+export const ebayAccounts = sqliteTable("ebay_accounts", {
+  id: text("id").primaryKey().default(sql`lower(hex(randomblob(16)))`),
+  label: text("label").notNull(),
+  siteId: text("site_id"),
+  clientId: text("client_id").notNull(),
+  clientSecret: text("client_secret").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  accessToken: text("access_token"),
+  accessTokenExpiresAt: text("access_token_expires_at"),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  lastOrdersSince: text("last_orders_since"),
+  lastInventorySince: text("last_inventory_since"),
+  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// External order idempotency index (avoid duplicates)
+export const externalOrdersIndex = sqliteTable("external_orders_index", {
+  id: text("id").primaryKey().default(sql`lower(hex(randomblob(16)))`),
+  accountId: text("account_id").notNull(),
+  externalOrderId: text("external_order_id").notNull(),
+  orderId: text("order_id").notNull(),
+  importedAt: text("imported_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// External inventory index (map eBay item to local inventory)
+export const externalInventoryIndex = sqliteTable("external_inventory_index", {
+  id: text("id").primaryKey().default(sql`lower(hex(randomblob(16)))`),
+  accountId: text("account_id").notNull(),
+  externalItemId: text("external_item_id").notNull(),
+  sku: text("sku"),
+  inventoryItemId: text("inventory_item_id"),
+  importedAt: text("imported_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// Insert schemas (new)
+export const insertEbayAccountSchema = createInsertSchema(ebayAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  accessToken: true,
+  accessTokenExpiresAt: true,
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
