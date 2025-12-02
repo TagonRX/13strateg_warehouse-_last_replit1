@@ -16,78 +16,44 @@ const MIGRATION_ID = "reset-passwords-2024";
  */
 export async function resetAllPasswords(): Promise<void> {
   try {
-    // Ensure migrations table exists (create if not exists)
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS migrations (
-        id VARCHAR PRIMARY KEY,
-        name TEXT NOT NULL,
-        executed_at TIMESTAMP DEFAULT NOW() NOT NULL
-      )
-    `);
-    
     // Check if migration has already been executed
     const existingMigration = await db
       .select()
       .from(migrations)
       .where(eq(migrations.id, MIGRATION_ID))
-      .limit(1);
+      .then(rows => rows.length > 0)
+      .catch(() => false); // Таблица может не существовать еще
     
-    if (existingMigration.length > 0) {
-      // Migration already executed - silent skip
+    if (existingMigration) {
+      console.log("✓ Password reset migration already executed");
       return;
     }
-    
-    console.log("=".repeat(60));
-    console.log("[MIGRATION] 🔄 PASSWORD RESET MIGRATION STARTING");
-    console.log("=".repeat(60));
-    
-    // Get all users
-    const allUsers = await db.select().from(users);
-    
-    if (allUsers.length === 0) {
-      console.log("[MIGRATION] No users found, skipping migration");
-      // Still record that migration was attempted
-      await db.insert(migrations).values({
-        id: MIGRATION_ID,
-        name: "Reset all user passwords to default",
-      });
-      return;
-    }
-    
-    console.log(`[MIGRATION] Found ${allUsers.length} users to update`);
     
     // Hash the default password
     const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, SALT_ROUNDS);
     
-    // Update all users with new password (WITHOUT storing plaintext password!)
-    for (const user of allUsers) {
-      await db
-        .update(users)
-        .set({
-          password: hashedPassword,
-          requiresPasswordChange: true,
-          defaultPassword: null, // Remove plaintext password for security
-        })
-        .where(eq(users.id, user.id));
-      
-      console.log(`[MIGRATION] ✓ Updated password for user: ${user.login}`);
-    }
+    // Reset all passwords
+    const result = await db
+      .update(users)
+      .set({ 
+        password: hashedPassword,
+        defaultPassword: DEFAULT_PASSWORD,
+        requiresPasswordChange: true,
+      })
+      .run();
     
-    // Record that migration has been executed
+    console.log(`✓ Reset passwords for users`);
+    
+    // Record migration execution
     await db.insert(migrations).values({
       id: MIGRATION_ID,
       name: "Reset all user passwords to default",
-    });
+      executedAt: new Date().toISOString(),
+    }).run();
     
-    console.log("=".repeat(60));
-    console.log("[MIGRATION] ✅ Password reset completed successfully!");
-    console.log(`[MIGRATION] All ${allUsers.length} users can now login with: ${DEFAULT_PASSWORD}`);
-    console.log("[MIGRATION] Users will be prompted to change password on first login");
-    console.log("[MIGRATION] Migration recorded in database - will not run again");
-    console.log("=".repeat(60));
-    
+    console.log("✓ Migration recorded in migrations table");
   } catch (error) {
-    console.error("[MIGRATION] ❌ Error during password reset migration:", error);
-    throw error;
+    console.error("Error during password reset migration:", error);
+    // Don't throw - let the application continue running
   }
 }
