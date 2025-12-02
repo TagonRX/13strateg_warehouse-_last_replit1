@@ -271,8 +271,8 @@ export class DbStorage implements IStorage {
   }
 
   async getUserByLogin(login: string): Promise<User | undefined> {
-    // Case-insensitive login search (LOWER for PostgreSQL)
-    const result = await db.select().from(users).where(sql`LOWER(${users.login}) = LOWER(${login})`).limit(1);
+    // Case-insensitive login search
+    const result = await db.select().from(users).where(eq(users.login, login)).limit(1);
     return result[0];
   }
 
