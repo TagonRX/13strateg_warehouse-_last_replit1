@@ -343,6 +343,17 @@ export async function initializeDatabase(): Promise<void> {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
       );
 
+      -- SKU reservations (to compute ATP and prevent overstock)
+      CREATE TABLE IF NOT EXISTS reservations (
+        id TEXT PRIMARY KEY,
+        order_id TEXT,
+        sku TEXT NOT NULL,
+        quantity INTEGER DEFAULT 1 NOT NULL,
+        status TEXT DEFAULT 'ACTIVE' NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        cleared_at TEXT
+      );
+
       -- eBay accounts (multiple stores)
       CREATE TABLE IF NOT EXISTS ebay_accounts (
         id TEXT PRIMARY KEY,

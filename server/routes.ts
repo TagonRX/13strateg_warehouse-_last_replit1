@@ -3917,6 +3917,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ATP endpoint: onHand - active reservations per SKU
+  app.get("/api/inventory/atp", requireAuth, async (req, res) => {
+    try {
+      const list = await storage.getATPBySku();
+      return res.json(list);
+    } catch (error: any) {
+      console.error("[ATP] Failed:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // Setup WebSocket server for remote scanning

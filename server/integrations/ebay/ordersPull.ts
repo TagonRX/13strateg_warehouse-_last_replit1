@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { externalOrdersIndex, orders, ebayAccounts, importRuns } from "@shared/schema";
+import { externalOrdersIndex, orders, ebayAccounts, importRuns, reservations } from "@shared/schema";
 import { ensureAccessToken, getEnabledAccounts } from "./client";
 import { eq, and } from "drizzle-orm";
 
@@ -42,6 +42,16 @@ export async function pullOrdersForAccount(accountId: string): Promise<PullOrder
         items: JSON.stringify(ext.items || []),
         orderDate: ext.orderDate || new Date().toISOString(),
       }).returning();
+
+      // Create SKU reservations for this order (prevent overstock)
+      try {
+        const items = Array.isArray(ext.items) ? ext.items : [];
+        for (const it of items) {
+          if (!it?.sku) continue;
+          const qty = Math.max(1, it.quantity ?? 1);
+          await db.insert(reservations).values({ orderId: newOrder.id, sku: String(it.sku).toUpperCase(), quantity: qty });
+        }
+      } catch {}
 
       await db.insert(externalOrdersIndex).values({
         accountId,

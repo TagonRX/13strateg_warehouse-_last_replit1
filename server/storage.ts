@@ -21,6 +21,7 @@ import {
   archivedInventoryItems,
   schedulerSettings,
   importRuns,
+  reservations,
   type User, 
   type InsertUser,
   type InventoryItem,
@@ -2971,6 +2972,11 @@ export class DbStorage implements IStorage {
       barcodesInfo = itemsInfo; // Fallback to items info on error
     }
 
+    // Clear reservations for this order
+    await db.update(reservations)
+      .set({ status: "CLEARED", clearedAt: new Date() })
+      .where(eq(reservations.orderId, id));
+
     // Delete items from inventory based on dispatched barcodes
     if (barcodes && barcodes.length > 0) {
       for (const barcode of barcodes) {
@@ -3489,6 +3495,28 @@ export class DbStorage implements IStorage {
       console.error('[ARCHIVE] Failed to append to OLD-inventory.csv:', error);
       // Don't throw - archiving to file is not critical
     }
+  }
+
+  // Compute Available-to-Promise by SKU (onHand - active reserved)
+  async getATPBySku(): Promise<Array<{ sku: string; onHand: number; reserved: number; atp: number }>> {
+    const items = await db.select().from(inventoryItems);
+    const activeRes = await db.select().from(reservations).where(eq(reservations.status, "ACTIVE"));
+    const onHandMap = new Map<string, number>();
+    for (const it of items) {
+      onHandMap.set(it.sku, (onHandMap.get(it.sku) || 0) + (it.quantity || 0));
+    }
+    const reservedMap = new Map<string, number>();
+    for (const r of activeRes) {
+      reservedMap.set(r.sku, (reservedMap.get(r.sku) || 0) + (r.quantity || 0));
+    }
+    const skus = new Set<string>([...onHandMap.keys(), ...reservedMap.keys()]);
+    const result: Array<{ sku: string; onHand: number; reserved: number; atp: number }> = [];
+    for (const sku of skus) {
+      const onHand = onHandMap.get(sku) || 0;
+      const reserved = reservedMap.get(sku) || 0;
+      result.push({ sku, onHand, reserved, atp: onHand - reserved });
+    }
+    return result.sort((a, b) => a.sku.localeCompare(b.sku));
   }
 }
 

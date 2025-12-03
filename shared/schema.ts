@@ -389,6 +389,23 @@ export const importRuns = sqliteTable("import_runs", {
   createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// Резервы по SKU (для расчёта ATP и защиты от overstock)
+export const reservations = sqliteTable("reservations", {
+  id: text("id").primaryKey().default(sql`lower(hex(randomblob(16)))`),
+  orderId: text("order_id"),
+  sku: text("sku").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  status: text("status").notNull().default("ACTIVE"), // ACTIVE | CLEARED
+  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  clearedAt: text("cleared_at"),
+});
+
+export const insertReservationSchema = createInsertSchema(reservations).omit({
+  id: true,
+  createdAt: true,
+  clearedAt: true,
+});
+
 // eBay Accounts (multiple stores support)
 export const ebayAccounts = sqliteTable("ebay_accounts", {
   id: text("id").primaryKey().default(sql`lower(hex(randomblob(16)))`),
