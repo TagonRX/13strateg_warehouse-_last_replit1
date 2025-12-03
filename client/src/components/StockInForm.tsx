@@ -442,11 +442,12 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
     
     // Логировать изменение состояния (критическое событие)
     try {
+      const token = localStorage.getItem('auth_token');
       await fetch("/api/event-logs", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem('token')}`,
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           action: "CONDITION_OVERRIDE",

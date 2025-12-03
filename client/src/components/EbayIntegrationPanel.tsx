@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
@@ -52,6 +53,19 @@ export default function EbayIntegrationPanel() {
       return res.json();
     },
   });
+  const canPushInventory = (inventorySyncMode?.value === 'push' || inventorySyncMode?.value === 'both');
+  const modeText = inventorySyncMode?.value === 'push'
+    ? 'Только в eBay'
+    : inventorySyncMode?.value === 'pull'
+    ? 'Только из eBay'
+    : inventorySyncMode?.value === 'both'
+    ? 'В обе стороны'
+    : 'Отключено';
+  const modeVariant = inventorySyncMode?.value === 'none'
+    ? 'destructive'
+    : inventorySyncMode?.value === 'pull'
+    ? 'secondary'
+    : 'default';
   const { data: inventorySyncAccounts } = useQuery<{ key: string; value: string }>({
     queryKey: ["/api/settings", "inventory_sync_accounts"],
     queryFn: async () => {
@@ -273,7 +287,13 @@ export default function EbayIntegrationPanel() {
           <TableBody>
             {accounts.map((acc) => (
               <TableRow key={acc.id}>
-                <TableCell className="font-medium">{acc.label}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <span>{acc.label}</span>
+                    {!!acc.useOrders && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">orders</span>}
+                    {!!acc.useInventory && <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">inventory</span>}
+                  </div>
+                </TableCell>
                 <TableCell>{acc.siteId || "-"}</TableCell>
                 <TableCell>
                   <Switch checked={!!acc.enabled} onCheckedChange={(val) => updateMutation.mutate({ id: acc.id, updates: { enabled: !!val } })} />
@@ -434,7 +454,7 @@ export default function EbayIntegrationPanel() {
               <TableHeader><TableRow><TableHead>Заказы: Аккаунт</TableHead><TableHead>Дата</TableHead><TableHead>Создано</TableHead><TableHead>Ошибок</TableHead><TableHead>Статус</TableHead></TableRow></TableHeader>
               <TableBody>
                 {filteredOrders.map((r: any) => (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} className={r.status === 'ERROR' ? 'bg-red-50' : r.status === 'WARNING' ? 'bg-yellow-50' : ''}>
                     <TableCell>{(accounts.find(a => a.id === r.sourceRef)?.label) || r.sourceRef || "—"}</TableCell>
                     <TableCell>{new Date(r.createdAt).toLocaleString()}</TableCell>
                     <TableCell>{r.created ?? 0}</TableCell>
@@ -455,7 +475,7 @@ export default function EbayIntegrationPanel() {
               <TableHeader><TableRow><TableHead>Инвентарь: Аккаунт</TableHead><TableHead>Дата</TableHead><TableHead>Создано</TableHead><TableHead>Ошибок</TableHead><TableHead>Статус</TableHead></TableRow></TableHeader>
               <TableBody>
                 {filteredInv.map((r: any) => (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} className={r.status === 'ERROR' ? 'bg-red-50' : r.status === 'WARNING' ? 'bg-yellow-50' : ''}>
                     <TableCell>{(accounts.find(a => a.id === r.sourceRef)?.label) || r.sourceRef || "—"}</TableCell>
                     <TableCell>{new Date(r.createdAt).toLocaleString()}</TableCell>
                     <TableCell>{r.created ?? 0}</TableCell>
@@ -476,7 +496,7 @@ export default function EbayIntegrationPanel() {
               <TableHeader><TableRow><TableHead>Пуш: Аккаунт</TableHead><TableHead>Дата</TableHead><TableHead>Обновлено</TableHead><TableHead>Ошибок</TableHead><TableHead>Статус</TableHead></TableRow></TableHeader>
               <TableBody>
                 {filteredInvPush.map((r: any) => (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} className={r.status === 'ERROR' ? 'bg-red-50' : r.status === 'WARNING' ? 'bg-yellow-50' : ''}>
                     <TableCell>{(accounts.find(a => a.id === r.sourceRef)?.label) || r.sourceRef || "—"}</TableCell>
                     <TableCell>{new Date(r.createdAt).toLocaleString()}</TableCell>
                     <TableCell>{r.updated ?? 0}</TableCell>
@@ -497,7 +517,10 @@ export default function EbayIntegrationPanel() {
 
       {/* Effective ATP preview + push */}
       <div className="space-y-4">
-        <h3 className="text-lg font-medium">Предпросмотр push (с учётом буфера)</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-medium">Предпросмотр push (с учётом буфера)</h3>
+          <Badge variant={modeVariant as any}>Режим: {modeText}</Badge>
+        </div>
         <div className="grid grid-cols-1 gap-2">
           <div className="space-y-1">
             <Label>Аккаунт</Label>
@@ -510,7 +533,14 @@ export default function EbayIntegrationPanel() {
           </div>
         </div>
         <div className="flex justify-end">
-          <Button variant="secondary" onClick={() => previewAccountId && pushMutation.mutate(previewAccountId)} disabled={!previewAccountId || pushMutation.isPending}>{pushMutation.isPending ? 'Пуш…' : 'Запушить инвентарь'}</Button>
+          <Button
+            variant="secondary"
+            onClick={() => previewAccountId && canPushInventory && pushMutation.mutate(previewAccountId)}
+            disabled={!previewAccountId || !canPushInventory || pushMutation.isPending}
+            title={canPushInventory ? undefined : 'Пуш инвентаря отключён в настройках (режим не push/both)'}
+          >
+            {pushMutation.isPending ? 'Пуш…' : (canPushInventory ? 'Запушить инвентарь' : 'Пуш отключён')}
+          </Button>
         </div>
         <div className="border rounded-md overflow-hidden">
           <Table>
