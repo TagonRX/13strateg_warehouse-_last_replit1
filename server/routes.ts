@@ -3940,18 +3940,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       // Compute effective ATP with buffer
       const effective = await storage.getEffectiveATPBySkuForAccount(accountId);
-      // STUB push: in real impl, loop and call eBay Inventory API to set quantities
-      let updated = 0, errors = 0;
-      for (const row of effective) {
-        try {
-          // Skip zero or negative effective quantities
-          if (row.effective <= 0) continue;
-          // TODO: call eBay API to set quantity for SKU row.sku to row.effective
-          updated++;
-        } catch (e) {
-          errors++;
-        }
-      }
+      // Real push via eBay Inventory API (with dry-run toggle)
+      const { pushInventoryForAccount } = await import('./integrations/ebay/inventoryPush');
+      const result = await pushInventoryForAccount(accountId, effective.map(r => ({ sku: r.sku, effective: r.effective })));
+      const updated = result.updated;
+      const errors = result.errors;
       // Record import run
       await db.insert(importRuns).values({
         sourceType: 'EBAY_INVENTORY_PUSH',
