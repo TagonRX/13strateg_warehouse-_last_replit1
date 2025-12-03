@@ -180,6 +180,8 @@ export default function EbayIntegrationPanel() {
         clientSecret: newClientSecret,
         refreshToken: newRefreshToken,
         enabled: newEnabled,
+        useOrders: true,
+        useInventory: false,
       });
     },
     onSuccess: () => {
@@ -241,6 +243,8 @@ export default function EbayIntegrationPanel() {
               <TableHead>Название</TableHead>
               <TableHead>Site ID</TableHead>
               <TableHead>Включен</TableHead>
+              <TableHead>Для заказов</TableHead>
+              <TableHead>Для инвентаря</TableHead>
               <TableHead className="text-right">Действия</TableHead>
             </TableRow>
           </TableHeader>
@@ -251,6 +255,12 @@ export default function EbayIntegrationPanel() {
                 <TableCell>{acc.siteId || "-"}</TableCell>
                 <TableCell>
                   <Switch checked={!!acc.enabled} onCheckedChange={(val) => updateMutation.mutate({ id: acc.id, updates: { enabled: !!val } })} />
+                </TableCell>
+                <TableCell>
+                  <Switch checked={!!acc.useOrders} onCheckedChange={(val) => updateMutation.mutate({ id: acc.id, updates: { useOrders: !!val } })} />
+                </TableCell>
+                <TableCell>
+                  <Switch checked={!!acc.useInventory} onCheckedChange={(val) => updateMutation.mutate({ id: acc.id, updates: { useInventory: !!val } })} />
                 </TableCell>
                 <TableCell className="text-right">
                   <Button size="sm" variant="secondary" onClick={() => testMutation.mutate(acc.id)} disabled={testMutation.isPending}>Тест</Button>

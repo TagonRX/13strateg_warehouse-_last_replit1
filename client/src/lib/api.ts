@@ -360,6 +360,8 @@ export interface EbayAccount {
   accessToken?: string | null;
   accessTokenExpiresAt?: string | null;
   enabled: boolean;
+  useOrders: boolean;
+  useInventory: boolean;
   lastOrdersSince?: string | null;
   lastInventorySince?: string | null;
   createdAt: string;
@@ -381,6 +383,8 @@ export async function createEbayAccount(input: {
   clientSecret: string;
   refreshToken: string;
   enabled?: boolean;
+  useOrders?: boolean;
+  useInventory?: boolean;
 }): Promise<EbayAccount> {
   const response = await fetch("/api/integrations/ebay/accounts", {
     method: "POST",
@@ -399,6 +403,8 @@ export async function updateEbayAccount(id: string, updates: Partial<{
   clientSecret: string;
   refreshToken: string;
   enabled: boolean;
+  useOrders: boolean;
+  useInventory: boolean;
   lastOrdersSince?: string | null;
   lastInventorySince?: string | null;
 }>): Promise<EbayAccount> {

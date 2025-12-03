@@ -365,6 +365,8 @@ export async function initializeDatabase(): Promise<void> {
         access_token TEXT,
         access_token_expires_at TEXT,
         enabled INTEGER DEFAULT 1 NOT NULL,
+        use_orders INTEGER DEFAULT 0 NOT NULL,
+        use_inventory INTEGER DEFAULT 0 NOT NULL,
         last_orders_since TEXT,
         last_inventory_since TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -426,6 +428,20 @@ export async function initializeDatabase(): Promise<void> {
     }
 
     console.log("✅ Database initialized successfully");
+
+    // Миграция: добавить столбцы use_orders/use_inventory, если таблица старая
+    try {
+      const tableInfo: any = await db.execute(sql`PRAGMA table_info(ebay_accounts)`);
+      const cols = (tableInfo.rows || []).map((r: any) => r.name);
+      if (!cols.includes('use_orders')) {
+        await db.execute(sql`ALTER TABLE ebay_accounts ADD COLUMN use_orders INTEGER DEFAULT 0 NOT NULL`);
+      }
+      if (!cols.includes('use_inventory')) {
+        await db.execute(sql`ALTER TABLE ebay_accounts ADD COLUMN use_inventory INTEGER DEFAULT 0 NOT NULL`);
+      }
+    } catch (e) {
+      console.warn('Migration check for ebay_accounts flags failed:', e);
+    }
   } catch (error) {
     console.error("❌ Failed to initialize database:", error);
     throw error;

@@ -421,6 +421,9 @@ export const ebayAccounts = sqliteTable("ebay_accounts", {
   lastInventorySince: text("last_inventory_since"),
   createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  // Новые флаги использования
+  useOrders: integer("use_orders", { mode: "boolean" }).notNull().default(false),
+  useInventory: integer("use_inventory", { mode: "boolean" }).notNull().default(false),
 });
 
 // External order idempotency index (avoid duplicates)
