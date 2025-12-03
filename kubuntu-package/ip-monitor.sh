@@ -3,7 +3,7 @@ set -euo pipefail
 
 ENV_FILE="/etc/warehouse/env"
 STATE_FILE="/etc/warehouse/last_ip"
-MAIL_TO=""
+MAIL_TO="tagonte@gmail.com"
 
 current_ip=$(hostname -I | awk '{print $1}')
 last_ip=""

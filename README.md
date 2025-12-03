@@ -136,6 +136,61 @@ module.exports = {
 - 2 GB RAM
 - 10 GB свободного места
 
+### Установка на Kubuntu (bash installer)
+
+- Установщик: `kubuntu-package/install.sh` копирует проект в `/opt/warehouse`, собирает, настраивает ENV и systemd, переносит БД в `/var/lib/warehouse/warehouse.db`.
+
+Шаги установки:
+
+1) Клонируйте репозиторий и перейдите в каталог
+
+```bash
+git clone <repo-url>
+cd 13strateg_warehouse-_last_replit1
+```
+
+2) Запустите установщик (требуются sudo права)
+
+```bash
+sudo bash kubuntu-package/install.sh
+```
+
+3) Проверьте статус сервиса и API
+
+```bash
+systemctl status warehouse.service
+curl -s http://localhost:5000/api/debug/status | jq
+```
+
+4) Включите мониторинг IP (опционально)
+
+```bash
+sudo cp kubuntu-package/warehouse-ip-monitor.service /etc/systemd/system/
+sudo cp kubuntu-package/warehouse-ip-monitor.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now warehouse-ip-monitor.timer
+```
+
+Конфигурация:
+- ENV файл: `/etc/warehouse/env` (по умолчанию `PORT=5000`, `SQLITE_PATH=/var/lib/warehouse/warehouse.db`, `NODE_ENV=production`)
+- База данных: `/var/lib/warehouse/warehouse.db`
+- Логи systemd: `journalctl -u warehouse.service -f`
+
+Удаление:
+
+```bash
+sudo bash kubuntu-package/uninstall.sh
+# Данные сохраняются по умолчанию
+# Полный удаление:
+sudo rm -rf /var/lib/warehouse /etc/warehouse /opt/warehouse
+```
+
+Смена порта:
+- Измените `PORT` в `/etc/warehouse/env` и выполните `sudo systemctl restart warehouse.service`
+
+Смена email для уведомлений IP:
+- Измените переменную `MAIL_TO` в `kubuntu-package/ip-monitor.sh` и перезапустите таймер: `sudo systemctl restart warehouse-ip-monitor.timer`
+
 ### SQLite версия
 - Node.js 18+
 - 1 GB RAM
