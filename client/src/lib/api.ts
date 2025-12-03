@@ -461,3 +461,24 @@ export async function createPickingListFromEbay(): Promise<{ id: string; name: s
   if (!response.ok) throw new Error(data?.error || "Ошибка создания листа отбора");
   return data;
 }
+
+// Effective ATP for a specific account (applies safety buffer)
+export async function getEffectiveATPForAccount(accountId: string): Promise<{ accountId: string; list: Array<{ sku: string; onHand: number; reserved: number; buffer: number; effective: number }> }>{
+  const response = await fetch(`/api/inventory/atp/effective?accountId=${encodeURIComponent(accountId)}`, {
+    headers: getHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || "Ошибка получения эффективного ATP");
+  return data;
+}
+
+export async function pushEbayInventory(accountId: string): Promise<{ ok: boolean; updated: number; errors: number; pushed: number; total: number }>{
+  const response = await fetch("/api/integrations/ebay/push-inventory", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ accountId }),
+  });
+  const data = await response.json();
+  if (!response.ok || data?.ok === false) throw new Error(data?.error || "Ошибка пуша инвентаря");
+  return data;
+}

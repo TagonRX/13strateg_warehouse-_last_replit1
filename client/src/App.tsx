@@ -21,6 +21,7 @@ import WorkerAnalytics from "@/components/WorkerAnalytics";
 import SkuErrorsView from "@/components/SkuErrorsView";
 import RemoteBarcodeScanner from "@/components/RemoteBarcodeScanner";
 import InventorySyncStatus from "@/components/InventorySyncStatus";
+import ATPWidget from "@/components/ATPWidget";
 import EbayIntegrationPanel from "@/components/EbayIntegrationPanel";
 import ProductTesting from "@/pages/ProductTesting";
 import FaultyStockPage from "@/pages/FaultyStock";
@@ -496,6 +497,9 @@ function AppContent() {
             {/* Inventory sync status and action (admin only) */}
             {user.role === "admin" && (
               <InventorySyncStatus />
+            )}
+            {user.role === "admin" && (
+              <ATPWidget />
             )}
             <InventoryTable items={inventory} userRole={user.role} />
           </div>

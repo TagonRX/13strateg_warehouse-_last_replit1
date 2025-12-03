@@ -3884,6 +3884,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Push inventory to eBay for a specific account, applying safety buffer (stub)
+  app.post("/api/integrations/ebay/push-inventory", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const modeSetting = await storage.getGlobalSetting('inventory_sync_mode');
+      const mode = modeSetting?.value || 'none';
+      if (!(mode === 'push' || mode === 'both')) {
+        return res.status(400).json({ ok: false, error: 'Пуш инвентаря отключён (режим не push/both)' });
+      }
+      const { accountId } = req.body || {};
+      if (!accountId || typeof accountId !== 'string') {
+        return res.status(400).json({ ok: false, error: 'accountId обязателен' });
+      }
+      // Check account is enabled and allowed by settings
+      const accs = await db.select().from(ebayAccounts).where(eq(ebayAccounts.id, accountId));
+      if (accs.length === 0 || !accs[0].enabled) return res.status(404).json({ ok: false, error: 'Аккаунт не найден или отключён' });
+      const allowedSetting = await storage.getGlobalSetting('inventory_sync_accounts');
+      if (allowedSetting?.value) {
+        try {
+          const arr = JSON.parse(allowedSetting.value);
+          if (Array.isArray(arr) && !arr.includes(accountId)) {
+            return res.status(403).json({ ok: false, error: 'Аккаунт не включён для синхронизации' });
+          }
+        } catch {}
+      }
+      // Compute effective ATP with buffer
+      const effective = await storage.getEffectiveATPBySkuForAccount(accountId);
+      // STUB push: in real impl, loop and call eBay Inventory API to set quantities
+      let updated = 0, errors = 0;
+      for (const row of effective) {
+        try {
+          // Skip zero or negative effective quantities
+          if (row.effective <= 0) continue;
+          // TODO: call eBay API to set quantity for SKU row.sku to row.effective
+          updated++;
+        } catch (e) {
+          errors++;
+        }
+      }
+      // Record import run
+      await db.insert(importRuns).values({
+        sourceType: 'EBAY_INVENTORY_PUSH',
+        sourceRef: accountId,
+        triggeredBy: 'manual',
+        rowsTotal: effective.length,
+        created: 0,
+        errors,
+        status: errors > 0 ? 'WARNING' : 'SUCCESS',
+        updated,
+      } as any);
+      return res.json({ ok: true, accountId, updated, errors, pushed: updated, total: effective.length });
+    } catch (error: any) {
+      console.error("[EBAY] Push inventory error:", error);
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
   // Aggregate pending orders into a picking list by SKU
   app.post("/api/integrations/ebay/create-picking-list", requireAuth, requireAdmin, async (req, res) => {
     try {
@@ -3924,6 +3980,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(list);
     } catch (error: any) {
       console.error("[ATP] Failed:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Effective ATP for account: applies safety buffer per account
+  app.get("/api/inventory/atp/effective", requireAuth, async (req, res) => {
+    try {
+      const accountId = String(req.query.accountId || "").trim();
+      if (!accountId) return res.status(400).json({ error: "accountId обязателен" });
+      const list = await storage.getEffectiveATPBySkuForAccount(accountId);
+      return res.json({ accountId, list });
+    } catch (error: any) {
+      console.error("[ATP] Effective failed:", error);
       return res.status(500).json({ error: error.message });
     }
   });

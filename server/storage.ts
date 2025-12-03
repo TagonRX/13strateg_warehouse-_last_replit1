@@ -3518,6 +3518,38 @@ export class DbStorage implements IStorage {
     }
     return result.sort((a, b) => a.sku.localeCompare(b.sku));
   }
+
+  // Compute Effective ATP for a specific account applying safety buffer
+  async getEffectiveATPBySkuForAccount(accountId: string): Promise<Array<{ sku: string; onHand: number; reserved: number; buffer: number; effective: number }>> {
+    const items = await db.select().from(inventoryItems);
+    const activeRes = await db.select().from(reservations).where(eq(reservations.status, "ACTIVE"));
+    const onHandMap = new Map<string, number>();
+    for (const it of items) {
+      onHandMap.set(it.sku, (onHandMap.get(it.sku) || 0) + (it.quantity || 0));
+    }
+    const reservedMap = new Map<string, number>();
+    for (const r of activeRes) {
+      reservedMap.set(r.sku, (reservedMap.get(r.sku) || 0) + (r.quantity || 0));
+    }
+    let bufMap: Record<string, number> = {};
+    try {
+      const bufSetting = await this.getGlobalSetting('inventory_safety_buffer');
+      if (bufSetting?.value) {
+        const parsed = JSON.parse(bufSetting.value);
+        if (parsed && typeof parsed === 'object') bufMap = parsed as Record<string, number>;
+      }
+    } catch {}
+    const buffer = Number.isFinite(bufMap[accountId]) ? Number(bufMap[accountId]) : 0;
+    const skus = new Set<string>([...onHandMap.keys(), ...reservedMap.keys()]);
+    const result: Array<{ sku: string; onHand: number; reserved: number; buffer: number; effective: number }> = [];
+    for (const sku of skus) {
+      const onHand = onHandMap.get(sku) || 0;
+      const reserved = reservedMap.get(sku) || 0;
+      const effective = Math.max(0, onHand - reserved - buffer);
+      result.push({ sku, onHand, reserved, buffer, effective });
+    }
+    return result.sort((a, b) => a.sku.localeCompare(b.sku));
+  }
 }
 
 export const storage = new DbStorage();
