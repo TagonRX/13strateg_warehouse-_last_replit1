@@ -191,6 +191,22 @@ sudo rm -rf /var/lib/warehouse /etc/warehouse /opt/warehouse
 Смена email для уведомлений IP:
 - Измените переменную `MAIL_TO` в `kubuntu-package/ip-monitor.sh` и перезапустите таймер: `sudo systemctl restart warehouse-ip-monitor.timer`
 
+### Nginx + HTTPS (Let’s Encrypt)
+
+Настроить reverse proxy и TLS:
+
+```bash
+sudo bash kubuntu-package/setup-nginx.sh <domain> tagonte@gmail.com
+# пример:
+sudo bash kubuntu-package/setup-nginx.sh warehouse.local tagonte@gmail.com
+```
+
+Файлы конфигурации:
+- `kubuntu-package/nginx-warehouse.conf` → устанавливается как `/etc/nginx/sites-available/warehouse.conf`
+- Сайт активируется ссылкой в `/etc/nginx/sites-enabled/warehouse.conf`
+
+Прокси перенаправляет на локальный сервис Express (`http://127.0.0.1:5000`). Сертификаты выпускать через certbot.
+
 ### SQLite версия
 - Node.js 18+
 - 1 GB RAM
