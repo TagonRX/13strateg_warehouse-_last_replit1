@@ -71,4 +71,5 @@ sudo systemctl enable --now warehouse.service
 echo "Installer completed. Service status:"
 systemctl --no-pager status warehouse.service || true
 
-echo "Try: curl -s http://localhost:5000/api/debug/status | jq"
+echo "Running smoke test:"
+bash kubuntu-package/smoke.sh 5000 || true

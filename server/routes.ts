@@ -93,6 +93,27 @@ function matchProductsByName(csvName: string, inventoryItems: any[]): { match: a
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Healthcheck (PUBLIC)
+  app.get("/api/health", async (_req, res) => {
+    try {
+      const startedAt = (process as any).startedAt || new Date().toISOString();
+      (process as any).startedAt = startedAt;
+      const { users, migrations } = await import('@shared/schema');
+      const allUsers = await db.select().from(users);
+      const dbPath = (process.env.SQLITE_PATH || require('path').join(__dirname, '..', 'warehouse.db'));
+      return res.json({
+        ok: true,
+        uptimeSec: Math.floor(process.uptime()),
+        startedAt,
+        env: process.env.NODE_ENV || 'unknown',
+        port: parseInt(process.env.PORT || '5000', 10),
+        usersCount: allUsers.length,
+        dbPath,
+      });
+    } catch (error: any) {
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  });
   // Debug endpoint - check migration status and users (PUBLIC)
   app.get("/api/debug/status", async (req, res) => {
     try {
