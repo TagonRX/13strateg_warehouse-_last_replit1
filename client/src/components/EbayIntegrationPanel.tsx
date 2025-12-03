@@ -84,6 +84,24 @@ export default function EbayIntegrationPanel() {
       return res.json();
     },
   });
+  const { data: pushLive } = useQuery<{ key: string; value: string }>({
+    queryKey: ["/api/settings", "inventory_push_live"],
+    queryFn: async () => {
+      const token = getAuthToken();
+      const res = await fetch("/api/settings/inventory_push_live", { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+      if (res.status === 404) return { key: "inventory_push_live", value: "false" };
+      return res.json();
+    },
+  });
+  const { data: ebayApiEnv } = useQuery<{ key: string; value: string }>({
+    queryKey: ["/api/settings", "ebay_api_env"],
+    queryFn: async () => {
+      const token = getAuthToken();
+      const res = await fetch("/api/settings/ebay_api_env", { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+      if (res.status === 404) return { key: "ebay_api_env", value: "production" };
+      return res.json();
+    },
+  });
 
   const saveSetting = async (key: string, value: any) => {
     const token = getAuthToken();
@@ -367,6 +385,10 @@ export default function EbayIntegrationPanel() {
           <Switch checked={allowWorkerPull?.value === "true"} onCheckedChange={(v) => saveSettingMutation.mutate({ key: "allow_worker_orders_pull", value: v ? "true" : "false" })} />
           <Label>Разрешить работникам подгружать заказы</Label>
         </div>
+        <div className="flex items-center gap-3">
+          <Switch checked={pushLive?.value === "true"} onCheckedChange={(v) => saveSettingMutation.mutate({ key: "inventory_push_live", value: v ? "true" : "false" })} />
+          <Label>Реальный пуш в eBay (иначе dry-run)</Label>
+        </div>
         <div className="space-y-2">
           <Label>Режим синхронизации инвентаря</Label>
           <Select value={inventorySyncMode?.value || "none"} onValueChange={(v) => saveSettingMutation.mutate({ key: "inventory_sync_mode", value: v })}>
@@ -376,6 +398,16 @@ export default function EbayIntegrationPanel() {
               <SelectItem value="pull">Только из eBay</SelectItem>
               <SelectItem value="push">Только в eBay</SelectItem>
               <SelectItem value="both">В обе стороны</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Среда eBay API</Label>
+          <Select value={ebayApiEnv?.value || "production"} onValueChange={(v) => saveSettingMutation.mutate({ key: "ebay_api_env", value: v })}>
+            <SelectTrigger className="w-64"><SelectValue placeholder="Выберите среду" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="production">Production</SelectItem>
+              <SelectItem value="sandbox">Sandbox</SelectItem>
             </SelectContent>
           </Select>
         </div>
