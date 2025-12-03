@@ -207,6 +207,18 @@ sudo bash kubuntu-package/setup-nginx.sh warehouse.local tagonte@gmail.com
 
 Прокси перенаправляет на локальный сервис Express (`http://127.0.0.1:5000`). Сертификаты выпускать через certbot.
 
+Автопродление сертификатов:
+- Certbot устанавливает systemd‑таймер автоматически (`certbot.timer`). Проверить:
+
+```bash
+systemctl list-timers | grep certbot
+sudo certbot renew --dry-run
+```
+
+Security‑хедеры:
+- Включены базовые заголовки (HSTS, X‑Content‑Type‑Options, X‑Frame‑Options, Referrer‑Policy, CSP) в `kubuntu-package/nginx-warehouse.conf`.
+- После изменения конфига перезапустите nginx: `sudo nginx -t && sudo systemctl restart nginx`.
+
 ### SQLite версия
 - Node.js 18+
 - 1 GB RAM
