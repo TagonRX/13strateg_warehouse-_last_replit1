@@ -94,10 +94,12 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
     });
     
     try {
+      const token = getAuthToken();
       const response = await fetch('/api/picking/parse-csv-url', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ url: csvUrl, full: false }),
       });
@@ -192,10 +194,12 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
         });
 
         try {
+          const token = getAuthToken();
           const response = await fetch('/api/picking/parse-csv-url', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             body: JSON.stringify({ url, full: false }),
           });
@@ -313,10 +317,12 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
           });
 
           try {
+            const token = getAuthToken();
             const response = await fetch('/api/picking/parse-csv-url', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
               },
               body: JSON.stringify({ url, full: true }),
             });
@@ -340,10 +346,12 @@ export default function CSVImportDialog({ onImport }: CSVImportDialogProps) {
         setLoadingProgress({ current: 0, total: 0 });
       } else {
         // Single URL mode - fetch full CSV data
+        const token = getAuthToken();
         const response = await fetch('/api/picking/parse-csv-url', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ url: csvUrl, full: true }),
         });

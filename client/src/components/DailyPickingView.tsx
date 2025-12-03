@@ -20,7 +20,7 @@ import type { PickingList, PickingTask, InventoryItem } from "@shared/schema";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { format } from "date-fns";
-import { pullEbayOrdersWorker, createPickingListFromEbay } from "@/lib/api";
+import { pullEbayOrdersWorker, createPickingListFromEbay, getAuthToken } from "@/lib/api";
 
 export default function DailyPickingView() {
   const { toast } = useToast();
@@ -63,7 +63,8 @@ export default function DailyPickingView() {
   const { data: allowWorkerPullSetting } = useQuery<{ key: string; value: string }>({
     queryKey: ["/api/settings", "allow_worker_orders_pull"],
     queryFn: async () => {
-      const res = await fetch("/api/settings/allow_worker_orders_pull");
+      const token = getAuthToken();
+      const res = await fetch("/api/settings/allow_worker_orders_pull", { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
       if (res.status === 404) return { key: "allow_worker_orders_pull", value: "false" };
       return res.json();
     },
@@ -93,12 +94,13 @@ export default function DailyPickingView() {
     queryKey: ["/api/settings", "csv_global_username"],
     queryFn: async () => {
       try {
-        const res = await fetch("/api/settings/csv_global_username");
+        const token = getAuthToken();
+        const res = await fetch("/api/settings/csv_global_username", { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
         if (res.status === 404) {
           // Initialize with default value if not exists
           const initRes = await fetch("/api/settings/csv_global_username", {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
             body: JSON.stringify({ value: "baritero@gmail.com" })
           });
           return await initRes.json();
@@ -114,12 +116,13 @@ export default function DailyPickingView() {
     queryKey: ["/api/settings", "csv_global_password"],
     queryFn: async () => {
       try {
-        const res = await fetch("/api/settings/csv_global_password");
+        const token = getAuthToken();
+        const res = await fetch("/api/settings/csv_global_password", { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
         if (res.status === 404) {
           // Initialize with default value if not exists
           const initRes = await fetch("/api/settings/csv_global_password", {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
             body: JSON.stringify({ value: "Baritero1" })
           });
           return await initRes.json();

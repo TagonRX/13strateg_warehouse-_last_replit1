@@ -2,13 +2,14 @@ import { useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getEbayAccounts, pullEbayInventory } from "@/lib/api";
+import { getEbayAccounts, pullEbayInventory, getAuthToken } from "@/lib/api";
 
 export default function InventorySyncStatus() {
   const { data: modeSetting } = useQuery<{ key: string; value: string }>({
     queryKey: ["/api/settings", "inventory_sync_mode"],
     queryFn: async () => {
-      const res = await fetch("/api/settings/inventory_sync_mode");
+      const token = getAuthToken();
+      const res = await fetch("/api/settings/inventory_sync_mode", { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
       if (res.status === 404) return { key: "inventory_sync_mode", value: "none" };
       return res.json();
     },
@@ -18,7 +19,8 @@ export default function InventorySyncStatus() {
   const { data: idsSetting } = useQuery<{ key: string; value: string }>({
     queryKey: ["/api/settings", "inventory_sync_accounts"],
     queryFn: async () => {
-      const res = await fetch("/api/settings/inventory_sync_accounts");
+      const token = getAuthToken();
+      const res = await fetch("/api/settings/inventory_sync_accounts", { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
       if (res.status === 404) return { key: "inventory_sync_accounts", value: "[]" };
       return res.json();
     },

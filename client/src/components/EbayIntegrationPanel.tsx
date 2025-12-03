@@ -145,6 +145,16 @@ export default function EbayIntegrationPanel() {
 
   // Effective ATP preview & push
   const [previewAccountId, setPreviewAccountId] = useState<string>("");
+  // Eligible accounts for push: enabled && useInventory && allowed by inventory_sync_accounts
+  const eligiblePushAccounts = useMemo(() => {
+    const allowedIds = (() => { try { const arr = JSON.parse(inventorySyncAccounts?.value || "[]"); return Array.isArray(arr) ? arr : []; } catch { return []; } })();
+    return accounts.filter(acc => {
+      const baseOk = !!acc.enabled && !!acc.useInventory;
+      if (!baseOk) return false;
+      if (allowedIds.length > 0) return allowedIds.includes(acc.id);
+      return true;
+    });
+  }, [accounts, inventorySyncAccounts?.value]);
   const { data: effectivePreview, isFetching: effectiveLoading } = useQuery<{ accountId: string; list: Array<{ sku: string; onHand: number; reserved: number; buffer: number; effective: number }> }>({
     queryKey: ["/api/inventory/atp/effective", previewAccountId],
     queryFn: () => getEffectiveATPForAccount(previewAccountId),
@@ -272,7 +282,49 @@ export default function EbayIntegrationPanel() {
                   <Switch checked={!!acc.useOrders} onCheckedChange={(val) => updateMutation.mutate({ id: acc.id, updates: { useOrders: !!val } })} />
                 </TableCell>
                 <TableCell>
-                  <Switch checked={!!acc.useInventory} onCheckedChange={(val) => updateMutation.mutate({ id: acc.id, updates: { useInventory: !!val } })} />
+                  <div className="flex items-center gap-2">
+                    <Switch checked={!!acc.useInventory} onCheckedChange={(val) => updateMutation.mutate({ id: acc.id, updates: { useInventory: !!val } })} />
+                    {(() => {
+                      // Show hint when account is not in global inventory_sync_accounts list
+                      try {
+                        const arr = JSON.parse(inventorySyncAccounts?.value || "[]");
+                        const listed = Array.isArray(arr) ? arr.includes(acc.id) : false;
+                        if (!!acc.useInventory && !listed) {
+                          return (
+                            <button
+                              type="button"
+                              className="text-xs text-blue-600 hover:underline"
+                              onClick={() => {
+                                let next: string[] = [];
+                                try { const parsed = JSON.parse(inventorySyncAccounts?.value || "[]"); if (Array.isArray(parsed)) next = parsed; } catch {}
+                                if (!next.includes(acc.id)) next.push(acc.id);
+                                saveSettingMutation.mutate({ key: "inventory_sync_accounts", value: next });
+                              }}
+                            >
+                              добавить в список
+                            </button>
+                          );
+                        }
+                        if (!!acc.useInventory && listed) {
+                          return (
+                            <button
+                              type="button"
+                              className="text-xs text-rose-600 hover:underline"
+                              onClick={() => {
+                                let next: string[] = [];
+                                try { const parsed = JSON.parse(inventorySyncAccounts?.value || "[]"); if (Array.isArray(parsed)) next = parsed; } catch {}
+                                next = next.filter((x) => x !== acc.id);
+                                saveSettingMutation.mutate({ key: "inventory_sync_accounts", value: next });
+                              }}
+                            >
+                              убрать из списка
+                            </button>
+                          );
+                        }
+                      } catch {}
+                      return null;
+                    })()}
+                  </div>
                 </TableCell>
                 <TableCell className="text-right">
                   <Button size="sm" variant="secondary" onClick={() => testMutation.mutate(acc.id)} disabled={testMutation.isPending}>Тест</Button>
@@ -452,13 +504,13 @@ export default function EbayIntegrationPanel() {
             <Select value={previewAccountId} onValueChange={setPreviewAccountId}>
               <SelectTrigger className="w-64"><SelectValue placeholder="Выберите аккаунт" /></SelectTrigger>
               <SelectContent>
-                {accounts.map(acc => (<SelectItem key={acc.id} value={acc.id}>{acc.label}</SelectItem>))}
+                {eligiblePushAccounts.map(acc => (<SelectItem key={acc.id} value={acc.id}>{acc.label}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
         </div>
         <div className="flex justify-end">
-          <Button variant="secondary" onClick={() => previewAccountId && pushMutation.mutate(previewAccountId)} disabled={!previewAccountId || pushMutation.isPending}>Запушить инвентарь</Button>
+          <Button variant="secondary" onClick={() => previewAccountId && pushMutation.mutate(previewAccountId)} disabled={!previewAccountId || pushMutation.isPending}>{pushMutation.isPending ? 'Пуш…' : 'Запушить инвентарь'}</Button>
         </div>
         <div className="border rounded-md overflow-hidden">
           <Table>

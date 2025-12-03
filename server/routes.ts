@@ -3917,9 +3917,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!accountId || typeof accountId !== 'string') {
         return res.status(400).json({ ok: false, error: 'accountId обязателен' });
       }
-      // Check account is enabled and allowed by settings
+      // Check account is enabled and allowed by settings and respects useInventory flag
       const accs = await db.select().from(ebayAccounts).where(eq(ebayAccounts.id, accountId));
-      if (accs.length === 0 || !accs[0].enabled) return res.status(404).json({ ok: false, error: 'Аккаунт не найден или отключён' });
+      if (accs.length === 0) {
+        return res.status(404).json({ ok: false, error: 'Аккаунт не найден' });
+      }
+      const acc = accs[0] as any;
+      if (!acc.enabled) {
+        return res.status(403).json({ ok: false, error: 'Аккаунт отключён' });
+      }
+      if (!acc.useInventory) {
+        return res.status(403).json({ ok: false, error: 'Аккаунт не помечен useInventory=true' });
+      }
       const allowedSetting = await storage.getGlobalSetting('inventory_sync_accounts');
       if (allowedSetting?.value) {
         try {

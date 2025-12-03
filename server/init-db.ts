@@ -429,19 +429,13 @@ export async function initializeDatabase(): Promise<void> {
 
     console.log("✅ Database initialized successfully");
 
-    // Миграция: добавить столбцы use_orders/use_inventory, если таблица старая
+    // Миграция: добавить столбцы use_orders/use_inventory, если таблица старая (без PRAGMA, с игнорированием ошибок если уже есть)
     try {
-      const tableInfo: any = await db.execute(sql`PRAGMA table_info(ebay_accounts)`);
-      const cols = (tableInfo.rows || []).map((r: any) => r.name);
-      if (!cols.includes('use_orders')) {
-        await db.execute(sql`ALTER TABLE ebay_accounts ADD COLUMN use_orders INTEGER DEFAULT 0 NOT NULL`);
-      }
-      if (!cols.includes('use_inventory')) {
-        await db.execute(sql`ALTER TABLE ebay_accounts ADD COLUMN use_inventory INTEGER DEFAULT 0 NOT NULL`);
-      }
-    } catch (e) {
-      console.warn('Migration check for ebay_accounts flags failed:', e);
-    }
+      await db.run(sql`ALTER TABLE ebay_accounts ADD COLUMN use_orders INTEGER DEFAULT 0 NOT NULL`);
+    } catch {}
+    try {
+      await db.run(sql`ALTER TABLE ebay_accounts ADD COLUMN use_inventory INTEGER DEFAULT 0 NOT NULL`);
+    } catch {}
   } catch (error) {
     console.error("❌ Failed to initialize database:", error);
     throw error;

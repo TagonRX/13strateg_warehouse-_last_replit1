@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getAuthToken } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -8,7 +9,8 @@ export default function ATPWidget() {
   const { data = [] } = useQuery<Array<{ sku: string; onHand: number; reserved: number; atp: number }>>({
     queryKey: ["/api/inventory/atp"],
     queryFn: async () => {
-      const res = await fetch("/api/inventory/atp");
+      const token = getAuthToken();
+      const res = await fetch("/api/inventory/atp", { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
       if (!res.ok) throw new Error("Failed to fetch ATP");
       return res.json();
     },
