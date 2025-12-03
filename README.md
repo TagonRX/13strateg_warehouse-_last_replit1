@@ -219,6 +219,27 @@ Security‑хедеры:
 - Включены базовые заголовки (HSTS, X‑Content‑Type‑Options, X‑Frame‑Options, Referrer‑Policy, CSP) в `kubuntu-package/nginx-warehouse.conf`.
 - После изменения конфига перезапустите nginx: `sudo nginx -t && sudo systemctl restart nginx`.
 
+### Обновление версии (upgrade)
+
+Скрипт `kubuntu-package/upgrade.sh` обновляет установку в `/opt/warehouse` из локальной папки или Git‑репозитория:
+
+```bash
+# Из локальной папки с новой версией
+sudo bash kubuntu-package/upgrade.sh /path/to/new/source
+
+# Из Git‑репозитория (по умолчанию ветка main)
+sudo bash kubuntu-package/upgrade.sh https://github.com/owner/repo.git main
+```
+
+Скрипт:
+- Останавливает `warehouse.service`
+- Копирует исходники (rsync или git clone)
+- Выполняет `npm ci && npm run build`
+- Проверяет `/etc/warehouse/env`
+- Стартует сервис и запускает `smoke.sh`
+
+Быстрый откат:
+- Повторно запустите `upgrade.sh` с прошлой версией (например, из бэкапа или предыдущего Git‑тэга), либо `git checkout <tag>` в локальной папке и обновите из неё.
 ### SQLite версия
 - Node.js 18+
 - 1 GB RAM
