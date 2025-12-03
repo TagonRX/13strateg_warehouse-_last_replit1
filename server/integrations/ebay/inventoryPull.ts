@@ -7,7 +7,7 @@ import { storage } from "../../storage";
 export type PullInventoryResult = { created: number; updated: number; skipped: number; errors: number; accountId: string };
 
 export async function pullInventoryForAllAccounts(): Promise<PullInventoryResult[]> {
-  const accounts = await getEnabledAccounts();
+  const accounts = (await getEnabledAccounts()).filter((a: any) => a.useInventory === true);
   // Filter by settings: inventory_sync_accounts (JSON array of account ids)
   let allowedIds: string[] | null = null;
   const setting = await storage.getGlobalSetting('inventory_sync_accounts');

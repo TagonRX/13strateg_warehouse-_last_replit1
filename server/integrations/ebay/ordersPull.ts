@@ -6,7 +6,8 @@ import { eq, and } from "drizzle-orm";
 export type PullOrdersResult = { created: number; skipped: number; errors: number; accountId: string };
 
 export async function pullOrdersForAllAccounts(): Promise<PullOrdersResult[]> {
-  const accounts = await getEnabledAccounts();
+  // Только аккаунты, отмеченные для заказов
+  const accounts = (await getEnabledAccounts()).filter(a => (a as any).useOrders === true);
   const results: PullOrdersResult[] = [];
   for (const acc of accounts) {
     try {

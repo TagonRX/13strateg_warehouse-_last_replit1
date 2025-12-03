@@ -167,6 +167,8 @@ export default function EbayIntegrationPanel() {
   const [newClientSecret, setNewClientSecret] = useState("");
   const [newRefreshToken, setNewRefreshToken] = useState("");
   const [newEnabled, setNewEnabled] = useState<boolean>(true);
+  const [newUseOrders, setNewUseOrders] = useState<boolean>(true);
+  const [newUseInventory, setNewUseInventory] = useState<boolean>(false);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -180,8 +182,8 @@ export default function EbayIntegrationPanel() {
         clientSecret: newClientSecret,
         refreshToken: newRefreshToken,
         enabled: newEnabled,
-        useOrders: true,
-        useInventory: false,
+        useOrders: newUseOrders,
+        useInventory: newUseInventory,
       });
     },
     onSuccess: () => {
@@ -191,6 +193,8 @@ export default function EbayIntegrationPanel() {
       setNewClientSecret("");
       setNewRefreshToken("");
       setNewEnabled(true);
+      setNewUseOrders(true);
+      setNewUseInventory(false);
       qc.invalidateQueries({ queryKey: ["/api/integrations/ebay/accounts"] });
     },
     onError: (e: any) => toast({ title: "Ошибка", description: e?.message || "Не удалось добавить аккаунт", variant: "destructive" }),
@@ -229,6 +233,14 @@ export default function EbayIntegrationPanel() {
           <div className="flex items-center gap-2">
             <Switch checked={newEnabled} onCheckedChange={setNewEnabled} />
             <Label>Включен</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={newUseOrders} onCheckedChange={setNewUseOrders} />
+            <Label>Использовать для заказов</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={newUseInventory} onCheckedChange={setNewUseInventory} />
+            <Label>Использовать для инвентаря</Label>
           </div>
         </div>
         <div className="flex justify-end">
