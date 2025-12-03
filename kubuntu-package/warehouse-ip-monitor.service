@@ -1,0 +1,11 @@
+[Unit]
+Description=Warehouse IP Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /opt/warehouse/kubuntu-package/ip-monitor.sh
+
+[Install]
+WantedBy=multi-user.target

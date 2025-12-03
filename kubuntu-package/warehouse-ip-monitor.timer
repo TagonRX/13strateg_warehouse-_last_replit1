@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Warehouse IP Monitor hourly
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+Unit=warehouse-ip-monitor.service
+
+[Install]
+WantedBy=timers.target
