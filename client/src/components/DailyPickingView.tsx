@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { parseSku, compareSequential, compareGroup } from "@shared/utils/sku";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +34,8 @@ export default function DailyPickingView() {
   const [listName, setListName] = useState(getTodayDate());
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [letterFilter, setLetterFilter] = useState<string[]>([]);
+  const [sortMode, setSortMode] = useState<"sequential" | "group">("sequential");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [pageLimit, setPageLimit] = useState<string>("50");
   const [lastResult, setLastResult] = useState<any>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
@@ -705,6 +708,12 @@ export default function DailyPickingView() {
     return Array.from(letters).sort();
   }, [currentList]);
 
+  const getPrefix = (sku: string) => parseSku(sku).prefix;
+  const getNumber = (sku: string) => {
+    const n = parseSku(sku).number;
+    return n == null ? NaN : n;
+  };
+
   // Filter tasks - hide completed tasks
   const filteredTasks = currentList?.tasks
     .filter(task => {
@@ -715,6 +724,20 @@ export default function DailyPickingView() {
       if (letterFilter.length === 0) return true;
       const firstLetter = task.sku.charAt(0).toUpperCase();
       return letterFilter.includes(firstLetter);
+    })
+    .sort((a, b) => {
+      const pa = getPrefix(a.sku);
+      const pb = getPrefix(b.sku);
+      if (pa !== pb) {
+        return sortDirection === "asc" ? pa.localeCompare(pb) : pb.localeCompare(pa);
+      }
+      const na = getNumber(a.sku);
+      const nb = getNumber(b.sku);
+      if (sortMode === "sequential") {
+        return compareSequential(isNaN(na) ? null : na, isNaN(nb) ? null : nb, sortDirection);
+      } else {
+        return compareGroup(isNaN(na) ? null : na, isNaN(nb) ? null : nb, sortDirection);
+      }
     })
     .slice(0, pageLimit === "all" ? undefined : parseInt(pageLimit)) || [];
 
@@ -1095,6 +1118,24 @@ export default function DailyPickingView() {
                         </div>
                       </PopoverContent>
                     </Popover>
+                    <Select value={sortMode} onValueChange={(v) => setSortMode(v as any)}>
+                      <SelectTrigger className="w-36" data-testid="select-sort-mode">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sequential">Последовательный режим</SelectItem>
+                        <SelectItem value="group">Групповой режим</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={sortDirection} onValueChange={(v) => setSortDirection(v as any)}>
+                      <SelectTrigger className="w-24" data-testid="select-sort-direction">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="asc">↑</SelectItem>
+                        <SelectItem value="desc">↓</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Select value={pageLimit} onValueChange={setPageLimit}>
                       <SelectTrigger data-testid="select-page-limit" className="w-24">
                         <SelectValue />

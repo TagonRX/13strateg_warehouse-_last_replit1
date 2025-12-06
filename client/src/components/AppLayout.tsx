@@ -111,6 +111,7 @@ export default function AppLayout({
     { title: "Тестирование товара", url: "/product-testing", icon: TestTube2 },
     { title: "Приёмка товара", url: "/stock-in", icon: PackagePlus },
     { title: "Размещение товара", url: "/placement", icon: Warehouse },
+    { title: "Online listings", url: "/online-listings", icon: Package },
     { title: "Сборка/Списание", url: "/stock-out", icon: PackageMinus },
     { title: "Picking List", url: "/picking", icon: ClipboardList },
     { title: "Подготовка заказов", url: "/dispatch", icon: Package },

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import { BrowserMultiFormatReader } from "@zxing/browser";
+import { DecodeHintType, BarcodeFormat } from "@zxing/library";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ export default function ScannerMode() {
   const { toast } = useToast();
   const { isConnected, sendMessage } = useWebSocket();
   const [scanning, setScanning] = useState(false);
-  const [html5QrCode, setHtml5QrCode] = useState<Html5Qrcode | null>(null);
+  const [reader, setReader] = useState<BrowserMultiFormatReader | null>(null);
   const [quantity, setQuantity] = useState("1");
   const [lastBarcode, setLastBarcode] = useState<string>("");
   const [cameraError, setCameraError] = useState<string>("");
@@ -30,11 +31,11 @@ export default function ScannerMode() {
 
   useEffect(() => {
     return () => {
-      if (html5QrCode) {
-        html5QrCode.stop().catch(() => {});
+      if (reader) {
+        try { reader.stopContinuousDecode(); } catch {}
       }
     };
-  }, [html5QrCode]);
+  }, [reader]);
 
   const startScanning = async () => {
     setCameraError("");
@@ -70,53 +71,55 @@ export default function ScannerMode() {
     }
 
     try {
-      const scanner = new Html5Qrcode("qr-reader");
-      setHtml5QrCode(scanner);
+      const videoElem = document.getElementById("qr-reader") as HTMLDivElement;
+      const video = document.createElement("video");
+      video.setAttribute("playsinline", "true");
+      video.style.width = "100%";
+      video.style.height = "100%";
+      videoElem.innerHTML = "";
+      videoElem.appendChild(video);
 
-      const config = {
-        fps: 10,
-        qrbox: { width: 350, height: 350 }, // Увеличен размер для лучшего зума
-        aspectRatio: 1.0,
-        // Html5Qrcode автоматически поддерживает все форматы: QR, CODE_128, EAN, UPC и другие
-      };
+      const constraints: MediaStreamConstraints = { video: { facingMode: { ideal: "environment" } } };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      video.srcObject = stream;
+      await video.play();
 
-      // Html5Qrcode сам запросит разрешение на камеру
-      await scanner.start(
-        { facingMode: "environment" },
-        config,
-        (decodedText) => {
-          handleScan(decodedText);
-        },
-        () => {}
-      );
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.QR_CODE
+      ]);
 
-      // Проверка поддержки зума после запуска камеры
-      try {
-        const capabilities = scanner.getRunningTrackCapabilities() as any;
-        if (capabilities.zoom) {
-          setZoomSupported(true);
-          setZoomRange({
-            min: capabilities.zoom.min || 1,
-            max: capabilities.zoom.max || 8,
-          });
-          // Устанавливаем начальный зум (можно настроить)
-          const initialZoom = Math.min(2, capabilities.zoom.max || 1);
-          setZoom(initialZoom);
-          await scanner.applyVideoConstraints({
-            advanced: [{ zoom: initialZoom } as any]
-          });
+      const r = new BrowserMultiFormatReader(hints);
+      setReader(r);
+      r.decodeFromVideoDevice(undefined, video, (result, err) => {
+        if (result?.getText) {
+          handleScan(result.getText());
         }
-      } catch (error) {
-        console.log("Zoom not supported:", error);
+      });
+
+      try {
+        const track = stream.getVideoTracks()[0];
+        const caps: any = track.getCapabilities?.() || {};
+        if (caps.zoom) {
+          setZoomSupported(true);
+          setZoomRange({ min: caps.zoom.min ?? 1, max: caps.zoom.max ?? 8 });
+          const initialZoom = Math.min(2, caps.zoom.max ?? 1);
+          setZoom(initialZoom);
+          track.applyConstraints({ advanced: [{ zoom: initialZoom } as any] });
+        }
+      } catch (e) {
         setZoomSupported(false);
       }
 
       setScanning(true);
       setCameraError("");
-      toast({
-        title: "Камера запущена",
-        description: "Наведите камеру на штрихкод или QR код",
-      });
+      toast({ title: "Камера запущена", description: "Наведите камеру на штрихкод или QR код" });
     } catch (error: any) {
       console.error("Camera start error:", error);
       console.error("Error name:", error?.name);
@@ -156,7 +159,7 @@ export default function ScannerMode() {
       }
       
       setCameraError(errorMessage + (helpText ? "\n\n" + helpText : ""));
-      setHtml5QrCode(null);
+      setReader(null);
       
       toast({
         variant: "destructive",
@@ -167,11 +170,11 @@ export default function ScannerMode() {
   };
 
   const stopScanning = async () => {
-    if (html5QrCode) {
+    if (reader) {
       try {
-        await html5QrCode.stop();
+        reader.stopContinuousDecode();
         setScanning(false);
-        setHtml5QrCode(null);
+        setReader(null);
         setZoomSupported(false);
         setZoom(1);
         toast({
@@ -184,41 +187,41 @@ export default function ScannerMode() {
   };
 
   const handleZoomChange = async (value: number[]) => {
-    if (!html5QrCode || !zoomSupported) return;
+    if (!zoomSupported) return;
     
     const newZoom = value[0];
     setZoom(newZoom);
     
     try {
-      await html5QrCode.applyVideoConstraints({
-        advanced: [{ zoom: newZoom } as any]
-      });
+      const stream = (document.querySelector("#qr-reader video") as HTMLVideoElement)?.srcObject as MediaStream | null;
+      const track = stream?.getVideoTracks?.()[0];
+      await track?.applyConstraints({ advanced: [{ zoom: newZoom } as any] });
     } catch (error) {
       console.error("Zoom change error:", error);
     }
   };
 
   const handleZoomIn = async () => {
-    if (!html5QrCode || !zoomSupported) return;
+    if (!zoomSupported) return;
     const newZoom = Math.min(zoom + 0.5, zoomRange.max);
     setZoom(newZoom);
     try {
-      await html5QrCode.applyVideoConstraints({
-        advanced: [{ zoom: newZoom } as any]
-      });
+      const stream = (document.querySelector("#qr-reader video") as HTMLVideoElement)?.srcObject as MediaStream | null;
+      const track = stream?.getVideoTracks?.()[0];
+      await track?.applyConstraints({ advanced: [{ zoom: newZoom } as any] });
     } catch (error) {
       console.error("Zoom in error:", error);
     }
   };
 
   const handleZoomOut = async () => {
-    if (!html5QrCode || !zoomSupported) return;
+    if (!zoomSupported) return;
     const newZoom = Math.max(zoom - 0.5, zoomRange.min);
     setZoom(newZoom);
     try {
-      await html5QrCode.applyVideoConstraints({
-        advanced: [{ zoom: newZoom } as any]
-      });
+      const stream = (document.querySelector("#qr-reader video") as HTMLVideoElement)?.srcObject as MediaStream | null;
+      const track = stream?.getVideoTracks?.()[0];
+      await track?.applyConstraints({ advanced: [{ zoom: newZoom } as any] });
     } catch (error) {
       console.error("Zoom out error:", error);
     }
@@ -230,10 +233,7 @@ export default function ScannerMode() {
     // Показываем баркод для подтверждения
     setPendingBarcode(barcode);
     
-    // Останавливаем сканирование для показа подтверждения
-    if (html5QrCode) {
-      html5QrCode.pause(true);
-    }
+    // При ZXing не останавливаем поток, просто показываем подтверждение
   };
 
   const handleConfirmSend = () => {
@@ -256,9 +256,7 @@ export default function ScannerMode() {
 
     // Очищаем и возобновляем сканирование
     setPendingBarcode("");
-    if (html5QrCode) {
-      html5QrCode.resume();
-    }
+    // Продолжаем поток без паузы
 
     // Clear last barcode after 2 seconds to allow re-scanning
     setTimeout(() => setLastBarcode(""), 2000);
@@ -266,9 +264,7 @@ export default function ScannerMode() {
 
   const handleCancelScan = () => {
     setPendingBarcode("");
-    if (html5QrCode) {
-      html5QrCode.resume();
-    }
+    // Возобновление не требуется
   };
 
   return (

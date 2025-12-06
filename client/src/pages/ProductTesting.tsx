@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Scan, CheckCircle2, AlertCircle, Usb, Smartphone, Wifi, Trash2, Edit } from "lucide-react";
+import ScannerModule from "@/components/ScannerModule";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -344,6 +345,11 @@ export default function ProductTesting() {
                   Повторное сканирование - выбор состояния
                 </p>
               </div>
+              <ScannerModule
+                onScan={(code) => setBarcode(code)}
+                onManualChange={(code) => setBarcode(code)}
+                onDelete={() => setBarcode("")}
+              />
               
               <form onSubmit={handleBarcodeSubmit} className="space-y-4">
                 <div className="space-y-2">

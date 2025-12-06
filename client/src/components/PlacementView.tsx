@@ -26,6 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Usb, Smartphone, Wifi, Check, X, Package, Trash2, Edit, Eye, EyeOff } from "lucide-react";
+import ScannerModule from "@/components/ScannerModule";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToast } from "@/hooks/use-toast";
@@ -455,6 +456,12 @@ export default function PlacementView() {
                     </p>
                   </div>
                   
+                  <ScannerModule
+                    onScan={(code) => handleBarcodeScanned(code)}
+                    onManualChange={(code) => setScannedBarcode(code)}
+                    onDelete={() => setScannedBarcode("")}
+                  />
+
                   <div className="space-y-2">
                     <Label htmlFor="item-barcode">Штрихкод товара</Label>
                     <Input
@@ -506,6 +513,11 @@ export default function PlacementView() {
                   
                   <div className="space-y-2">
                     <Label htmlFor="location-barcode">Штрихкод локации</Label>
+                    <ScannerModule
+                      onScan={(code) => handleLocationScanned(code)}
+                      onManualChange={(code) => setScannedLocation(code)}
+                      onDelete={() => setScannedLocation("")}
+                    />
                     <Input
                       id="location-barcode"
                       ref={scannerMode === "usb" ? locationInputRef : undefined}

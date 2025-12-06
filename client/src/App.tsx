@@ -31,6 +31,8 @@ import Dispatch from "@/pages/Dispatch";
 import Packing from "@/pages/Packing";
 import ImportHistory from "@/pages/ImportHistory";
 import NotFound from "@/pages/not-found";
+import OnlineListings from "@/pages/OnlineListings";
+import OnlineAnalytics from "@/components/OnlineAnalytics";
 import * as api from "@/lib/api";
 import type { InventoryItem } from "@shared/schema";
 
@@ -73,6 +75,9 @@ function AppContent() {
     enabled: !!user,
   });
 
+  // Show admin toast if there are aged awaiting listings
+  // Moved below settings initialization to avoid TDZ on agingDays/alertEnabled
+
   const { data: warehouseLoading = [] } = useQuery({
     queryKey: ["/api/warehouse/loading"],
     queryFn: api.getWarehouseLoading,
@@ -83,6 +88,98 @@ function AppContent() {
     queryKey: ["/api/users"],
     queryFn: api.getAllUsers,
     enabled: !!user && user.role === "admin",
+  });
+
+  // Admin setting: aging threshold in days for awaiting listing
+  const { data: agingThresholdSetting } = useQuery<{ key: string; value: string }>({
+    queryKey: ["/api/settings", "awaiting_listing_threshold_days"],
+    queryFn: async () => {
+      try {
+        const token = api.getAuthToken();
+        const res = await fetch("/api/settings/awaiting_listing_threshold_days", { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+        if (res.status === 404) {
+          const initRes = await fetch("/api/settings/awaiting_listing_threshold_days", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ value: "4" })
+          });
+          return await initRes.json();
+        }
+        return await res.json();
+      } catch {
+        return { key: "awaiting_listing_threshold_days", value: "4" };
+      }
+    },
+    enabled: !!user && user.role === "admin",
+  });
+  const agingDays = parseInt(agingThresholdSetting?.value || "4") || 4;
+
+  // Admin setting: show toast alert enabled
+  const { data: alertEnabledSetting } = useQuery<{ key: string; value: string }>({
+    queryKey: ["/api/settings", "awaiting_listing_alert_enabled"],
+    queryFn: async () => {
+      try {
+        const token = api.getAuthToken();
+        const res = await fetch("/api/settings/awaiting_listing_alert_enabled", { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+        if (res.status === 404) {
+          const initRes = await fetch("/api/settings/awaiting_listing_alert_enabled", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ value: "true" })
+          });
+          return await initRes.json();
+        }
+        return await res.json();
+      } catch {
+        return { key: "awaiting_listing_alert_enabled", value: "true" };
+      }
+    },
+    enabled: !!user && user.role === "admin",
+  });
+  const alertEnabled = (alertEnabledSetting?.value ?? "true") === "true";
+
+  // Show admin toast if there are aged awaiting listings (after settings ready)
+  useEffect(() => {
+    if (!user || user.role !== "admin") return;
+    if (!inventory || inventory.length === 0) return;
+    if (!alertEnabled) return;
+    const N = agingDays;
+    const today = Date.now();
+    const awaiting = (inventory || []).filter((i: any) => !i.name || i.name.trim() === "");
+    const aged = awaiting.filter((i: any) => {
+      const dt = (i.updatedAt || i.createdAt) ? new Date((i.updatedAt || i.createdAt) as any).getTime() : today;
+      const days = Math.floor((today - dt) / (1000*60*60*24));
+      return days > N;
+    });
+    if (aged.length > 0) {
+      toast({
+        title: "Внимание: ожидание листинга",
+        description: `Товаров, ожидающих листинга дольше ${N} дн.: ${aged.length}`,
+        variant: "destructive",
+      });
+    }
+  }, [user, inventory, agingDays, alertEnabled]);
+
+  const updateAlertEnabledMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await (api as any).apiRequest?.("PUT", "/api/settings/awaiting_listing_alert_enabled", { value: String(enabled) })
+        || fetch("/api/settings/awaiting_listing_alert_enabled", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value: String(enabled) }) });
+      return (response as any).json ? (response as any).json() : response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings", "awaiting_listing_alert_enabled"] });
+    }
+  });
+
+  const updateAgingThresholdMutation = useMutation({
+    mutationFn: async (days: number) => {
+      const response = await api.apiRequest?.("PUT", "/api/settings/awaiting_listing_threshold_days", { value: String(days) })
+        || fetch("/api/settings/awaiting_listing_threshold_days", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value: String(days) }) });
+      return (response as any).json ? (response as any).json() : response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings", "awaiting_listing_threshold_days"] });
+    }
   });
 
   const loginMutation = useMutation({
@@ -456,6 +553,57 @@ function AppContent() {
                 <p className="text-3xl font-bold text-primary">{users.length}</p>
               </div>
             </div>
+            {user.role === "admin" && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Счётчик ожидания листинга > N дней с бейджем предупреждения */}
+                {(() => {
+                  const N = agingDays;
+                  const today = Date.now();
+                  const awaiting = (inventory || []).filter((i) => !i.name || i.name.trim() === "");
+                  const aged = awaiting.filter((i) => {
+                    const dt = (i.updatedAt || i.createdAt) ? new Date((i.updatedAt || i.createdAt) as any).getTime() : today;
+                    const days = Math.floor((today - dt) / (1000*60*60*24));
+                    return days > N;
+                  });
+                  const hasAlert = aged.length > 0;
+                  return (
+                    <div className="bg-card p-6 rounded-md border relative" data-testid="card-awaiting-listing-aging">
+                      {hasAlert && (
+                        <span
+                          aria-label="alert"
+                          title="Перейти к ожидающим листинга"
+                          onClick={() => setLocation("/online-listings?focus=awaiting")}
+                          className="absolute -top-2 -right-2 inline-flex items-center justify-center rounded-full bg-red-600 text-white text-xs px-2 py-1 shadow cursor-pointer"
+                        >{aged.length}</span>
+                      )}
+                      <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                        Ожидает листинга &gt; N дней
+                        {hasAlert && (<span className="inline-block h-2 w-2 rounded-full bg-red-600" />)}
+                      </h3>
+                      <div>
+                        <p className="text-3xl font-bold text-destructive">{aged.length}</p>
+                        <p className="text-xs text-muted-foreground">Порог: {N} дней</p>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <label className="text-xs text-muted-foreground" htmlFor="aging-days">Изменить порог</label>
+                        <input id="aging-days" type="number" min={1} defaultValue={agingDays} className="h-7 w-20 text-sm border rounded px-2"
+                          onBlur={(e) => {
+                            const val = parseInt(e.target.value || "4") || 4;
+                            updateAgingThresholdMutation.mutate(val);
+                          }} />
+                        <label className="text-xs text-muted-foreground" htmlFor="alert-enabled">Тост</label>
+                        <input id="alert-enabled" type="checkbox" className="h-4 w-4"
+                          defaultChecked={alertEnabled}
+                          onChange={(e) => updateAlertEnabledMutation.mutate(e.target.checked)} />
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+            {user.role === "admin" && (
+              <OnlineAnalytics inventory={inventory as InventoryItem[]} />
+            )}
           </div>
         </Route>
         <Route path="/stock-in">
@@ -556,6 +704,9 @@ function AppContent() {
         )}
         <Route path="/product-testing">
           <ProductTesting />
+        </Route>
+        <Route path="/online-listings">
+          <OnlineListings />
         </Route>
         <Route path="/placement">
           <Placement />
