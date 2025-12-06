@@ -155,6 +155,11 @@ export const warehouseSettings = sqliteTable("warehouse_settings", {
   tsku: integer("tsku").notNull().default(4),
   maxq: integer("maxq").notNull().default(10),
   bypassCode: text("bypass_code"),
+  // Color thresholds (percentages 0-100) for TSKU and MAXQ indicators
+  greenThreshold: integer("green_threshold").default(25),  // 0-25% = green
+  yellowThreshold: integer("yellow_threshold").default(50),  // 25-50% = yellow
+  orangeThreshold: integer("orange_threshold").default(75),  // 50-75% = orange
+  // 75-100% = red (implicit)
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

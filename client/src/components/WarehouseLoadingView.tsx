@@ -69,7 +69,7 @@ const LocationTable = memo(({
             {locations.map((loc) => {
               const setting = getSettingForLocation(loc.location);
               const tsku = setting?.tsku || 4;
-              const maxq = setting?.maxq || 10;
+              const maxq = setting?.maxq || 15;
 
               return (
                 <div
@@ -80,8 +80,10 @@ const LocationTable = memo(({
                   <div className="w-12 font-mono font-semibold">{loc.location}</div>
                   <div className="w-5 text-center">{loc.skuCount}</div>
                   <div className={`w-3 h-3 rounded-full ${getSkuColor(loc.location, loc.skuCount)}`} />
+                  <div className="w-6 text-center text-muted-foreground">/{tsku}</div>
                   <div className="w-6 text-center">{loc.totalQuantity}</div>
                   <div className={`w-3 h-3 rounded-full ${getQuantityColor(loc.location, loc.totalQuantity)}`} />
+                  <div className="w-6 text-center text-muted-foreground">/{maxq}</div>
                 </div>
               );
             })}
@@ -189,31 +191,66 @@ function WarehouseSettingsPanel({
   settings, 
   onUpdate,
   onDelete,
-  isDeleting 
+  isDeleting,
+  activeLocations 
 }: { 
   settings: WarehouseSetting[]; 
-  onUpdate: (setting: { locationPattern: string; tsku: number; maxq: number }) => void;
+  onUpdate: (setting: { locationPattern: string; tsku: number; maxq: number; greenThreshold?: number; yellowThreshold?: number; orangeThreshold?: number }) => void;
   onDelete: (locationPattern: string) => void;
   isDeleting?: boolean;
+  activeLocations: ActiveLocation[];
 }) {
+  const { toast } = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTsku, setEditTsku] = useState("");
   const [editMaxq, setEditMaxq] = useState("");
+  const [editGreen, setEditGreen] = useState("25");
+  const [editYellow, setEditYellow] = useState("50");
+  const [editOrange, setEditOrange] = useState("75");
   const [newPattern, setNewPattern] = useState("");
   const [newTsku, setNewTsku] = useState("4");
-  const [newMaxq, setNewMaxq] = useState("10");
+  const [newMaxq, setNewMaxq] = useState("15");
+  const [newGreen, setNewGreen] = useState("25");
+  const [newYellow, setNewYellow] = useState("50");
+  const [newOrange, setNewOrange] = useState("75");
+
+  // Вычисляем какие паттерны (A0-A6) реально используются в активных локациях
+  const usedPatterns = useMemo(() => {
+    const patterns = new Set<string>();
+    activeLocations.forEach(loc => {
+      const location = loc.location.toUpperCase();
+      // Извлекаем букву и первую цифру (например, A123 -> A1, B456 -> B4)
+      const match = location.match(/^([A-Z])(\d)/);
+      if (match) {
+        const pattern = `${match[1]}${match[2]}`;
+        patterns.add(pattern);
+      }
+    });
+    return patterns;
+  }, [activeLocations]);
+
+  // Фильтруем настройки - показываем только те, для которых есть реальные локации
+  const filteredSettings = useMemo(() => {
+    return settings.filter(setting => usedPatterns.has(setting.locationPattern));
+  }, [settings, usedPatterns]);
 
   const handleEdit = (setting: WarehouseSetting) => {
     setEditingId(setting.id);
     setEditTsku(setting.tsku.toString());
     setEditMaxq(setting.maxq.toString());
+    setEditGreen((setting.greenThreshold || 25).toString());
+    setEditYellow((setting.yellowThreshold || 50).toString());
+    setEditOrange((setting.orangeThreshold || 75).toString());
   };
 
   const handleSave = (locationPattern: string) => {
     onUpdate({
       locationPattern,
       tsku: parseInt(editTsku) || 4,
-      maxq: parseInt(editMaxq) || 10,
+      maxq: parseInt(editMaxq) || 15,
+      greenThreshold: parseInt(editGreen) || 25,
+      yellowThreshold: parseInt(editYellow) || 50,
+      orangeThreshold: parseInt(editOrange) || 75,
     });
     setEditingId(null);
   };
@@ -227,30 +264,77 @@ function WarehouseSettingsPanel({
     onUpdate({
       locationPattern: newPattern.toUpperCase(),
       tsku: parseInt(newTsku) || 4,
-      maxq: parseInt(newMaxq) || 10,
+      maxq: parseInt(newMaxq) || 15,
+      greenThreshold: parseInt(newGreen) || 25,
+      yellowThreshold: parseInt(newYellow) || 50,
+      orangeThreshold: parseInt(newOrange) || 75,
     });
     setNewPattern("");
     setNewTsku("4");
-    setNewMaxq("10");
+    setNewMaxq("15");
+    setNewGreen("25");
+    setNewYellow("50");
+    setNewOrange("75");
+  };
+
+  // Функция для создания настроек для всех используемых паттернов
+  const handleCreateAllLetters = () => {
+    const patterns: string[] = [];
+    
+    // Создаем настройки только для тех паттернов, которые реально используются
+    usedPatterns.forEach(pattern => {
+      // Проверяем, что такого паттерна еще нет в настройках
+      if (!settings.find(s => s.locationPattern === pattern)) {
+        patterns.push(pattern);
+      }
+    });
+
+    if (patterns.length === 0) {
+      toast({
+        title: "Все настройки уже созданы",
+        description: "Настройки для всех используемых паттернов локаций уже существуют",
+      });
+      return;
+    }
+
+    // Добавляем все паттерны
+    patterns.forEach(pattern => {
+      onUpdate({
+        locationPattern: pattern,
+        tsku: 4,
+        maxq: 15,
+        greenThreshold: 25,
+        yellowThreshold: 50,
+        orangeThreshold: 75,
+      });
+    });
+
+    toast({
+      title: "Настройки созданы",
+      description: `Добавлено ${patterns.length} настроек для используемых паттернов (TSKU=4, MAXQ=15)`,
+    });
   };
 
   return (
     <div className="space-y-4">
       {/* Existing settings */}
-      {settings.length > 0 && (
+      {filteredSettings.length > 0 && (
         <div className="rounded-md border overflow-x-auto">
           <div className="flex p-2 text-sm font-medium bg-muted/50">
-            <div className="w-48">Группа локаций</div>
-            <div className="w-20">TSKU</div>
+            <div className="w-32">Группа</div>
+            <div className="w-16">TSKU</div>
             <div className="w-16">MAXQ</div>
+            <div className="w-16 text-center">🟢%</div>
+            <div className="w-16 text-center">🟡%</div>
+            <div className="w-16 text-center">🟠%</div>
             <div className="flex-1">Действия</div>
           </div>
-          {settings.map((setting) => (
+          {filteredSettings.map((setting) => (
             <div key={setting.id} className="flex p-2 text-sm border-t items-center" data-testid={`setting-row-${setting.locationPattern}`}>
               {editingId === setting.id ? (
                 <>
-                  <div className="w-48 font-mono font-semibold">{setting.locationPattern}</div>
-                  <div className="w-20">
+                  <div className="w-32 font-mono font-semibold">{setting.locationPattern}</div>
+                  <div className="w-16">
                     <Input
                       type="number"
                       value={editTsku}
@@ -266,6 +350,39 @@ function WarehouseSettingsPanel({
                       onChange={(e) => setEditMaxq(e.target.value)}
                       className="h-8"
                       data-testid={`input-edit-maxq-${setting.locationPattern}`}
+                    />
+                  </div>
+                  <div className="w-16">
+                    <Input
+                      type="number"
+                      value={editGreen}
+                      onChange={(e) => setEditGreen(e.target.value)}
+                      className="h-8 text-center"
+                      min="0"
+                      max="100"
+                      data-testid={`input-edit-green-${setting.locationPattern}`}
+                    />
+                  </div>
+                  <div className="w-16">
+                    <Input
+                      type="number"
+                      value={editYellow}
+                      onChange={(e) => setEditYellow(e.target.value)}
+                      className="h-8 text-center"
+                      min="0"
+                      max="100"
+                      data-testid={`input-edit-yellow-${setting.locationPattern}`}
+                    />
+                  </div>
+                  <div className="w-16">
+                    <Input
+                      type="number"
+                      value={editOrange}
+                      onChange={(e) => setEditOrange(e.target.value)}
+                      className="h-8 text-center"
+                      min="0"
+                      max="100"
+                      data-testid={`input-edit-orange-${setting.locationPattern}`}
                     />
                   </div>
                   <div className="flex-1 flex gap-1">
@@ -291,9 +408,12 @@ function WarehouseSettingsPanel({
                 </>
               ) : (
                 <>
-                  <div className="w-48 font-mono font-semibold truncate" title={setting.locationPattern}>{setting.locationPattern}</div>
-                  <div className="w-20">{setting.tsku}</div>
+                  <div className="w-32 font-mono font-semibold truncate" title={setting.locationPattern}>{setting.locationPattern}</div>
+                  <div className="w-16">{setting.tsku}</div>
                   <div className="w-16">{setting.maxq}</div>
+                  <div className="w-16 text-center">{setting.greenThreshold || 25}</div>
+                  <div className="w-16 text-center">{setting.yellowThreshold || 50}</div>
+                  <div className="w-16 text-center">{setting.orangeThreshold || 75}</div>
                   <div className="flex-1 flex gap-1">
                     <Button
                       size="sm"
@@ -324,9 +444,9 @@ function WarehouseSettingsPanel({
       {/* Add new setting */}
       <div className="rounded-md border p-4">
         <h3 className="text-sm font-semibold mb-3">Добавить настройку</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <div className="space-y-2">
-            <Label htmlFor="pattern">Группа (например, A1, B1)</Label>
+            <Label htmlFor="pattern">Группа</Label>
             <Input
               id="pattern"
               placeholder="A1"
@@ -356,18 +476,69 @@ function WarehouseSettingsPanel({
               data-testid="input-maxq"
             />
           </div>
-          <div className="flex items-end">
-            <Button onClick={handleAdd} className="w-full" data-testid="button-add-setting">
-              <Plus className="w-4 h-4 mr-2" />
-              Добавить
-            </Button>
+          <div className="space-y-2">
+            <Label htmlFor="green" className="text-xs">🟢 Зелёный %</Label>
+            <Input
+              id="green"
+              type="number"
+              value={newGreen}
+              onChange={(e) => setNewGreen(e.target.value)}
+              min="0"
+              max="100"
+              data-testid="input-green"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="yellow" className="text-xs">🟡 Жёлтый %</Label>
+            <Input
+              id="yellow"
+              type="number"
+              value={newYellow}
+              onChange={(e) => setNewYellow(e.target.value)}
+              min="0"
+              max="100"
+              data-testid="input-yellow"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="orange" className="text-xs">🟠 Оранжевый %</Label>
+            <Input
+              id="orange"
+              type="number"
+              value={newOrange}
+              onChange={(e) => setNewOrange(e.target.value)}
+              min="0"
+              max="100"
+              data-testid="input-orange"
+            />
           </div>
         </div>
-      </div>
+        <div className="mt-3">
+          <Button onClick={handleAdd} className="w-full" data-testid="button-add-setting">
+            <Plus className="w-4 h-4 mr-2" />
+            Добавить
+          </Button>
+        </div>
+        
+        {/* Quick setup for all letters */}
+        <div className="mt-4 pt-4 border-t">
+          <Button 
+            onClick={handleCreateAllLetters} 
+            variant="outline" 
+            className="w-full"
+            data-testid="button-create-all-letters"
+          >
+            Создать настройки для всех используемых паттернов (TSKU=4, MAXQ=15)
+          </Button>
+          <p className="text-xs text-muted-foreground mt-2">
+            Автоматически создаст настройки только для паттернов, которые реально используются в локациях
+          </p>
+        </div>
 
-      <p className="text-sm text-muted-foreground">
-        Группа локаций определяется первой буквой и первой цифрой (например, A1 для A100-A199)
-      </p>
+        <p className="text-sm text-muted-foreground mt-4">
+          Группа локаций определяется первой буквой и первой цифрой (например, A1 для A100-A199)
+        </p>
+      </div>
     </div>
   );
 }
@@ -388,6 +559,10 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
   const [csvUploadStats, setCsvUploadStats] = useState<{ added: number; updated: number; errors: string[] } | null>(null);
   const [letterFilter, setLetterFilter] = useState<string[]>([]); // Multi-select letter filter
   const [limitFilter, setLimitFilter] = useState<string>("200"); // Увеличен лимит до 200 для лучшей производительности
+  
+  // Pagination states for location management
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   
   // Separate input state (immediate) and filter state (debounced)
   const [tskuInput, setTskuInput] = useState<string>("");
@@ -463,6 +638,32 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       toast({
         title: "Ошибка удаления",
         description: error.message || "Не удалось удалить настройку",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Clear all locations mutation
+  const clearAllLocationsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/warehouse/locations/clear-all", undefined);
+      if (res.status === 204) {
+        return;
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/active-locations"] });
+      setLocationList([]);
+      toast({
+        title: "Все локации удалены",
+        description: "Все локации успешно удалены из базы данных. Теперь можете загрузить новый CSV файл.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка очистки",
+        description: error.message || "Не удалось очистить локации",
         variant: "destructive",
       });
     },
@@ -570,8 +771,7 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
     }, 0);
   }, [locationGroups, managedLocationsSet]);
 
-  // Filter locations by range (С and ПО) with display limit
-  const DISPLAY_LIMIT = 200;
+  // Filter locations by range (С and ПО)
   const filteredLocationList = useMemo(() => {
     let filtered = locationList;
     
@@ -592,30 +792,26 @@ export default function WarehouseLoadingView({ locationGroups, userRole }: Wareh
       });
     }
     
-    // Limit to first 200 items for performance
-    return filtered.slice(0, DISPLAY_LIMIT);
+    return filtered;
   }, [locationList, locationRangeFrom, locationRangeTo]);
 
+  // Paginated location list
+  const paginatedLocationList = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredLocationList.slice(startIndex, endIndex);
+  }, [filteredLocationList, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredLocationList.length / itemsPerPage);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [locationRangeFrom, locationRangeTo]);
+
   const hasMoreLocations = useMemo(() => {
-    let count = locationList.length;
-    if (locationRangeFrom || locationRangeTo) {
-      count = locationList.filter(loc => {
-        const upperLoc = loc.location.toUpperCase();
-        const from = locationRangeFrom.toUpperCase();
-        const to = locationRangeTo.toUpperCase();
-        
-        if (from && to) {
-          return upperLoc >= from && upperLoc <= to;
-        } else if (from) {
-          return upperLoc >= from;
-        } else if (to) {
-          return upperLoc <= to;
-        }
-        return true;
-      }).length;
-    }
-    return count > DISPLAY_LIMIT;
-  }, [locationList, locationRangeFrom, locationRangeTo]);
+    return filteredLocationList.length > itemsPerPage;
+  }, [filteredLocationList.length, itemsPerPage]);
 
   // Handler to add new location
   const handleAddLocation = () => {
@@ -753,6 +949,14 @@ B201,BC205`;
     event.target.value = '';
   };
 
+  // Handler for clearing all locations
+  const handleClearAllLocations = () => {
+    if (!confirm("⚠️ ВНИМАНИЕ!\n\nВы уверены, что хотите удалить ВСЕ локации из базы данных?\n\nЭто действие нельзя отменить!\n\nПосле очистки вы сможете загрузить новый CSV файл.")) {
+      return;
+    }
+    clearAllLocationsMutation.mutate();
+  };
+
   // Filter locations based on managed locations and TSKU/MAXQ filters
   const filteredLocations = useMemo(() => {
     // Start with all locations by default
@@ -857,25 +1061,35 @@ B201,BC205`;
     const setting = getSettingForLocation(location);
     const tsku = setting?.tsku || 4;
     
+    // Get thresholds from settings (defaults: 25%, 50%, 75%)
+    const greenThreshold = (setting?.greenThreshold || 25) / 100;
+    const yellowThreshold = (setting?.yellowThreshold || 50) / 100;
+    const orangeThreshold = (setting?.orangeThreshold || 75) / 100;
+    
     const ratio = Math.min(skuCount / tsku, 1);
     
     if (ratio >= 1) return "bg-red-500";
-    if (ratio >= 0.75) return "bg-orange-500";
-    if (ratio >= 0.5) return "bg-yellow-500";
-    if (ratio >= 0.25) return "bg-lime-500";
+    if (ratio >= orangeThreshold) return "bg-orange-500";
+    if (ratio >= yellowThreshold) return "bg-yellow-500";
+    if (ratio >= greenThreshold) return "bg-lime-500";
     return "bg-green-500";
   }, [getSettingForLocation]);
 
   const getQuantityColor = useCallback((location: string, quantity: number) => {
     const setting = getSettingForLocation(location);
-    const maxq = setting?.maxq || 10;
+    const maxq = setting?.maxq || 15;
+    
+    // Get thresholds from settings (defaults: 25%, 50%, 75%)
+    const greenThreshold = (setting?.greenThreshold || 25) / 100;
+    const yellowThreshold = (setting?.yellowThreshold || 50) / 100;
+    const orangeThreshold = (setting?.orangeThreshold || 75) / 100;
     
     const ratio = Math.min(quantity / maxq, 1);
     
     if (ratio >= 1) return "bg-red-500";
-    if (ratio >= 0.75) return "bg-orange-500";
-    if (ratio >= 0.5) return "bg-yellow-500";
-    if (ratio >= 0.25) return "bg-lime-500";
+    if (ratio >= orangeThreshold) return "bg-orange-500";
+    if (ratio >= yellowThreshold) return "bg-yellow-500";
+    if (ratio >= greenThreshold) return "bg-lime-500";
     return "bg-green-500";
   }, [getSettingForLocation]);
 
@@ -968,7 +1182,7 @@ B201,BC205`;
                     </TableHeader>
                     <TableBody>
                       <LocationsManagementTable
-                        locations={filteredLocationList}
+                        locations={paginatedLocationList}
                         editingBarcode={editingBarcode}
                         onEditBarcode={handleEditBarcode}
                         onUpdateBarcode={handleUpdateBarcode}
@@ -981,11 +1195,76 @@ B201,BC205`;
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
                     {locationList.length} локаций введено
-                    {(locationRangeFrom || locationRangeTo) && ` (показано: ${filteredLocationList.length})`}
+                    {(locationRangeFrom || locationRangeTo) && ` (найдено: ${filteredLocationList.length})`}
                   </p>
-                  {hasMoreLocations && (
+                  
+                  {/* Pagination controls */}
+                  {filteredLocationList.length > 0 && (
+                    <div className="flex items-center justify-between gap-4 pt-2 border-t">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs">Показывать:</Label>
+                        <Select value={itemsPerPage.toString()} onValueChange={(v) => {
+                          setItemsPerPage(parseInt(v));
+                          setCurrentPage(1);
+                        }}>
+                          <SelectTrigger className="h-8 w-20">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                            <SelectItem value="200">200</SelectItem>
+                            <SelectItem value="400">400</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <span className="text-xs text-muted-foreground">
+                          Показано {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, filteredLocationList.length)} из {filteredLocationList.length}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(1)}
+                          disabled={currentPage === 1}
+                        >
+                          ««
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          «
+                        </Button>
+                        <span className="text-sm px-2">
+                          Страница {currentPage} из {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                        >
+                          »
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(totalPages)}
+                          disabled={currentPage === totalPages}
+                        >
+                          »»
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {hasMoreLocations && !((locationRangeFrom || locationRangeTo)) && (
                     <p className="text-sm text-yellow-600 dark:text-yellow-500">
-                      Показаны первые 200 локаций. Используйте фильтр диапазона чтобы найти нужные локации.
+                      Используйте фильтр диапазона или пагинацию для навигации по локациям.
                     </p>
                   )}
                 </div>
@@ -1011,6 +1290,15 @@ B201,BC205`;
                     <Upload className="w-4 h-4 mr-2" />
                     Загрузить CSV файл
                   </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleClearAllLocations}
+                    disabled={clearAllLocationsMutation.isPending}
+                    data-testid="button-clear-all-locations"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    {clearAllLocationsMutation.isPending ? "Удаление..." : "Очистить все локации"}
+                  </Button>
                   <input
                     id="csv-upload-input"
                     type="file"
@@ -1019,10 +1307,13 @@ B201,BC205`;
                     className="hidden"
                     data-testid="input-csv-upload"
                   />
-                  <span className="text-sm text-muted-foreground">
-                    1. Скачайте шаблон → 2. Заполните данные → 3. Загрузите обратно
-                  </span>
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  1. Скачайте шаблон → 2. Заполните данные → 3. Загрузите обратно
+                </p>
+                <p className="text-sm text-destructive">
+                  ⚠️ Кнопка "Очистить все локации" удалит ВСЕ локации из базы данных перед новой загрузкой
+                </p>
                 {csvUploadStats && csvUploadStats.errors.length > 0 && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
@@ -1117,6 +1408,7 @@ B201,BC205`;
                       onUpdate={(setting) => upsertSettingMutation.mutate(setting)}
                       onDelete={(locationPattern) => deleteSettingMutation.mutate(locationPattern)}
                       isDeleting={deleteSettingMutation.isPending}
+                      activeLocations={activeLocations}
                     />
                   </CardContent>
                 )}

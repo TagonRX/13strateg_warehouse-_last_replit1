@@ -14,6 +14,8 @@ import { parse } from 'fast-csv';
 import { Readable } from 'stream';
 import { db } from "./db";
 import { sql, eq } from "drizzle-orm";
+import { downloadImage, deleteImage, imageExists } from "./image-manager";
+import express from "express";
 
 // Helper function to extract location from SKU
 // SKU format examples:
@@ -93,6 +95,9 @@ function matchProductsByName(csvName: string, inventoryItems: any[]): { match: a
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Serve static images
+  app.use('/images', express.static(path.join(process.cwd(), 'server', 'public', 'images')));
+
   // Healthcheck (PUBLIC)
   app.get("/api/health", async (_req, res) => {
     try {
@@ -511,6 +516,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get ATP (Available to Promise) data for inventory
+  app.get("/api/inventory/atp", requireAuth, async (req, res) => {
+    try {
+      const atpData = await storage.getATPBySku();
+      return res.json(atpData);
+    } catch (error: any) {
+      console.error("Get ATP error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  // Download and cache product image
+  app.post("/api/inventory/download-image", requireAuth, async (req, res) => {
+    try {
+      const { sku, imageUrl } = req.body;
+      
+      if (!sku || !imageUrl) {
+        return res.status(400).json({ error: "SKU и imageUrl обязательны" });
+      }
+
+      // Check if image already exists locally
+      const existingPath = await imageExists(sku);
+      if (existingPath) {
+        return res.json({ success: true, localPath: existingPath });
+      }
+
+      // Download image
+      const result = await downloadImage(imageUrl, sku);
+      return res.json(result);
+    } catch (error: any) {
+      console.error("Download image error:", error);
+      return res.status(500).json({ error: "Ошибка скачивания изображения" });
+    }
+  });
+
+  // Get local image path for SKU
+  app.get("/api/inventory/image/:sku", requireAuth, async (req, res) => {
+    try {
+      const { sku } = req.params;
+      const localPath = await imageExists(sku);
+      
+      if (localPath) {
+        return res.json({ exists: true, localPath });
+      } else {
+        return res.json({ exists: false });
+      }
+    } catch (error: any) {
+      console.error("Get image error:", error);
+      return res.status(500).json({ error: "Ошибка получения изображения" });
+    }
+  });
+
   // Find duplicates in inventory
   app.get("/api/inventory/duplicates", requireAuth, requireAdmin, async (req, res) => {
     try {
@@ -786,6 +843,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update item
       const updated = await storage.updateInventoryItemById(id, updates);
+
+      // Auto-delete ALL images if quantity becomes 0
+      if (updates.quantity !== undefined && updates.quantity === 0 && existing.quantity > 0) {
+        for (let i = 1; i <= 24; i++) {
+          await deleteImage(`${existing.sku}_${i}`);
+        }
+        console.log(`Auto-deleted all images for SKU ${existing.sku} (quantity = 0)`);
+      }
+
+      // Auto-download ALL images if quantity changes from 0 to > 0
+      if (updates.quantity !== undefined && updates.quantity > 0 && existing.quantity === 0) {
+        for (let i = 1; i <= 24; i++) {
+          const imageUrlKey = `imageUrl${i}` as keyof typeof existing;
+          const imageUrl = (updates as any)[`imageUrl${i}`] || existing[imageUrlKey];
+          if (imageUrl) {
+            downloadImage(imageUrl as string, `${existing.sku}_${i}`).catch(err => {
+              console.error(`Failed to download image ${i} for ${existing.sku}:`, err);
+            });
+          }
+        }
+      }
 
       // Check if quantity decreased (STOCK_OUT)
       if (updates.quantity !== undefined && updates.quantity < existing.quantity) {
@@ -1326,6 +1404,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           await storage.createInventoryItem(itemData);
           created++;
+
+          // Auto-download all images if URLs exist and quantity > 0
+          if (itemData.quantity > 0) {
+            for (let i = 1; i <= 24; i++) {
+              const imageUrl = itemData[`imageUrl${i}`];
+              if (imageUrl) {
+                downloadImage(imageUrl, `${itemData.sku}_${i}`).catch(err => {
+                  console.error(`Failed to download image ${i} for ${itemData.sku}:`, err);
+                });
+              }
+            }
+          }
         }
       }
 
@@ -1574,13 +1664,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/warehouse/settings", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { locationPattern, tsku, maxq } = req.body;
+      const { locationPattern, tsku, maxq, greenThreshold, yellowThreshold, orangeThreshold } = req.body;
 
       if (!locationPattern || !tsku || !maxq) {
         return res.status(400).json({ error: "Требуются locationPattern, tsku и maxq" });
       }
 
-      const setting = await storage.upsertWarehouseSetting({ locationPattern, tsku, maxq });
+      const setting = await storage.upsertWarehouseSetting({ 
+        locationPattern, 
+        tsku, 
+        maxq,
+        greenThreshold,
+        yellowThreshold,
+        orangeThreshold,
+      });
       return res.json(setting);
     } catch (error: any) {
       console.error("Upsert warehouse setting error:", error);
@@ -1675,6 +1772,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(204).send();
     } catch (error: any) {
       console.error("Clear active locations error:", error);
+      return res.status(500).json({ error: "Внутренняя ошибка сервера" });
+    }
+  });
+
+  app.delete("/api/warehouse/locations/clear-all", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      await storage.clearAllLocations();
+      return res.status(204).send();
+    } catch (error: any) {
+      console.error("Clear all locations error:", error);
       return res.status(500).json({ error: "Внутренняя ошибка сервера" });
     }
   });

@@ -885,10 +885,16 @@ export default function DailyPickingView() {
                       </div>
                       <Input
                         placeholder="URL"
+                        key={`url-${source.id}-${source.url}`}
                         defaultValue={source.url}
                         onBlur={(e) => {
                           if (e.target.value !== source.url) {
                             updateCsvSourceMutation.mutate({ id: source.id, updates: { url: e.target.value } });
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.currentTarget.blur();
                           }
                         }}
                         data-testid={`input-source-url-${index}`}

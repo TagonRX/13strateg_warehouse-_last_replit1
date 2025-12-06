@@ -41,6 +41,7 @@ import { DuplicatesDialog } from "./DuplicatesDialog";
 import { Progress } from "@/components/ui/progress";
 import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { SmartImage } from "./SmartImage";
 
 interface BarcodeMapping {
   code: string;
@@ -195,6 +196,11 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   // Global barcode scanner support for search field
   const { inputRef: searchInputRef } = useGlobalBarcodeInput(true);
 
+  // Fetch ATP (Available to Promise) data for reserve/available columns
+  const { data: atpData = [] } = useQuery<Array<{ sku: string; onHand: number; reserved: number; atp: number }>>({
+    queryKey: ['/api/inventory/atp'],
+  });
+
   // Fetch tested items for condition display
   const { data: testedItems = [] } = useQuery<any[]>({
     queryKey: ['/api/tested-items'],
@@ -204,6 +210,15 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
   const { data: duplicateSkuGroups = [] } = useQuery<any[]>({
     queryKey: ['/api/duplicate-skus'],
   });
+
+  // Create ATP map for quick lookup by SKU
+  const atpMap = useMemo(() => {
+    const map = new Map<string, { reserved: number; available: number }>();
+    atpData.forEach(item => {
+      map.set(item.sku, { reserved: item.reserved, available: item.atp });
+    });
+    return map;
+  }, [atpData]);
 
   // Helper function to get condition color classes
   const getConditionClasses = (condition: string | null): string => {
@@ -232,6 +247,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
     name: 250,
     sku: 150,
     quantity: 100,
+    reserved: 80,
+    available: 80,
     qty: 100,
     barcode: 150,
     condition: 120,
@@ -808,16 +825,29 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
       );
     }
 
-    // Collect image URLs from imageUrl1-24 fields
-    const imageUrls = [
+    // Collect image URLs from imageUrl1-24 fields with indices
+    const allImageUrls = [
       item.imageUrl1, item.imageUrl2, item.imageUrl3, item.imageUrl4,
       item.imageUrl5, item.imageUrl6, item.imageUrl7, item.imageUrl8,
       item.imageUrl9, item.imageUrl10, item.imageUrl11, item.imageUrl12,
       item.imageUrl13, item.imageUrl14, item.imageUrl15, item.imageUrl16,
       item.imageUrl17, item.imageUrl18, item.imageUrl19, item.imageUrl20,
       item.imageUrl21, item.imageUrl22, item.imageUrl23, item.imageUrl24,
-    ].filter((url): url is string => url !== null && url !== undefined && url.trim() !== '');
-    const firstImageUrl = imageUrls.length > 0 ? imageUrls[0] : null;
+    ];
+    
+    // Find first non-empty URL and its index
+    let firstImageUrl: string | null = null;
+    let firstImageIndex = 1;
+    for (let i = 0; i < allImageUrls.length; i++) {
+      if (allImageUrls[i]) {
+        firstImageUrl = allImageUrls[i]!;
+        firstImageIndex = i + 1;
+        break;
+      }
+    }
+    
+    // Filter only non-empty URLs for gallery
+    const imageUrls = allImageUrls.filter((url): url is string => url !== null && url !== undefined && url.trim() !== '');
 
     return (
       <TableRow key={item.id} data-testid={`row-item-${item.id}`}>
@@ -846,11 +876,12 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
               className="hover-elevate rounded overflow-hidden relative"
               data-testid={`button-open-gallery-${item.id}`}
             >
-              <img 
-                src={firstImageUrl} 
-                alt={item.name || "Product"} 
+              <SmartImage
+                sku={item.sku}
+                imageUrl={firstImageUrl}
+                imageIndex={firstImageIndex}
+                alt={item.name || "Product"}
                 className="w-12 h-12 object-cover"
-                data-testid={`image-thumbnail-${item.id}`}
               />
               {imageUrls.length > 1 && (
                 <div className="absolute bottom-0 right-0 bg-black/70 text-white text-xs px-1 rounded-tl">
@@ -881,6 +912,12 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
         </TableCell>
         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="font-mono text-xs">{item.sku}</TableCell>
         <TableCell style={{ width: `${columnWidths.quantity}px`, minWidth: `${columnWidths.quantity}px` }} className="text-right text-xs font-medium">{item.quantity}</TableCell>
+        <TableCell style={{ width: `${columnWidths.reserved}px`, minWidth: `${columnWidths.reserved}px` }} className="text-right text-xs text-muted-foreground">
+          {atpMap.get(item.sku)?.reserved || 0}
+        </TableCell>
+        <TableCell style={{ width: `${columnWidths.available}px`, minWidth: `${columnWidths.available}px` }} className="text-right text-xs font-medium">
+          {atpMap.get(item.sku)?.available ?? item.quantity}
+        </TableCell>
         <TableCell style={{ width: `${columnWidths.qty}px`, minWidth: `${columnWidths.qty}px` }} className="text-right text-xs">
           {(() => {
             const qtyData = itemsWithQtyData.get(item.id);
@@ -1272,6 +1309,12 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                 <ResizableHeader columnKey="quantity" width={columnWidths.quantity} onResize={handleResize} className="text-right text-xs">
                   Кол-во
                 </ResizableHeader>
+                <ResizableHeader columnKey="reserved" width={columnWidths.reserved} onResize={handleResize} className="text-right text-xs">
+                  Резерв
+                </ResizableHeader>
+                <ResizableHeader columnKey="available" width={columnWidths.available} onResize={handleResize} className="text-right text-xs">
+                  Свободно
+                </ResizableHeader>
                 <ResizableHeader columnKey="qty" width={columnWidths.qty} onResize={handleResize} className="text-right text-xs">
                   Qty
                 </ResizableHeader>
@@ -1334,6 +1377,8 @@ export default function InventoryTable({ items, userRole }: InventoryTableProps)
                         </TableCell>
                         <TableCell style={{ width: `${columnWidths.sku}px`, minWidth: `${columnWidths.sku}px` }} className="text-xs text-muted-foreground">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.quantity}px`, minWidth: `${columnWidths.quantity}px` }} className="text-right text-xs font-medium">{totalQuantity}</TableCell>
+                        <TableCell style={{ width: `${columnWidths.reserved}px`, minWidth: `${columnWidths.reserved}px` }} className="text-xs text-muted-foreground text-right">-</TableCell>
+                        <TableCell style={{ width: `${columnWidths.available}px`, minWidth: `${columnWidths.available}px` }} className="text-xs text-muted-foreground text-right">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.qty}px`, minWidth: `${columnWidths.qty}px` }} className="text-xs text-muted-foreground text-right">-</TableCell>
                         <TableCell style={{ width: `${columnWidths.barcode}px`, minWidth: `${columnWidths.barcode}px` }} className="text-xs text-muted-foreground">
                           {totalBarcodes} штрихкодов

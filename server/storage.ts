@@ -160,6 +160,7 @@ export interface IStorage {
   setActiveLocations(locations: { location: string; barcode?: string }[]): Promise<void>;
   updateLocationBarcode(location: string, barcode: string | null): Promise<ActiveLocation>;
   clearActiveLocations(): Promise<void>;
+  clearAllLocations(): Promise<void>;
 
   // Picking List methods
   createPickingList(data: { name: string; userId: string; tasks: { sku: string; itemName?: string; requiredQuantity: number; ebaySellerName?: string; itemId?: string; buyerUsername?: string; buyerName?: string; addressPostalCode?: string; sellerEbayId?: string; orderDate?: Date | string }[] }): Promise<{ list: PickingList; tasks: PickingTask[] }>;
@@ -960,7 +961,7 @@ export class DbStorage implements IStorage {
     totalQuantity: number;
     items: { sku: string; name: string; quantity: number; barcode?: string }[];
   }[]> {
-    // Get all active locations
+    // Get all active locations from activeLocations table
     const activeLocationsList = await this.getAllActiveLocations();
     
     // Get all inventory items
@@ -968,18 +969,18 @@ export class DbStorage implements IStorage {
       .select()
       .from(inventoryItems);
 
-    // Group by extracted location
+    // Group items by their location field (from inventoryItems.location)
     const locationMap = new Map<string, InventoryItem[]>();
     
     for (const item of items) {
-      const location = this.extractLocation(item.sku);
+      const location = item.location; // Use location field from inventory, not extracted from SKU
       if (!locationMap.has(location)) {
         locationMap.set(location, []);
       }
       locationMap.get(location)!.push(item);
     }
 
-    // Build result array including all active locations
+    // Build result array - ONLY locations from activeLocations table
     const result: {
       location: string;
       skuCount: number;
@@ -1004,25 +1005,6 @@ export class DbStorage implements IStorage {
           barcode: item.barcode || undefined,
         })),
       });
-    }
-
-    // Add any locations that have items but are not in active locations list
-    for (const [location, locationItems] of Array.from(locationMap.entries())) {
-      if (!activeLocationsList.some(loc => loc.location === location)) {
-        const totalQuantity = locationItems.reduce((sum: number, item: InventoryItem) => sum + item.quantity, 0);
-        result.push({
-          location,
-          skuCount: locationItems.length,
-          totalQuantity,
-          items: locationItems.map((item: InventoryItem) => ({
-            id: item.id,
-            sku: item.sku,
-            name: item.name || "Без названия",
-            quantity: item.quantity,
-            barcode: item.barcode || undefined,
-          })),
-        });
-      }
     }
 
     return result.sort((a, b) => this.naturalSortLocations(a.location, b.location)); // Natural sort by location (X1, X2...X10, X11...)
@@ -2042,7 +2024,14 @@ export class DbStorage implements IStorage {
       // Update existing
       const result = await db
         .update(warehouseSettings)
-        .set({ tsku: setting.tsku, maxq: setting.maxq, updatedAt: new Date() })
+        .set({ 
+          tsku: setting.tsku, 
+          maxq: setting.maxq,
+          greenThreshold: setting.greenThreshold,
+          yellowThreshold: setting.yellowThreshold,
+          orangeThreshold: setting.orangeThreshold,
+          updatedAt: new Date(),
+        })
         .where(eq(warehouseSettings.locationPattern, setting.locationPattern))
         .returning();
       return result[0];
@@ -2091,6 +2080,10 @@ export class DbStorage implements IStorage {
   }
 
   async clearActiveLocations(): Promise<void> {
+    await db.delete(activeLocations);
+  }
+
+  async clearAllLocations(): Promise<void> {
     await db.delete(activeLocations);
   }
 

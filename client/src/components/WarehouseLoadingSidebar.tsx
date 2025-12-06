@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { parseSku, compareSequential, compareGroup } from "@shared/utils/sku";
+import { parseSku } from "@shared/utils/sku";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,8 +39,6 @@ interface WarehouseLoadingSidebarProps {
 export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLoadingSidebarProps = {}) {
   // Filters
   const [filterLetters, setFilterLetters] = useState<string>(""); // e.g. "A,N,L"
-  const [sortMode, setSortMode] = useState<"sequential"|"group">("sequential");
-  const [sortDirection, setSortDirection] = useState<"asc"|"desc">("asc");
   const [tskuOperator, setTskuOperator] = useState<ComparisonOperator>("lt");
   const [tskuValue, setTskuValue] = useState("3");
   const [quantityOperator, setQuantityOperator] = useState<ComparisonOperator>("lt");
@@ -199,11 +197,8 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
         return ia - ib;
       }
 
-      if (sortMode === "sequential") {
-        return compareSequential(isNaN(na) ? null : na, isNaN(nb) ? null : nb, sortDirection);
-      } else {
-        return compareGroup(isNaN(na) ? null : na, isNaN(nb) ? null : nb, sortDirection);
-      }
+      // Simple alphabetical sort by location
+      return a.location.localeCompare(b.location);
     });
 
     sorted.forEach((group) => {
@@ -224,7 +219,7 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
     // Keep order as pre-sorted
     
     return columns;
-  }, [filteredLocations, selectedLetters, sortMode, sortDirection]);
+  }, [filteredLocations, selectedLetters]);
 
   return (
     <div className="flex flex-col h-full">
@@ -247,34 +242,6 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
               className="h-8 text-sm"
               data-testid="input-filter-letters"
             />
-          </div>
-
-          {/* Sort mode */}
-          <div className="flex-shrink-0" style={{ width: "140px" }}>
-            <Label className="text-xs">Режим</Label>
-            <Select value={sortMode} onValueChange={(v) => setSortMode(v as any)}>
-              <SelectTrigger className="h-8 text-xs px-1" data-testid="select-sort-mode">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sequential">Последовательный</SelectItem>
-                <SelectItem value="group">Групповой</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Direction */}
-          <div className="flex-shrink-0" style={{ width: "110px" }}>
-            <Label className="text-xs">Направление</Label>
-            <Select value={sortDirection} onValueChange={(v) => setSortDirection(v as any)}>
-              <SelectTrigger className="h-8 text-xs px-1" data-testid="select-sort-direction">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="asc">↑ Возрастание</SelectItem>
-                <SelectItem value="desc">↓ Убывание</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           {/* TSKU filter */}
@@ -340,8 +307,6 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
           size="sm"
           onClick={() => {
             setFilterLetters("");
-            setSortMode("sequential");
-            setSortDirection("asc");
             setTskuOperator("lt");
             setTskuValue("3");
             setQuantityOperator("lt");
