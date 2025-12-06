@@ -3,14 +3,17 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useQuery } from "@tanstack/react-query";
-import ScannerMode from "./ScannerMode";
+import BarcodeScanner from "@/components/BarcodeScanner";
 import { Download } from "lucide-react";
 import type { PendingPlacement, InventoryItem } from "@shared/schema";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import SkuErrorsView from "@/components/SkuErrorsView";
+import { useToast } from "@/hooks/use-toast";
 
 export default function OnlineListings() {
-    const awaitingRef = useRef<HTMLDivElement | null>(null);
+  const awaitingRef = useRef<HTMLDivElement | null>(null);
+  const { toast } = useToast();
+  const [lastScanned, setLastScanned] = useState("");
 
   // Pending placement (ожидает первичного размещения)
   const { data: pendingPlacements = [], isLoading: loadingPending } = useQuery<PendingPlacement[]>({
@@ -66,12 +69,14 @@ export default function OnlineListings() {
       {/* Раздел: Ошибки SKU (первым) */}
       <SkuErrorsView />
 
-      {/* Раздел: Сканер */}
-      <Card>
-        <CardContent className="pt-6">
-          <ScannerMode />
-        </CardContent>
-      </Card>
+      {/* Раздел: Сканер — полноценный USB/Камера/Телефон */}
+      <BarcodeScanner 
+        onScan={(code) => {
+          setLastScanned(code);
+          toast({ title: "Сканировано", description: code });
+        }}
+        label="Штрихкод / QR код"
+      />
 
       {/* Раздел: Ожидает первичного размещения */}
       <Card>

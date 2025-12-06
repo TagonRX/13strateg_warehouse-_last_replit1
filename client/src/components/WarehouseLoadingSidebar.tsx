@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { parseSku, compareSequential, compareGroup } from "@shared/utils/sku";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Package, PackageX } from "lucide-react";
 import type { InventoryItem, PendingPlacement, ActiveLocation } from "@shared/schema";
 
 interface LocationGroup {
@@ -35,11 +38,17 @@ interface WarehouseLoadingSidebarProps {
 
 export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLoadingSidebarProps = {}) {
   // Filters
-  const [filterLetter, setFilterLetter] = useState("");
+  const [filterLetters, setFilterLetters] = useState<string>(""); // e.g. "A,N,L"
+  const [sortMode, setSortMode] = useState<"sequential"|"group">("sequential");
+  const [sortDirection, setSortDirection] = useState<"asc"|"desc">("asc");
   const [tskuOperator, setTskuOperator] = useState<ComparisonOperator>("lt");
   const [tskuValue, setTskuValue] = useState("3");
   const [quantityOperator, setQuantityOperator] = useState<ComparisonOperator>("lt");
   const [quantityValue, setQuantityValue] = useState("");
+  
+  // Modal for SKU list
+  const [selectedLocationGroup, setSelectedLocationGroup] = useState<LocationGroup | null>(null);
+  const [skuModalOpen, setSkuModalOpen] = useState(false);
 
   // Fetch inventory
   const { data: inventory = [] } = useQuery<InventoryItem[]>({
@@ -106,12 +115,22 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
     );
   }, [inventory, managedLocationsSet]);
 
+  // Helpers
+  const getPrefix = (loc: string) => parseSku(loc).prefix;
+  const getNumber = (loc: string) => {
+    const n = parseSku(loc).number;
+    return n == null ? NaN : n;
+  };
+
+  const selectedLetters = useMemo(() => filterLetters.split(/[,\s]+/).map(s=>s.trim().toUpperCase()).filter(Boolean), [filterLetters]);
+
   // Apply filters
   const filteredLocations = useMemo(() => {
     return locationGroups.filter((group) => {
-      // Letter filter
-      if (filterLetter && !group.location.toUpperCase().startsWith(filterLetter.toUpperCase())) {
-        return false;
+      // Letters filter
+      if (selectedLetters.length > 0) {
+        const pref = getPrefix(group.location);
+        if (!selectedLetters.includes(pref)) return false;
       }
 
       // TSKU filter
@@ -136,7 +155,7 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
 
       return true;
     });
-  }, [locationGroups, filterLetter, tskuOperator, tskuValue, quantityOperator, quantityValue]);
+  }, [locationGroups, selectedLetters, tskuOperator, tskuValue, quantityOperator, quantityValue]);
 
   // Get color for location based on TSKU and MAXQ settings
   const getLocationColor = (group: LocationGroup) => {
@@ -164,8 +183,30 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
   // Column 0: 1-99, Column 1: 100-199, Column 2: 200-299, etc.
   const locationColumns = useMemo(() => {
     const columns: LocationGroup[][] = [[], [], [], [], [], [], []];
-    
-    filteredLocations.forEach((group) => {
+
+    const sorted = [...filteredLocations].sort((a,b) => {
+      const pa = getPrefix(a.location);
+      const pb = getPrefix(b.location);
+      const na = getNumber(a.location);
+      const nb = getNumber(b.location);
+
+      // Order by selected letters as entered
+      const ia = selectedLetters.length ? selectedLetters.indexOf(pa) : -1;
+      const ib = selectedLetters.length ? selectedLetters.indexOf(pb) : -1;
+      if (ia !== ib) {
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+      }
+
+      if (sortMode === "sequential") {
+        return compareSequential(isNaN(na) ? null : na, isNaN(nb) ? null : nb, sortDirection);
+      } else {
+        return compareGroup(isNaN(na) ? null : na, isNaN(nb) ? null : nb, sortDirection);
+      }
+    });
+
+    sorted.forEach((group) => {
       // Extract numeric part from location (e.g., "A123" -> 123)
       const match = group.location.match(/\d+/);
       if (!match) {
@@ -180,13 +221,10 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
       columns[columnIndex].push(group);
     });
     
-    // Sort locations within each column
-    columns.forEach(column => {
-      column.sort((a, b) => a.location.localeCompare(b.location));
-    });
+    // Keep order as pre-sorted
     
     return columns;
-  }, [filteredLocations]);
+  }, [filteredLocations, selectedLetters, sortMode, sortDirection]);
 
   return (
     <div className="flex flex-col h-full">
@@ -198,18 +236,45 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
       {/* Filters - all in one horizontal line */}
       <div className="p-3 border-b space-y-2">
         <div className="flex items-end gap-2">
-          {/* Letter filter */}
-          <div className="flex-shrink-0" style={{ width: "70px" }}>
-            <Label htmlFor="filter-letter" className="text-xs">Буква</Label>
+          {/* Letters filter */}
+          <div className="flex-shrink-0" style={{ width: "140px" }}>
+            <Label htmlFor="filter-letters" className="text-xs">Буквы (A,N,L)</Label>
             <Input
-              id="filter-letter"
-              value={filterLetter}
-              onChange={(e) => setFilterLetter(e.target.value.toUpperCase())}
-              placeholder="A"
-              maxLength={1}
+              id="filter-letters"
+              value={filterLetters}
+              onChange={(e) => setFilterLetters(e.target.value.toUpperCase())}
+              placeholder="A,N,L"
               className="h-8 text-sm"
-              data-testid="input-filter-letter"
+              data-testid="input-filter-letters"
             />
+          </div>
+
+          {/* Sort mode */}
+          <div className="flex-shrink-0" style={{ width: "140px" }}>
+            <Label className="text-xs">Режим</Label>
+            <Select value={sortMode} onValueChange={(v) => setSortMode(v as any)}>
+              <SelectTrigger className="h-8 text-xs px-1" data-testid="select-sort-mode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sequential">Последовательный</SelectItem>
+                <SelectItem value="group">Групповой</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Direction */}
+          <div className="flex-shrink-0" style={{ width: "110px" }}>
+            <Label className="text-xs">Направление</Label>
+            <Select value={sortDirection} onValueChange={(v) => setSortDirection(v as any)}>
+              <SelectTrigger className="h-8 text-xs px-1" data-testid="select-sort-direction">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="asc">↑ Возрастание</SelectItem>
+                <SelectItem value="desc">↓ Убывание</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* TSKU filter */}
@@ -274,7 +339,9 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
           variant="outline"
           size="sm"
           onClick={() => {
-            setFilterLetter("");
+            setFilterLetters("");
+            setSortMode("sequential");
+            setSortDirection("asc");
             setTskuOperator("lt");
             setTskuValue("3");
             setQuantityOperator("lt");
@@ -345,8 +412,11 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
                   key={group.location}
                   className={`rounded border p-1 text-center cursor-pointer hover-elevate active-elevate-2 ${getLocationColor(group)}`}
                   data-testid={`location-${group.location}`}
-                  onClick={() => onLocationClick?.(group.location)}
-                  title="Нажмите, чтобы вставить локацию в SKU"
+                  onClick={() => {
+                    setSelectedLocationGroup(group);
+                    setSkuModalOpen(true);
+                  }}
+                  title="Нажмите, чтобы увидеть SKU в этой локации"
                 >
                   <div className="font-mono font-semibold" style={{ fontSize: "11px" }}>
                     {group.location}
@@ -366,6 +436,74 @@ export default function WarehouseLoadingSidebar({ onLocationClick }: WarehouseLo
           </div>
         )}
       </div>
+
+      {/* SKU Modal for selected location */}
+      <Dialog open={skuModalOpen} onOpenChange={setSkuModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Локация: {selectedLocationGroup?.location}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {selectedLocationGroup?.items.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+                <PackageX className="w-5 h-5" />
+                <span>Локация пустая</span>
+              </div>
+            ) : (
+              selectedLocationGroup?.items.map((item, index) => (
+                <div
+                  key={`${item.sku}-${index}`}
+                  className={`p-2 rounded-md border flex items-center justify-between ${
+                    item.quantity > 0
+                      ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800"
+                      : "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-sm font-medium truncate">{item.sku}</div>
+                    {item.name && (
+                      <div className="text-xs text-muted-foreground truncate">{item.name}</div>
+                    )}
+                    {item.barcode && (
+                      <div className="text-xs text-muted-foreground font-mono">{item.barcode}</div>
+                    )}
+                  </div>
+                  <div className={`font-semibold text-lg ml-2 ${
+                    item.quantity > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
+                  }`}>
+                    {item.quantity}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                if (selectedLocationGroup) {
+                  onLocationClick?.(selectedLocationGroup.location);
+                }
+                setSkuModalOpen(false);
+              }}
+            >
+              Вставить локацию
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setSkuModalOpen(false)}
+            >
+              Закрыть
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

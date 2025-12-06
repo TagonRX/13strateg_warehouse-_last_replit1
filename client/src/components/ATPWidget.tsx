@@ -23,7 +23,7 @@ export default function ATPWidget() {
     <Card>
       <CardContent className="space-y-3 py-3">
         <div className="flex items-center justify-between">
-          <div className="text-sm font-medium">Доступно к обещанию (ATP)</div>
+          <div className="text-sm font-medium">Свободный остаток (доступно к продаже)</div>
           <Input placeholder="Фильтр по SKU" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs h-8 text-sm" />
         </div>
         <div className="border rounded-md overflow-x-auto">
@@ -33,7 +33,7 @@ export default function ATPWidget() {
                 <TableHead>SKU</TableHead>
                 <TableHead>На складе</TableHead>
                 <TableHead>В резерве</TableHead>
-                <TableHead>ATP</TableHead>
+                <TableHead>Свободно</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

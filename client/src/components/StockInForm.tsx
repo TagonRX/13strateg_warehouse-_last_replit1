@@ -542,32 +542,37 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
         </div>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="productId">ID товара</Label>
-            <Input
-              id="productId"
-              value={productId}
-              onChange={(e) => setProductId(e.target.value)}
-              placeholder="Уникальный идентификатор"
-              data-testid="input-product-id"
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="name">Название товара</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Название товара"
-              data-testid="input-name"
-            />
-          </div>
-          
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Первая строка: ID товара, Название (компактно) */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="sku">SKU * (формат: локация-буква)</Label>
+            <div className="space-y-1">
+              <Label htmlFor="productId" className="text-xs">ID товара</Label>
+              <Input
+                id="productId"
+                value={productId}
+                onChange={(e) => setProductId(e.target.value)}
+                placeholder="ID"
+                data-testid="input-product-id"
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="name" className="text-xs">Название товара</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Название"
+                data-testid="input-name"
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
+          
+          {/* Вторая строка: SKU, Локация, Кол-во */}
+          <div className="grid grid-cols-4 gap-3">
+            <div className="space-y-1 col-span-2">
+              <Label htmlFor="sku" className="text-xs">SKU * (локация-буква)</Label>
               <Input
                 id="sku"
                 value={sku}
@@ -579,101 +584,102 @@ export default function StockInForm({ onSubmit, onSkuChange, externalSku, extern
                 placeholder="A101-J"
                 required
                 data-testid="input-sku"
+                className="h-8 text-sm"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="location">Локация</Label>
+            <div className="space-y-1">
+              <Label htmlFor="location" className="text-xs">Локация</Label>
               <Input
                 id="location"
                 value={location}
                 placeholder="A101"
                 disabled
-                className="bg-muted text-muted-foreground"
+                className="bg-muted text-muted-foreground h-8 text-sm"
                 data-testid="input-location"
               />
             </div>
+            {!isBulkMode && (
+              <div className="space-y-1">
+                <Label htmlFor="quantity" className="text-xs">Кол-во *</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(parseInt(e.target.value))}
+                  required
+                  data-testid="input-quantity"
+                  className="h-8 text-sm"
+                />
+              </div>
+            )}
           </div>
           
-          {!isBulkMode && (
-            <div className="space-y-2">
-              <Label htmlFor="quantity">Количество *</Label>
-              <Input
-                id="quantity"
-                type="number"
-                min="1"
-                value={quantity}
-                onChange={(e) => setQuantity(parseInt(e.target.value))}
-                required
-                data-testid="input-quantity"
-              />
-            </div>
-          )}
-          
-          {isBulkMode ? (
-            <>
-              <div className="space-y-2">
-                <Label>Штрихкод (сканируйте каждый товар)</Label>
+          {/* Третья строка: Штрихкод + Состояние + Кнопка */}
+          <div className="grid grid-cols-4 gap-3 items-end">
+            {isBulkMode ? (
+              <>
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-xs">Штрихкод (сканируйте)</Label>
+                  <Input
+                    ref={scannerMode === "usb" ? bulkBarcodeInputRef : undefined}
+                    placeholder={scannerMode === "usb" ? "Скан + Enter" : "Скан с телефона"}
+                    className="font-mono h-8 text-sm"
+                    onKeyDown={scannerMode === "usb" ? handleBulkBarcodeInput : undefined}
+                    readOnly={scannerMode === "phone"}
+                    data-testid="input-bulk-barcode"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Кол-во</Label>
+                  <Input
+                    value={scannedBarcodes.length}
+                    readOnly
+                    className="font-bold h-8 text-sm"
+                    data-testid="input-bulk-quantity"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1 col-span-2">
+                <Label htmlFor="barcode" className="text-xs">Штрихкод</Label>
                 <Input
-                  ref={scannerMode === "usb" ? bulkBarcodeInputRef : undefined}
-                  placeholder={scannerMode === "usb" ? "Отсканируйте штрихкод и нажмите Enter" : "Отсканируйте с телефона"}
-                  className="font-mono"
-                  onKeyDown={scannerMode === "usb" ? handleBulkBarcodeInput : undefined}
+                  id="barcode"
+                  ref={scannerMode === "usb" ? barcodeInputRef : undefined}
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                  placeholder={scannerMode === "usb" ? "Введите или отсканируйте" : "Скан с телефона"}
+                  className="font-mono h-8 text-sm"
                   readOnly={scannerMode === "phone"}
-                  data-testid="input-bulk-barcode"
+                  data-testid="input-barcode"
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label>Количество товара</Label>
-                <Input
-                  value={scannedBarcodes.length}
-                  readOnly
-                  className="font-bold text-lg"
-                  data-testid="input-bulk-quantity"
-                />
-              </div>
-            </>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="barcode">Штрихкод</Label>
-              <Input
-                id="barcode"
-                ref={scannerMode === "usb" ? barcodeInputRef : undefined}
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                placeholder={scannerMode === "usb" ? "Введите или отсканируйте" : "Отсканируйте с телефона"}
-                className="font-mono"
-                readOnly={scannerMode === "phone"}
-                data-testid="input-barcode"
-              />
+            )}
+            <div className="space-y-1">
+              <Label htmlFor="condition" className="text-xs">Состояние</Label>
+              <Select value={condition || "-"} onValueChange={(val) => setCondition(val === "-" ? "" : val)}>
+                <SelectTrigger id="condition" data-testid="select-condition" className="h-8 text-sm">
+                  <SelectValue placeholder="Не указано" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="-">Не указано</SelectItem>
+                  <SelectItem value="New">New</SelectItem>
+                  <SelectItem value="Used">Used</SelectItem>
+                  <SelectItem value="Exdisplay">Exdisplay</SelectItem>
+                  <SelectItem value="Parts">Parts</SelectItem>
+                  <SelectItem value="Faulty">Faulty</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="condition">Состояние</Label>
-            <Select value={condition || "-"} onValueChange={(val) => setCondition(val === "-" ? "" : val)}>
-              <SelectTrigger id="condition" data-testid="select-condition">
-                <SelectValue placeholder="Не указано" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="-">Не указано</SelectItem>
-                <SelectItem value="New">New</SelectItem>
-                <SelectItem value="Used">Used</SelectItem>
-                <SelectItem value="Exdisplay">Exdisplay</SelectItem>
-                <SelectItem value="Parts">Parts</SelectItem>
-                <SelectItem value="Faulty">Faulty</SelectItem>
-              </SelectContent>
-            </Select>
+            <Button 
+              type="submit" 
+              data-testid="button-submit"
+              disabled={isBulkMode && scannedBarcodes.length === 0}
+              className="h-8"
+            >
+              {isBulkMode ? `Добавить (${scannedBarcodes.length})` : "Добавить"}
+            </Button>
           </div>
-          
-          <Button 
-            type="submit" 
-            className="w-full" 
-            data-testid="button-submit"
-            disabled={isBulkMode && scannedBarcodes.length === 0}
-          >
-            {isBulkMode ? `Подтвердить (${scannedBarcodes.length} шт.)` : "Добавить товар"}
-          </Button>
         </form>
 
         {isBulkMode && scannedBarcodes.length > 0 && (

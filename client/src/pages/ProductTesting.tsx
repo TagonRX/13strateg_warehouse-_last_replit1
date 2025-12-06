@@ -15,62 +15,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Scan, CheckCircle2, AlertCircle, Usb, Smartphone, Wifi, Trash2, Edit } from "lucide-react";
-import ScannerModule from "@/components/ScannerModule";
+import { Loader2, Scan, CheckCircle2, AlertCircle, Trash2, Edit } from "lucide-react";
+import BarcodeScanner from "@/components/BarcodeScanner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import type { PendingTest, TestedItem } from "@shared/schema";
-import { useGlobalBarcodeInput } from "@/hooks/useGlobalBarcodeInput";
-import { useWebSocket } from "@/hooks/useWebSocket";
 import { getCurrentUser } from "@/lib/api";
-
-type ScannerMode = "usb" | "phone";
 
 export default function ProductTesting() {
   const [barcode, setBarcode] = useState("");
   const [selectedCondition, setSelectedCondition] = useState<string>("");
   const [currentTest, setCurrentTest] = useState<PendingTest | null>(null);
-  const [scannerMode, setScannerMode] = useState<ScannerMode>("usb");
   const [editBarcodeDialogOpen, setEditBarcodeDialogOpen] = useState(false);
   const [testToEdit, setTestToEdit] = useState<PendingTest | null>(null);
   const [newBarcode, setNewBarcode] = useState("");
   const { toast } = useToast();
-
-  // WebSocket for phone mode
-  const { isConnected: isPhoneConnected, lastMessage } = useWebSocket();
-
-  // USB scanner routing - ВСЕГДА создается, но активен только в USB режиме
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
-  
-  // Простой keydown listener для захвата сканера
-  useEffect(() => {
-    if (scannerMode !== "usb") return;
-    
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Игнорируем модификаторы
-      if (e.ctrlKey || e.altKey || e.metaKey) return;
-      
-      // Если фокус не на input, направляем туда
-      const activeElement = document.activeElement;
-      if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
-        if (e.key.length === 1 || e.key === 'Enter') {
-          barcodeInputRef.current?.focus();
-        }
-      }
-    };
-    
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [scannerMode]);
-
-  // Обработка сообщений от телефона через WebSocket
-  useEffect(() => {
-    if (lastMessage?.type === "barcode_scanned" && scannerMode === "phone") {
-      const code = lastMessage.barcode;
-      setBarcode(code);
-    }
-  }, [lastMessage, scannerMode]);
 
   // Fetch pending tests
   const { data: pendingTests = [] } = useQuery<PendingTest[]>({
@@ -263,7 +223,6 @@ export default function ProductTesting() {
     setCurrentTest(null);
     setSelectedCondition("");
     setBarcode("");
-    setTimeout(() => barcodeInputRef.current?.focus(), 100);
   };
 
   // Edit barcode handlers
@@ -279,199 +238,96 @@ export default function ProductTesting() {
     }
   };
 
-  // Auto-focus on mount (простой подход как в StockInForm)
-  useEffect(() => {
-    if (barcodeInputRef.current) {
-      barcodeInputRef.current.focus();
-    }
-  }, [scannerMode]);
-
   const isPending = startTestMutation.isPending || completeTestMutation.isPending;
 
   return (
     <div className="flex flex-col gap-4 p-4 h-full overflow-auto">
       <h1 className="text-2xl font-semibold">Тестирование товаров</h1>
 
-      {/* Main Scanner Card */}
-      <Card>
-        <CardHeader className="space-y-3 pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <Scan className="w-5 h-5" />
-            {!currentTest ? "Тестирование товаров" : "Выбор состояния"}
-          </CardTitle>
-          
-          {/* Scanner Mode Selector */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground mr-2">Сканер:</span>
-            <Button
-              size="sm"
-              variant={scannerMode === "usb" ? "default" : "outline"}
-              onClick={() => setScannerMode("usb")}
-              data-testid="button-scanner-usb"
-              className="h-8"
-            >
-              <Usb className="w-3.5 h-3.5 mr-1.5" />
-              USB
-            </Button>
-            <Button
-              size="sm"
-              variant={scannerMode === "phone" ? "default" : "outline"}
-              onClick={() => setScannerMode("phone")}
-              data-testid="button-scanner-phone"
-              className="h-8"
-            >
-              <Smartphone className="w-3.5 h-3.5 mr-1.5" />
-              Телефон
-            </Button>
-            
-            {/* Phone Connection Indicator */}
-            {scannerMode === "phone" && (
-              <div className="flex items-center gap-1.5 ml-2 px-2 py-1 rounded-md bg-muted/50">
-                <Wifi className={`w-3.5 h-3.5 ${isPhoneConnected ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`} />
-                <span className={`text-xs font-medium ${isPhoneConnected ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                  {isPhoneConnected ? "Подключен" : "Ожидание..."}
-                </span>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      {/* Main Scanner Card — полноценный USB/Камера/Телефон */}
+      <BarcodeScanner 
+        onScan={(code) => {
+          setBarcode(code);
+          // Автоматически отправляем на обработку
+          const existingTest = pendingTests.find(t => t.barcode === code);
+          if (existingTest) {
+            setCurrentTest(existingTest);
+            toast({
+              title: "Товар найден",
+              description: "Выберите состояние для завершения тестирования",
+            });
+          } else {
+            startTestMutation.mutate({ barcode: code });
+          }
+        }}
+        label="Штрихкод / QR код"
+      />
+      
+      <div className="p-2 bg-muted rounded-md text-xs text-muted-foreground">
+        Первое сканирование - добавление в тестирование • Повторное сканирование - выбор состояния
+      </div>
 
-          {!currentTest ? (
-            <>
-              <div className="p-4 bg-muted rounded-md">
-                <p className="text-sm text-muted-foreground">
-                  Первое сканирование - добавление в тестирование<br/>
-                  Повторное сканирование - выбор состояния
-                </p>
-              </div>
-              <ScannerModule
-                onScan={(code) => setBarcode(code)}
-                onManualChange={(code) => setBarcode(code)}
-                onDelete={() => setBarcode("")}
-              />
-              
-              <form onSubmit={handleBarcodeSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="barcode">Штрихкод</Label>
-                  <Input
-                    ref={barcodeInputRef}
-                    id="barcode"
-                    data-testid="input-barcode"
-                    value={barcode}
-                    onChange={(e) => setBarcode(e.target.value)}
-                    placeholder={scannerMode === "usb" ? "Отсканируйте штрихкод" : "Введите или отсканируйте"}
-                    disabled={isPending}
-                  />
+      {/* Выбор кондиции если товар найден */}
+      {currentTest && (
+        <Card>
+          <CardContent className="py-4 space-y-4">
+            <div className="p-4 bg-muted rounded-md space-y-2">
+              <p className="font-medium">Товар: {currentTest.barcode}</p>
+              {currentTest.name && <p className="text-sm text-muted-foreground">{currentTest.name}</p>}
+              {currentTest.sku && <p className="text-sm text-muted-foreground">SKU: {currentTest.sku}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Выберите кондицию</Label>
+              <RadioGroup value={selectedCondition} onValueChange={setSelectedCondition}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="New" id="new" data-testid="radio-new" />
+                  <Label htmlFor="new" className="cursor-pointer">New (Новый)</Label>
                 </div>
-
-                <Button 
-                  type="submit" 
-                  data-testid="button-scan"
-                  disabled={!barcode.trim() || isPending}
-                  className="w-full"
-                >
-                  {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Сканировать
-                </Button>
-              </form>
-            </>
-          ) : (
-            <>
-              {currentTest ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-muted rounded-md space-y-2">
-                    <p className="font-medium">Товар: {currentTest.barcode}</p>
-                    {currentTest.name && <p className="text-sm text-muted-foreground">{currentTest.name}</p>}
-                    {currentTest.sku && <p className="text-sm text-muted-foreground">SKU: {currentTest.sku}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Выберите кондицию</Label>
-                    <RadioGroup value={selectedCondition} onValueChange={setSelectedCondition}>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="New" id="new" data-testid="radio-new" />
-                        <Label htmlFor="new" className="cursor-pointer">New (Новый)</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="Used" id="used" data-testid="radio-used" />
-                        <Label htmlFor="used" className="cursor-pointer">Used (Б/У)</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="Exdisplay" id="exdisplay" data-testid="radio-exdisplay" />
-                        <Label htmlFor="exdisplay" className="cursor-pointer">Exdisplay (Витринный)</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="Parts" id="parts" data-testid="radio-parts" />
-                        <Label htmlFor="parts" className="cursor-pointer">Parts (Запчасти)</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="Faulty" id="faulty" data-testid="radio-faulty" />
-                        <Label htmlFor="faulty" className="cursor-pointer text-destructive font-medium">
-                          Faulty (Брак)
-                        </Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={handleConfirm}
-                      data-testid="button-confirm-condition"
-                      disabled={!selectedCondition || isPending}
-                      className="flex-1"
-                    >
-                      {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                      Подтвердить
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleCancel}
-                      data-testid="button-cancel"
-                      disabled={isPending}
-                    >
-                      Отмена
-                    </Button>
-                  </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="Used" id="used" data-testid="radio-used" />
+                  <Label htmlFor="used" className="cursor-pointer">Used (Б/У)</Label>
                 </div>
-              ) : (
-                <>
-                  <div className="p-4 bg-muted rounded-md">
-                    <p className="text-sm text-muted-foreground">
-                      Отсканируйте товар из списка тестирования
-                    </p>
-                  </div>
-                  
-                  <form onSubmit={handleBarcodeSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="barcode-second">Штрихкод</Label>
-                      <Input
-                        ref={barcodeInputRef}
-                        id="barcode-second"
-                        data-testid="input-barcode-second"
-                        value={barcode}
-                        onChange={(e) => setBarcode(e.target.value)}
-                        placeholder={scannerMode === "usb" ? "Отсканируйте штрихкод" : "Введите или отсканируйте"}
-                        disabled={isPending}
-                      />
-                    </div>
-                  </form>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="Exdisplay" id="exdisplay" data-testid="radio-exdisplay" />
+                  <Label htmlFor="exdisplay" className="cursor-pointer">Exdisplay (Витринный)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="Parts" id="parts" data-testid="radio-parts" />
+                  <Label htmlFor="parts" className="cursor-pointer">Parts (Запчасти)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="Faulty" id="faulty" data-testid="radio-faulty" />
+                  <Label htmlFor="faulty" className="cursor-pointer text-destructive font-medium">
+                    Faulty (Брак)
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
 
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                    data-testid="button-back-to-first"
-                    className="w-full"
-                  >
-                    Вернуться к началу
-                  </Button>
-                </>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleConfirm}
+                data-testid="button-confirm-condition"
+                disabled={!selectedCondition || isPending}
+                className="flex-1"
+              >
+                {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Подтвердить
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleCancel}
+                data-testid="button-cancel"
+                disabled={isPending}
+              >
+                Отмена
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Pending Tests Table */}
       {pendingTests.length > 0 && (

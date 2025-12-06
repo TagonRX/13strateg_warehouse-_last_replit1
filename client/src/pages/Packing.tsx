@@ -10,9 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CheckCircle2, Circle, ExternalLink, Image as ImageIcon, Package, Truck, AlertTriangle, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
-// Replaced legacy BarcodeScanner with unified ScannerModule
-// import BarcodeScanner from "@/components/BarcodeScanner";
-import ScannerModule from "@/components/ScannerModule";
+import BarcodeScanner from "@/components/BarcodeScanner";
 import ImageGalleryModal from "@/components/ImageGalleryModal";
 import type { Order, InventoryItem } from "@shared/schema";
 import { format } from "date-fns";
@@ -562,21 +560,11 @@ export default function Packing() {
         </Badge>
       </div>
 
-      {/* Top Section: Scanner */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Сканер штрихкодов</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-2 text-sm text-muted-foreground" data-testid="text-scanner-label">
-            {getScannerLabel()}
-          </div>
-          <ScannerModule 
-            onScan={handleScan}
-            onManualChange={() => setErrorMessage(null)}
-          />
-        </CardContent>
-      </Card>
+      {/* Top Section: Scanner — полноценный USB/Камера/Телефон */}
+      <BarcodeScanner 
+        onScan={handleScan}
+        label={getScannerLabel()}
+      />
 
       {currentOrder && (
         <Card data-testid="card-current-packing">

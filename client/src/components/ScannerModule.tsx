@@ -14,7 +14,7 @@ export default function ScannerModule({ onScan, onManualChange, onDelete }: Prop
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const [lastCode, setLastCode] = useState("");
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [active, setActive] = useState(true);
+  const [active, setActive] = useState(false); // Камера НЕ запускается автоматически
 
   useEffect(() => {
     if (!active) return;
@@ -54,34 +54,44 @@ export default function ScannerModule({ onScan, onManualChange, onDelete }: Prop
   }, [onScan, active]);
 
   return (
-    <div className="space-y-2">
-      {cameraError ? (
-        <div className="p-3 border rounded bg-yellow-50 text-yellow-900 text-sm">
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Видео камеры — показываем только если активна */}
+      {active && !cameraError && (
+        <video ref={videoRef} className="w-40 h-24 rounded border object-cover flex-shrink-0" muted playsInline />
+      )}
+      {active && cameraError && (
+        <div className="w-40 h-24 p-2 border rounded bg-yellow-50 text-yellow-900 text-xs flex items-center">
           {cameraError}
         </div>
-      ) : (
-        <video ref={videoRef} className="w-full max-h-64 rounded border" muted playsInline />
       )}
-      <div className="flex items-center gap-2">
-        <Button variant={active ? "outline" : "default"} onClick={() => setActive((v) => !v)}>
-          {active ? "Пауза сканера" : "Включить сканер"}
-        </Button>
-      </div>
-      <div className="flex items-center gap-2">
-        <input
-          className="h-9 px-2 border rounded w-full"
-          placeholder="Ручной ввод баркода"
-          value={lastCode}
-          onChange={(e) => {
-            setLastCode(e.target.value);
-            onManualChange?.(e.target.value);
-          }}
-        />
-        <Button variant="outline" onClick={() => setLastCode("")}>Очистить</Button>
-        {onDelete && (
-          <Button variant="destructive" onClick={() => onDelete?.()}>Удалить</Button>
-        )}
-      </div>
+      {/* Кнопка включения/паузы */}
+      <Button 
+        variant={active ? "outline" : "default"} 
+        size="sm"
+        onClick={() => { setActive((v) => !v); setCameraError(null); }}
+        className="flex-shrink-0"
+      >
+        {active ? "Пауза сканера" : "Включить сканер"}
+      </Button>
+      {/* Ручной ввод */}
+      <input
+        className="h-9 px-2 border rounded flex-1 min-w-[180px]"
+        placeholder="Ручной ввод баркода"
+        value={lastCode}
+        onChange={(e) => {
+          setLastCode(e.target.value);
+          onManualChange?.(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && lastCode.trim()) {
+            onScan(lastCode.trim());
+          }
+        }}
+      />
+      <Button variant="outline" size="sm" onClick={() => setLastCode("")}>Очистить</Button>
+      {onDelete && (
+        <Button variant="destructive" size="sm" onClick={() => onDelete?.()}>Удалить</Button>
+      )}
     </div>
   );
 }

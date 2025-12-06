@@ -108,17 +108,17 @@ export default function AppLayout({
   }, [location, unresolvedCount]);
 
   const workerMenuItems = [
+    { title: "Online listings", url: "/online-listings", icon: Package },
     { title: "Тестирование товара", url: "/product-testing", icon: TestTube2 },
     { title: "Приёмка товара", url: "/stock-in", icon: PackagePlus },
     { title: "Размещение товара", url: "/placement", icon: Warehouse },
-    { title: "Online listings", url: "/online-listings", icon: Package },
-    { title: "Сборка/Списание", url: "/stock-out", icon: PackageMinus },
     { title: "Picking List", url: "/picking", icon: ClipboardList },
     { title: "Подготовка заказов", url: "/dispatch", icon: Package },
     { title: "Упаковка заказов", url: "/packing", icon: PackageCheck },
     { title: "Инвентаризация", url: "/inventory", icon: Package },
     { title: "Загрузка склада", url: "/warehouse", icon: Warehouse },
     { title: "Режим сканера", url: "/scanner-mode", icon: Smartphone },
+    { title: "Сборка/Списание", url: "/stock-out", icon: PackageMinus },
   ];
 
   const adminMenuItems = [
